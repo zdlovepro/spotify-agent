@@ -1,0 +1,14 @@
+{
+  "translation": {
+    "appName": "Spotify Agent",
+    "welcome": "Good day",
+    "recentlyPlayed": "Recently played",
+    "browseAll": "Browse all",
+    "playlists": "Playlists",
+    "podcasts": "Podcasts",
+    "artists": "Artists",
+    "albums": "Albums",
+    "login": "Login with Spotify",
+    "logout": "Logout"
+  }
+}

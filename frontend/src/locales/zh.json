@@ -1,0 +1,14 @@
+{
+  "translation": {
+    "appName": "Spotify Agent",
+    "welcome": "你好",
+    "recentlyPlayed": "最近播放",
+    "browseAll": "浏览全部",
+    "playlists": "播放列表",
+    "podcasts": "播客",
+    "artists": "艺术家",
+    "albums": "专辑",
+    "login": "登录 Spotify",
+    "logout": "退出登录"
+  }
+}

@@ -25,6 +25,19 @@
     display: flex;
     align-items: center;
 }
+.LangBtn{
+    border: 1px solid rgba(255,255,255,.3);
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 16px;
+    background-color: transparent;
+    color: #fff;
+    margin-right: 8px;
+    cursor: pointer;
+}
+.LangBtn:hover {
+    border-color: #fff;
+}
 .ProfileBtn{
     border: none;
     height: 32px;
