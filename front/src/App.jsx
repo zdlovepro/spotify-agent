@@ -1,0 +1,35 @@
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import useWindowSize from './hooks/useWindowSize'
+import Sidebar from './components/sidebar/Sidebar'
+import MobileNavigation from './components/sidebar/MobileNavigation'
+import Footer from './components/footer/Footer'
+import Home from './pages/Home'
+import Search from './pages/Search'
+import Library from './pages/Library'
+import PlaylistPage from './pages/Playlist'
+import CONST from './constants/index.jsx'
+import styles from './App.module.css'
+
+function App() {
+  const size = useWindowSize()
+
+  return (
+    <Router>
+      <div className={styles.layout}>
+        {size.width > CONST.MOBILE_SIZE ? <Sidebar /> : <MobileNavigation />}
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/search" element={<Search />} />
+          <Route path="/library" element={<Library />} />
+          <Route path="/library/podcasts" element={<Library />} />
+          <Route path="/library/artists" element={<Library />} />
+          <Route path="/library/albums" element={<Library />} />
+          <Route path="/playlist/:path" element={<PlaylistPage />} />
+        </Routes>
+        <Footer />
+      </div>
+    </Router>
+  )
+}
+
+export default App
