@@ -186,3 +186,5 @@ config.local.py
 # Frontend build artifacts
 front/node_modules/
 front/dist/
+
+config/
