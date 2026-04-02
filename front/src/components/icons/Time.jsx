@@ -1,6 +1,6 @@
 import * as React from "react";
 
-function SvgSoundClose(props) {
+function SvgTime(props) {
   return (
     <svg 
       width="1em" 
@@ -16,4 +16,4 @@ function SvgSoundClose(props) {
   );
 }
 
-export default SvgSoundClose;
+export default SvgTime;

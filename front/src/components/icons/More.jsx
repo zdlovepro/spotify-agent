@@ -1,6 +1,6 @@
 import * as React from "react";
 
-function SvgMix(props) {
+function SvgMore(props) {
   return (
     <svg 
       height="1em" 
@@ -15,4 +15,4 @@ function SvgMix(props) {
   );
 }
 
-export default SvgMix;
+export default SvgMore;

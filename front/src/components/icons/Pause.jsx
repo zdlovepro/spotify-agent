@@ -1,6 +1,6 @@
 import * as React from "react";
 
-function SvgPlay(props) {
+function SvgPause(props) {
   return (
     <svg 
       height=".7em" 
@@ -14,4 +14,4 @@ function SvgPlay(props) {
   );
 }
 
-export default SvgPlay;
+export default SvgPause;
