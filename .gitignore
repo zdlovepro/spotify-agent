@@ -183,3 +183,6 @@ config.local.py
 
 # Async / event loops dumps
 *.dump
+# Frontend build artifacts
+front/node_modules/
+front/dist/
