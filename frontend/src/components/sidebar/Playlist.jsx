@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import TitleS from '../text/TitleS'
 import TextRegularM from '../text/TextRegularM'
 import PlaylistButton from './PlaylistButton'
@@ -7,9 +8,11 @@ import { PLAYLIST } from '../../data/index.js'
 import styles from './playlist.module.css'
 
 function Playlist() {
+  const { t } = useTranslation()
+
   return (
     <div className={styles.Playlist}>
-      <TitleS>Playlists</TitleS>
+      <TitleS>{t('playlists')}</TitleS>
 
       <div>
         {PLAYLISTBTN.map((playlist) => (
@@ -18,7 +21,7 @@ function Playlist() {
             ImgName={playlist.ImgName}
             key={playlist.title}
           >
-            {playlist.title}
+            {t(playlist.titleKey)}
           </PlaylistButton>
         ))}
       </div>

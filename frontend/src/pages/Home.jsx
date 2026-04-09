@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import Topnav from '../components/topnav/Topnav'
 import TitleL from '../components/text/TitleL'
 import TitleM from '../components/text/TitleM'
@@ -7,6 +8,8 @@ import { PLAYLIST } from '../data/index.js'
 import styles from './home.module.css'
 
 function Home() {
+  const { t } = useTranslation()
+
   return (
     <div className={styles.Home}>
       <div className={styles.HoverBg} />
@@ -16,7 +19,7 @@ function Home() {
       <div className={styles.Content}>
         <section>
           <div className={styles.SectionTitle}>
-            <TitleL>Good day</TitleL>
+            <TitleL>{t('welcome')}</TitleL>
           </div>
 
           <div className={styles.SectionCards}>
@@ -28,7 +31,7 @@ function Home() {
 
         <section>
           <div className={styles.SectionTitle}>
-            <TitleM>Recently played</TitleM>
+            <TitleM>{t('recentlyPlayed')}</TitleM>
           </div>
 
           <div className={styles.SectionCardsMedium}>

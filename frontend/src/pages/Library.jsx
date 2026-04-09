@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import TitleM from '../components/text/TitleM'
 import Topnav from '../components/topnav/Topnav'
 import PlaylistCardM from '../components/cards/PlaylistCardM'
@@ -22,9 +23,10 @@ function Library() {
 }
 
 function PlaylistTab() {
+  const { t } = useTranslation()
   return (
     <div>
-      <TitleM>Playlists</TitleM>
+      <TitleM>{t('playlists')}</TitleM>
       <div className={styles.Grid}>
         {PLAYLIST.filter((item) => item.type === 'playlist').map((item) => (
           <PlaylistCardM key={item.title} data={item} />
@@ -35,9 +37,10 @@ function PlaylistTab() {
 }
 
 function PodcastTab() {
+  const { t } = useTranslation()
   return (
     <div>
-      <TitleM>Podcasts</TitleM>
+      <TitleM>{t('podcasts')}</TitleM>
       <div className={styles.Grid}>
         {PLAYLIST.filter((item) => item.type === 'podcast').map((item) => (
           <PlaylistCardM key={item.title} data={item} />
@@ -48,17 +51,19 @@ function PodcastTab() {
 }
 
 function ArtistTab() {
+  const { t } = useTranslation()
   return (
     <div>
-      <TitleM>Artists</TitleM>
+      <TitleM>{t('artists')}</TitleM>
     </div>
   )
 }
 
 function AlbumTab() {
+  const { t } = useTranslation()
   return (
     <div>
-      <TitleM>Albums</TitleM>
+      <TitleM>{t('albums')}</TitleM>
       <div className={styles.Grid}>
         {PLAYLIST.filter((item) => item.type === 'albüm').map((item) => (
           <PlaylistCardM key={item.title} data={item} />
