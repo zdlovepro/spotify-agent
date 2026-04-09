@@ -9,6 +9,13 @@
     "artists": "艺术家",
     "albums": "专辑",
     "login": "登录 Spotify",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "nav_home": "主页",
+    "nav_search": "搜索",
+    "nav_yourLibrary": "你的音乐库",
+    "nav_createPlaylist": "创建歌单",
+    "nav_likedSongs": "喜欢的歌",
+    "search_placeholder": "艺术家、歌曲或播客",
+    "playlist_title_col": "标题"
   }
 }
