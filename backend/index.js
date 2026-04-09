@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import authRouter from './routes/auth.js';
 
 dotenv.config();
 
@@ -12,6 +13,8 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+
+app.use('/api/auth', authRouter);
 
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Backend is running' });
