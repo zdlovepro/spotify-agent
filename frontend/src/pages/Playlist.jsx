@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
+import { useTranslation } from 'react-i18next'
 import { changeTrack } from '../store/index.js'
 import Topnav from '../components/topnav/Topnav'
 import TextRegularM from '../components/text/TextRegularM'
@@ -18,6 +19,7 @@ function PlaylistPage() {
   const { path } = useParams()
   const [playlistIndex, setPlaylistIndex] = useState(undefined)
   const [isthisplay, setIsthisPlay] = useState(false)
+  const { t } = useTranslation()
 
   useEffect(() => {
     setIsthisPlay(playlistIndex === trackData.trackKey[0])
@@ -58,7 +60,7 @@ function PlaylistPage() {
 
             <div className={styles.ListHead}>
               <TextRegularM>#</TextRegularM>
-              <TextRegularM>TITLE</TextRegularM>
+              <TextRegularM>{t('playlist_title_col')}</TextRegularM>
               <Icons.Time />
             </div>
 

@@ -9,6 +9,13 @@
     "artists": "Artists",
     "albums": "Albums",
     "login": "Login with Spotify",
-    "logout": "Logout"
+    "logout": "Logout",
+    "nav_home": "Home",
+    "nav_search": "Search",
+    "nav_yourLibrary": "Your Library",
+    "nav_createPlaylist": "Create Playlist",
+    "nav_likedSongs": "Liked Songs",
+    "search_placeholder": "Artists, songs or podcasts",
+    "playlist_title_col": "TITLE"
   }
 }
