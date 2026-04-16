@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { useSpotify } from '../../context/SpotifyContext.jsx'
 import PrevPageBtn from '../buttons/PrevPageBtn'
 import NextPageBtn from '../buttons/NextPageBtn'
 import SearchBox from './SearchBox'
@@ -7,6 +8,7 @@ import styles from './topnav.module.css'
 
 function Topnav({ search = false, tabButtons = false }) {
   const { t, i18n } = useTranslation()
+  const { error, isAuthenticated, login, logout, profile } = useSpotify()
 
   const toggleLanguage = () => {
     const next = i18n.language === 'zh' ? 'en' : 'zh'
@@ -24,10 +26,24 @@ function Topnav({ search = false, tabButtons = false }) {
           {tabButtons && <LibraryTabBtn />}
         </span>
         <span>
+          {error && <small className={styles.StatusText}>{error}</small>}
           <button className={styles.LangBtn} onClick={toggleLanguage}>
             {i18n.language === 'zh' ? 'EN' : '中文'}
           </button>
-          <button className={styles.ProfileBtn}>{t('appName')}</button>
+          {isAuthenticated ? (
+            <>
+              <button className={styles.SecondaryBtn} onClick={logout}>
+                {t('logout')}
+              </button>
+              <button className={styles.ProfileBtn}>
+                {profile?.display_name || t('appName')}
+              </button>
+            </>
+          ) : (
+            <button className={styles.ProfileBtn} onClick={login}>
+              {t('login')}
+            </button>
+          )}
         </span>
       </div>
     </nav>

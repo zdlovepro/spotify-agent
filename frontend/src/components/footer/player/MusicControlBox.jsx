@@ -1,37 +1,26 @@
 import { useSelector, useDispatch } from 'react-redux'
-import { changeTrack } from '../../../store/index.js'
+import { changePlay, nextTrack, previousTrack } from '../../../store/index.js'
 import * as Icons from '../../icons/index.jsx'
 import IconButton from '../../buttons/IconButton'
 import PlayButton from '../../buttons/PlayButton'
-import { PLAYLIST } from '../../../data/index.js'
 import styles from './music-control-box.module.css'
 
 function MusicControlBox() {
   const dispatch = useDispatch()
-  const trackData = useSelector((state) => state.player.trackData)
+  const isPlaying = useSelector((state) => state.player.isPlaying)
 
-  function decreaseIndex() {
-    const [pIdx, tIdx] = trackData.trackKey
-    if (tIdx > 0) {
-      dispatch(changeTrack([pIdx, tIdx - 1]))
-    }
-  }
-
-  function increaseIndex() {
-    const [pIdx, tIdx] = trackData.trackKey
-    if (tIdx < PLAYLIST[pIdx].playlistData.length - 1) {
-      dispatch(changeTrack([pIdx, tIdx + 1]))
-    }
+  function togglePlay() {
+    dispatch(changePlay(!isPlaying))
   }
 
   return (
     <div className={styles.musicControl}>
       <IconButton icon={<Icons.Mix />} activeicon={<Icons.Mix />} />
-      <button className={styles.button} onClick={decreaseIndex}>
+      <button className={styles.button} onClick={() => dispatch(previousTrack())}>
         <Icons.Prev />
       </button>
-      <PlayButton isthisplay={true} />
-      <button className={styles.button} onClick={increaseIndex}>
+      <PlayButton isthisplay={true} onClick={togglePlay} />
+      <button className={styles.button} onClick={() => dispatch(nextTrack())}>
         <Icons.Next />
       </button>
       <IconButton icon={<Icons.Loop />} activeicon={<Icons.Loop />} />

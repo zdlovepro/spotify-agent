@@ -42,6 +42,12 @@
 .trackDiv:hover .playBtn{
     opacity: 1;
 }
+.DisabledTrack{
+    opacity: .5;
+}
+.DisabledTrack:hover{
+    background-color: transparent;
+}
 @media screen and (max-width: 640px) {
     .trackDiv{
         padding: 0;

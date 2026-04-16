@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useSpotify } from '../../context/SpotifyContext.jsx'
 import TitleS from '../text/TitleS'
 import TextRegularM from '../text/TextRegularM'
 import PlaylistButton from './PlaylistButton'
@@ -9,6 +10,10 @@ import styles from './playlist.module.css'
 
 function Playlist() {
   const { t } = useTranslation()
+  const { isAuthenticated, playlists } = useSpotify()
+  const libraryPlaylists = isAuthenticated
+    ? playlists
+    : PLAYLIST.filter((item) => item.type === 'playlist')
 
   return (
     <div className={styles.Playlist}>
@@ -29,7 +34,7 @@ function Playlist() {
       <hr className={styles.hr} />
 
       <div>
-        {PLAYLIST.filter((item) => item.type === 'playlist').map((list) => (
+        {libraryPlaylists.map((list) => (
           <Link to={`/playlist/${list.link}`} key={list.title}>
             <TextRegularM>{list.title}</TextRegularM>
           </Link>
