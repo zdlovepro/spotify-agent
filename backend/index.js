@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import authRouter from './routes/auth.js'
+import historyRouter from './routes/history.js'
 import spotifyRouter from './routes/spotify.js'
 
 dotenv.config()
@@ -19,6 +20,7 @@ app.use(
 app.use(express.json())
 
 app.use('/api/auth', authRouter)
+app.use('/api/history', historyRouter)
 app.use('/api/spotify', spotifyRouter)
 
 app.get('/api/test', (req, res) => {

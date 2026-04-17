@@ -38,6 +38,91 @@ function assert(condition, message, status = 400, details = undefined) {
 router.use(requireSpotifyAccessToken)
 
 router.get(
+  '/home',
+  asyncHandler(async (req, res) => {
+    const limit = parseInteger(req.query.limit, 8, { min: 1, max: 20 })
+
+    const [
+      profile,
+      topTracks,
+      topArtists,
+      userPlaylists,
+      featuredPlaylists,
+      newReleases,
+    ] = await Promise.all([
+      getCurrentUserProfile(req.accessToken),
+      getUserTopItems(req.accessToken, 'tracks', {
+        time_range: 'medium_term',
+        limit,
+        offset: 0,
+      }),
+      getUserTopItems(req.accessToken, 'artists', {
+        time_range: 'medium_term',
+        limit,
+        offset: 0,
+      }),
+      getUserPlaylists(req.accessToken, {
+        limit,
+        offset: 0,
+      }),
+      getFeaturedPlaylists(req.accessToken, {
+        limit,
+        offset: 0,
+      }),
+      getNewReleases(req.accessToken, {
+        limit,
+        offset: 0,
+      }),
+    ])
+
+    res.json({
+      profile,
+      topTracks: topTracks.items || [],
+      topArtists: topArtists.items || [],
+      playlists: userPlaylists.items || [],
+      featuredPlaylists: featuredPlaylists.playlists?.items || [],
+      newReleases: newReleases.albums?.items || [],
+    })
+  }),
+)
+
+router.get(
+  '/library/overview',
+  asyncHandler(async (req, res) => {
+    const limit = parseInteger(req.query.limit, 10, { min: 1, max: 20 })
+
+    const [playlists, savedTracks, savedAlbums, topArtists] = await Promise.all([
+      getUserPlaylists(req.accessToken, {
+        limit,
+        offset: 0,
+      }),
+      getUserSavedTracks(req.accessToken, {
+        limit,
+        offset: 0,
+        market: req.query.market || 'from_token',
+      }),
+      getUserSavedAlbums(req.accessToken, {
+        limit,
+        offset: 0,
+        market: req.query.market || 'from_token',
+      }),
+      getUserTopItems(req.accessToken, 'artists', {
+        time_range: 'medium_term',
+        limit,
+        offset: 0,
+      }),
+    ])
+
+    res.json({
+      playlists: playlists.items || [],
+      savedTracks: savedTracks.items || [],
+      savedAlbums: savedAlbums.items || [],
+      topArtists: topArtists.items || [],
+    })
+  }),
+)
+
+router.get(
   '/me',
   asyncHandler(async (req, res) => {
     const data = await getCurrentUserProfile(req.accessToken)

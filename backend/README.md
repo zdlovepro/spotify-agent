@@ -55,6 +55,8 @@ Authorization: Bearer <spotify_access_token>
 ### User
 
 - `GET /api/spotify/me`
+- `GET /api/spotify/home?limit=8`
+- `GET /api/spotify/library/overview?limit=10`
 - `GET /api/spotify/me/top/tracks?time_range=medium_term&limit=10&offset=0`
 - `GET /api/spotify/me/top/artists?time_range=medium_term&limit=10&offset=0`
 - `GET /api/spotify/me/tracks?limit=20&offset=0&market=from_token`
@@ -82,7 +84,45 @@ Authorization: Bearer <spotify_access_token>
 - `GET /api/spotify/recommendations?seed_tracks=id1,id2&limit=20`
 - `GET /api/spotify/recommendations?seed_artists=id1&seed_genres=pop&limit=20`
 
+## Recommendation History
+
+All history routes also require:
+
+```text
+Authorization: Bearer <spotify_access_token>
+```
+
+The backend derives the current Spotify user from the token and stores a per-user local history file.
+
+- `GET /api/history/recommendations?limit=20`
+- `POST /api/history/recommendations`
+- `DELETE /api/history/recommendations/:entryId`
+
+Example POST body:
+
+```json
+{
+  "title": "Late Night Discovery",
+  "prompt": "给我来点适合深夜学习的电子乐",
+  "description": "Warm electronic recommendations for focus",
+  "seeds": {
+    "genres": ["electronic", "ambient"]
+  },
+  "tracks": [
+    {
+      "id": "123",
+      "name": "Example Track",
+      "artists": ["Example Artist"],
+      "album": "Example Album",
+      "image": "https://...",
+      "previewUrl": "https://..."
+    }
+  ]
+}
+```
+
 Notes:
 
 - Spotify recommendations allow at most 5 combined seeds across `seed_tracks`, `seed_artists`, and `seed_genres`.
 - Query validation errors and Spotify API errors are normalized into JSON `{ "error": "..." }`.
+- A lightweight in-memory cache is enabled for Spotify GET requests to reduce repeated calls and help with rate-limit pressure.
