@@ -1,119 +1,153 @@
-import { Router } from 'express';
-import axios from 'axios';
-import crypto from 'crypto';
+import { Router } from 'express'
+import axios from 'axios'
+import crypto from 'crypto'
+import { asyncHandler } from '../middleware/async-handler.js'
 
-const router = Router();
+const router = Router()
+const STATE_TTL_MS = 10 * 60 * 1000
 
 const SCOPES = [
   'user-read-private',
   'user-read-email',
   'playlist-read-private',
-].join(' ');
+  'playlist-read-collaborative',
+  'user-library-read',
+  'user-top-read',
+].join(' ')
 
-// In-memory store for pending OAuth states (CSRF protection)
-const pendingStates = new Set();
+const pendingStates = new Map()
 
-function generateRandomString(length) {
-  return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
+function createClientCredentials() {
+  return Buffer.from(
+    `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`,
+  ).toString('base64')
 }
 
-// GET /api/auth/login
+function generateRandomString(length) {
+  return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length)
+}
+
+function pruneExpiredStates() {
+  const now = Date.now()
+
+  for (const [state, expiresAt] of pendingStates.entries()) {
+    if (expiresAt <= now) {
+      pendingStates.delete(state)
+    }
+  }
+}
+
+async function exchangeSpotifyToken(body) {
+  const response = await axios.post(
+    'https://accounts.spotify.com/api/token',
+    body.toString(),
+    {
+      headers: {
+        Authorization: `Basic ${createClientCredentials()}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    },
+  )
+
+  return response.data
+}
+
 router.get('/login', (req, res) => {
-  const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
-  const REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI;
-  const state = generateRandomString(16);
-  pendingStates.add(state);
+  pruneExpiredStates()
+
+  const state = generateRandomString(16)
+  pendingStates.set(state, Date.now() + STATE_TTL_MS)
+
   const params = new URLSearchParams({
     response_type: 'code',
-    client_id: CLIENT_ID,
+    client_id: process.env.SPOTIFY_CLIENT_ID,
     scope: SCOPES,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
     state,
-  });
-  res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);
-});
+  })
 
-// GET /api/auth/callback
-router.get('/callback', async (req, res) => {
-  const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
-  const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-  const REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI;
-  const FRONTEND_URI = process.env.FRONTEND_URI || 'http://localhost:5173';
-  const { code, state, error } = req.query;
+  res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`)
+})
 
-  if (error || !code) {
-    return res.redirect(
-      `${FRONTEND_URI}?error=${encodeURIComponent(error || 'access_denied')}`
-    );
-  }
+router.get(
+  '/callback',
+  asyncHandler(async (req, res) => {
+    pruneExpiredStates()
 
-  if (!state || !pendingStates.has(state)) {
-    return res.redirect(`${FRONTEND_URI}?error=state_mismatch`);
-  }
-  pendingStates.delete(state);
+    const frontendUri = process.env.FRONTEND_URI || 'http://localhost:5173'
+    const { code, state, error } = req.query
 
-  try {
-    const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-    const body = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: REDIRECT_URI,
-    });
+    if (error || !code) {
+      return res.redirect(
+        `${frontendUri}?error=${encodeURIComponent(error || 'access_denied')}`,
+      )
+    }
 
-    const response = await axios.post(
-      'https://accounts.spotify.com/api/token',
-      body.toString(),
-      {
-        headers: {
-          Authorization: `Basic ${credentials}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      }
-    );
+    if (!state || !pendingStates.has(state)) {
+      return res.redirect(`${frontendUri}?error=state_mismatch`)
+    }
 
-    const { access_token, refresh_token, expires_in } = response.data;
-    const params = new URLSearchParams({ access_token, refresh_token, expires_in });
-    res.redirect(`${FRONTEND_URI}?${params.toString()}`);
-  } catch (err) {
-    const message = err.response?.data?.error || err.message || 'token_exchange_failed';
-    res.redirect(`${FRONTEND_URI}?error=${encodeURIComponent(message)}`);
-  }
-});
+    pendingStates.delete(state)
 
-// GET /api/auth/refresh_token
-router.get('/refresh_token', async (req, res) => {
-  const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
-  const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-  const { refresh_token } = req.query;
+    try {
+      const tokenData = await exchangeSpotifyToken(
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
+        }),
+      )
 
-  if (!refresh_token) {
-    return res.status(400).json({ error: 'refresh_token is required' });
-  }
+      const params = new URLSearchParams({
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_in: String(tokenData.expires_in),
+      })
 
-  try {
-    const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token,
-    });
+      res.redirect(`${frontendUri}?${params.toString()}`)
+    } catch (error_) {
+      const message =
+        error_.response?.data?.error_description ||
+        error_.response?.data?.error ||
+        error_.message ||
+        'token_exchange_failed'
 
-    const response = await axios.post(
-      'https://accounts.spotify.com/api/token',
-      body.toString(),
-      {
-        headers: {
-          Authorization: `Basic ${credentials}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      }
-    );
+      res.redirect(`${frontendUri}?error=${encodeURIComponent(message)}`)
+    }
+  }),
+)
 
-    const { access_token, expires_in } = response.data;
-    res.json({ access_token, expires_in });
-  } catch (err) {
-    const message = err.response?.data?.error || err.message || 'refresh_failed';
-    res.status(400).json({ error: message });
-  }
-});
+router.get(
+  '/refresh_token',
+  asyncHandler(async (req, res) => {
+    const { refresh_token: refreshToken } = req.query
 
-export default router;
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'refresh_token is required' })
+    }
+
+    try {
+      const tokenData = await exchangeSpotifyToken(
+        new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+        }),
+      )
+
+      res.json({
+        access_token: tokenData.access_token,
+        expires_in: tokenData.expires_in,
+      })
+    } catch (error_) {
+      const message =
+        error_.response?.data?.error_description ||
+        error_.response?.data?.error ||
+        error_.message ||
+        'refresh_failed'
+
+      res.status(400).json({ error: message })
+    }
+  }),
+)
+
+export default router
