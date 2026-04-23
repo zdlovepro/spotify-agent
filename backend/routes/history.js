@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/async-handler.js'
+import { attachSpotifyProfile } from '../middleware/attach-spotify-profile.js'
 import { requireSpotifyAccessToken } from '../middleware/require-spotify-access-token.js'
-import { getCurrentUserProfile, parseInteger } from '../services/spotify-api.js'
+import { parseInteger } from '../services/spotify-api.js'
 import {
   deleteRecommendationHistory,
   listRecommendationHistory,
@@ -22,16 +23,7 @@ function assert(condition, message, status = 400, details = undefined) {
 }
 
 router.use(requireSpotifyAccessToken)
-
-router.use(
-  asyncHandler(async (req, res, next) => {
-    const profile = await getCurrentUserProfile(req.accessToken)
-
-    req.spotifyProfile = profile
-    req.spotifyUserId = profile.id
-    next()
-  }),
-)
+router.use(attachSpotifyProfile)
 
 router.get(
   '/recommendations',

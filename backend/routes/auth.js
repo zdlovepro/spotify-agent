@@ -70,11 +70,11 @@ router.get('/login', (req, res) => {
 })
 
 router.get(
-  '/callback',
+  '/spotify/callback',
   asyncHandler(async (req, res) => {
     pruneExpiredStates()
 
-    const frontendUri = process.env.FRONTEND_URI || 'http://localhost:5173'
+    const frontendUri = process.env.FRONTEND_URI || 'http://127.0.0.1:5173'
     const { code, state, error } = req.query
 
     if (error || !code) {
