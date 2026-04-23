@@ -16,6 +16,9 @@
     "nav_createPlaylist": "创建歌单",
     "nav_likedSongs": "喜欢的歌",
     "search_placeholder": "艺术家、歌曲或播客",
-    "playlist_title_col": "标题"
+    "playlist_title_col": "标题",
+    "playlist_unavailable": "歌单暂时不可用",
+    "playlist_loading": "歌单加载中...",
+    "preview_unavailable": "当前歌曲没有预览音频"
   }
 }

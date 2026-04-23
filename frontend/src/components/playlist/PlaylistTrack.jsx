@@ -12,23 +12,25 @@ function PlaylistTrack({ data }) {
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const trackData = useSelector((state) => state.player.trackData)
   const [thisSong, setThisSong] = useState(false)
+  const playable = data.song.playable ?? Boolean(data.song.link)
+  const isAlbumView = data.listType === 'album' || data.listType === 'alb眉m'
 
   useEffect(() => {
-    setThisSong(data.song.link === trackData.track && isPlaying === true)
-  }, [data.song.link, trackData.track, isPlaying])
+    setThisSong(
+      (data.song.id === trackData.id || data.song.link === trackData.track) &&
+        isPlaying === true,
+    )
+  }, [data.song.id, data.song.link, trackData.id, trackData.track, isPlaying])
 
   return (
     <div
-      className={`${styles.trackDiv} ${thisSong ? 'activeTrack' : ''}`}
-      style={
-        data.listType === 'albüm'
-          ? { gridTemplateColumns: '16px 1fr 38px' }
-          : {}
-      }
+      className={`${styles.trackDiv} ${thisSong ? 'activeTrack' : ''} ${!playable ? styles.DisabledTrack : ''}`}
+      style={isAlbumView ? { gridTemplateColumns: '16px 1fr 38px' } : {}}
     >
       <button
         className={styles.playBtn}
-        onClick={() => dispatch(changePlay(!isPlaying))}
+        disabled={!playable}
+        onClick={() => dispatch(changePlay(thisSong ? !isPlaying : true))}
       >
         {thisSong ? <Icons.Pause /> : <Icons.Play />}
       </button>
@@ -39,9 +41,7 @@ function PlaylistTrack({ data }) {
         <p className={styles.SongIndex}>{data.song.index}</p>
       )}
 
-      {data.listType !== 'albüm' && (
-        <img src={data.song.songimg} alt={data.song.songName} />
-      )}
+      {!isAlbumView && <img src={data.song.songimg} alt={data.song.songName} />}
 
       <span>
         <TextBoldL>{data.song.songName}</TextBoldL>

@@ -1,13 +1,12 @@
 import { useRef, useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { changeTrack, changePlay } from '../../store/index.js'
+import { nextTrack } from '../../store/index.js'
 import useWindowSize from '../../hooks/useWindowSize'
 import FooterLeft from './FooterLeft'
 import MusicControlBox from './player/MusicControlBox'
 import MusicProgressBar from './player/MusicProgressBar'
 import FooterRight from './FooterRight'
 import Audio from './Audio'
-import { PLAYLIST } from '../../data/index.js'
 import CONST from '../../constants/index.jsx'
 import styles from './footer.module.css'
 
@@ -23,34 +22,41 @@ function Footer() {
   const audioRef = useRef(null)
 
   const handleTrackClick = (position) => {
-    audioRef.current.currentTime = position
+    if (audioRef.current) {
+      audioRef.current.currentTime = position
+    }
   }
 
   useEffect(() => {
+    if (!audioRef.current) {
+      return
+    }
+
     if (isPlaying) {
-      audioRef.current.play()
+      audioRef.current.play().catch(() => {})
     } else {
       audioRef.current.pause()
     }
-  }, [isPlaying])
+  }, [isPlaying, trackData.track])
 
   useEffect(() => {
-    audioRef.current.volume = volume
+    if (audioRef.current) {
+      audioRef.current.volume = volume
+    }
   }, [volume])
 
   useEffect(() => {
     const audio = audioRef.current
-    const handleEnded = () => {
-      const [pIdx, tIdx] = trackData.trackKey
-      if (tIdx === PLAYLIST[pIdx].playlistData.length - 1) {
-        dispatch(changeTrack([pIdx, 0]))
-      } else {
-        dispatch(changeTrack([pIdx, tIdx + 1]))
-      }
+
+    if (!audio) {
+      return
     }
+
+    const handleEnded = () => dispatch(nextTrack())
+
     audio.addEventListener('ended', handleEnded)
     return () => audio.removeEventListener('ended', handleEnded)
-  }, [dispatch, trackData.trackKey])
+  }, [dispatch])
 
   return (
     <footer className={styles.footer}>

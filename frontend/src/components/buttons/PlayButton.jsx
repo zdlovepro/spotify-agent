@@ -1,11 +1,9 @@
-import { useSelector, useDispatch } from 'react-redux'
-import { changePlay } from '../../store/index.js'
+import { useSelector } from 'react-redux'
 import * as Icons from '../icons/index.jsx'
 import IconButton from './IconButton'
 import styles from './play-button.module.css'
 
-function PlayButton({ isthisplay }) {
-  const dispatch = useDispatch()
+function PlayButton({ isthisplay, onClick }) {
   const isPlaying = useSelector((state) => state.player.isPlaying)
 
   return (
@@ -13,7 +11,7 @@ function PlayButton({ isthisplay }) {
       className={styles.playBtn}
       tabIndex="0"
       role="button"
-      onClick={() => dispatch(changePlay(!isPlaying))}
+      onClick={onClick}
     >
       {isPlaying && isthisplay ? (
         <IconButton icon={<Icons.Pause />} activeicon={<Icons.Pause />} />

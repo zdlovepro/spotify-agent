@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { useTranslation } from 'react-i18next'
-import { changeTrack } from '../store/index.js'
+import { changePlay, changeTrack } from '../store/index.js'
+import { useSpotify } from '../context/SpotifyContext.jsx'
+import { createPlaybackQueue } from '../lib/spotify.js'
 import Topnav from '../components/topnav/Topnav'
 import TextRegularM from '../components/text/TextRegularM'
 import PlayButton from '../components/buttons/PlayButton'
@@ -16,18 +18,131 @@ import styles from './playlist.module.css'
 function PlaylistPage() {
   const dispatch = useDispatch()
   const trackData = useSelector((state) => state.player.trackData)
+  const isPlaying = useSelector((state) => state.player.isPlaying)
   const { path } = useParams()
-  const [playlistIndex, setPlaylistIndex] = useState(undefined)
-  const [isthisplay, setIsthisPlay] = useState(false)
   const { t } = useTranslation()
+  const { getPlaylistDetails, isAuthenticated } = useSpotify()
+  const [playlist, setPlaylist] = useState(null)
+  const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
 
   useEffect(() => {
-    setIsthisPlay(playlistIndex === trackData.trackKey[0])
-  }, [playlistIndex, trackData.trackKey])
+    let cancelled = false
 
-  function changeBg(color) {
-    document.documentElement.style.setProperty('--hover-home-bg', color)
+    async function loadPlaylist() {
+      const mockPlaylist = PLAYLIST.find((item) => item.link === path)
+
+      if (mockPlaylist) {
+        setPlaylist(mockPlaylist)
+        setIsLoadingPlaylist(false)
+        return
+      }
+
+      if (!isAuthenticated) {
+        setPlaylist(null)
+        return
+      }
+
+      setIsLoadingPlaylist(true)
+
+      try {
+        const spotifyPlaylist = await getPlaylistDetails(path)
+
+        if (!cancelled) {
+          setPlaylist(spotifyPlaylist)
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingPlaylist(false)
+        }
+      }
+    }
+
+    loadPlaylist()
+
+    return () => {
+      cancelled = true
+    }
+  }, [getPlaylistDetails, isAuthenticated, path])
+
+  useEffect(() => {
+    if (playlist?.playlistBg) {
+      document.documentElement.style.setProperty(
+        '--hover-home-bg',
+        playlist.playlistBg,
+      )
+    }
+  }, [playlist])
+
+  function startPlaylist(trackId) {
+    if (!playlist) {
+      return
+    }
+
+    const queue = createPlaybackQueue(playlist).filter((track) => track.playable)
+
+    if (!queue.length) {
+      return
+    }
+
+    const startIndex = trackId
+      ? queue.findIndex(
+          (track) => track.id === trackId || track.track === trackId,
+        )
+      : 0
+
+    dispatch(
+      changeTrack({
+        queue,
+        startIndex: startIndex >= 0 ? startIndex : 0,
+      }),
+    )
+    dispatch(changePlay(true))
   }
+
+  function togglePlaylistPlayback(event) {
+    event.preventDefault()
+
+    if (!playlist) {
+      return
+    }
+
+    if (trackData.playlistId === playlist.link) {
+      dispatch(changePlay(!isPlaying))
+      return
+    }
+
+    startPlaylist()
+  }
+
+  if (isLoadingPlaylist) {
+    return (
+      <div className={styles.PlaylistPage}>
+        <div className={styles.gradientBg} />
+        <div className={styles.gradientBgSoft} />
+        <div className={styles.Bg} />
+        <Topnav />
+        <div className={styles.PlaylistSongs}>
+          <TextRegularM>{t('playlist_loading')}</TextRegularM>
+        </div>
+      </div>
+    )
+  }
+
+  if (!playlist) {
+    return (
+      <div className={styles.PlaylistPage}>
+        <div className={styles.gradientBg} />
+        <div className={styles.gradientBgSoft} />
+        <div className={styles.Bg} />
+        <Topnav />
+        <div className={styles.PlaylistSongs}>
+          <TextRegularM>{t('playlist_unavailable')}</TextRegularM>
+        </div>
+      </div>
+    )
+  }
+
+  const isthisplay = trackData.playlistId === playlist.link
 
   return (
     <div className={styles.PlaylistPage}>
@@ -37,56 +152,43 @@ function PlaylistPage() {
 
       <Topnav />
 
-      {PLAYLIST.map((item) => {
-        if (item.link !== path) return null
-        const idx = PLAYLIST.indexOf(item)
-        return (
-          <div
-            key={item.title}
-            onLoad={() => {
-              changeBg(item.playlistBg)
-              setPlaylistIndex(idx)
-            }}
-          >
-            <PlaylistDetails data={item} />
+      <div>
+        <PlaylistDetails data={playlist} />
 
-            <div className={styles.PlaylistIcons}>
-              <button onClick={() => dispatch(changeTrack([idx, 0]))}>
-                <PlayButton isthisplay={isthisplay} />
-              </button>
-              <IconButton icon={<Icons.Like />} activeicon={<Icons.LikeActive />} />
-              <Icons.More className={styles.moreIcon} />
-            </div>
+        <div className={styles.PlaylistIcons}>
+          <button onClick={togglePlaylistPlayback}>
+            <PlayButton isthisplay={isthisplay} onClick={togglePlaylistPlayback} />
+          </button>
+          <IconButton icon={<Icons.Like />} activeicon={<Icons.LikeActive />} />
+          <Icons.More className={styles.moreIcon} />
+        </div>
 
-            <div className={styles.ListHead}>
-              <TextRegularM>#</TextRegularM>
-              <TextRegularM>{t('playlist_title_col')}</TextRegularM>
-              <Icons.Time />
-            </div>
+        <div className={styles.ListHead}>
+          <TextRegularM>#</TextRegularM>
+          <TextRegularM>{t('playlist_title_col')}</TextRegularM>
+          <Icons.Time />
+        </div>
 
-            <div className={styles.PlaylistSongs}>
-              {item.playlistData.map((song) => (
-                <button
-                  key={song.index}
-                  onClick={() =>
-                    dispatch(
-                      changeTrack([idx, item.playlistData.indexOf(song)]),
-                    )
-                  }
-                  className={styles.SongBtn}
-                >
-                  <PlaylistTrack
-                    data={{
-                      listType: item.type,
-                      song,
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-        )
-      })}
+        <div className={styles.PlaylistSongs}>
+          {playlist.playlistData.map((song) => (
+            <button
+              key={song.id || song.index}
+              type="button"
+              disabled={song.playable === false}
+              title={song.playable === false ? t('preview_unavailable') : song.songName}
+              onClick={() => startPlaylist(song.id || song.link)}
+              className={styles.SongBtn}
+            >
+              <PlaylistTrack
+                data={{
+                  listType: playlist.type,
+                  song,
+                }}
+              />
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

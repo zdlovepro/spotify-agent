@@ -4,11 +4,14 @@ import TitleL from '../components/text/TitleL'
 import TitleM from '../components/text/TitleM'
 import PlaylistCardS from '../components/cards/PlaylistCardS'
 import PlaylistCardM from '../components/cards/PlaylistCardM'
+import { useSpotify } from '../context/SpotifyContext.jsx'
 import { PLAYLIST } from '../data/index.js'
 import styles from './home.module.css'
 
 function Home() {
   const { t } = useTranslation()
+  const { isAuthenticated, playlists } = useSpotify()
+  const homePlaylists = isAuthenticated ? playlists : PLAYLIST
 
   return (
     <div className={styles.Home}>
@@ -23,7 +26,7 @@ function Home() {
           </div>
 
           <div className={styles.SectionCards}>
-            {PLAYLIST.map((item) => (
+            {homePlaylists.map((item) => (
               <PlaylistCardS key={item.title} data={item} />
             ))}
           </div>
@@ -35,7 +38,7 @@ function Home() {
           </div>
 
           <div className={styles.SectionCardsMedium}>
-            {PLAYLIST.slice(0, 6).map((item) => (
+            {homePlaylists.slice(0, 6).map((item) => (
               <PlaylistCardM key={item.title} data={item} />
             ))}
           </div>

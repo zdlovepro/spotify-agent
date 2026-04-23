@@ -16,6 +16,9 @@
     "nav_createPlaylist": "Create Playlist",
     "nav_likedSongs": "Liked Songs",
     "search_placeholder": "Artists, songs or podcasts",
-    "playlist_title_col": "TITLE"
+    "playlist_title_col": "TITLE",
+    "playlist_unavailable": "Playlist unavailable",
+    "playlist_loading": "Loading playlist...",
+    "preview_unavailable": "Preview unavailable"
   }
 }
