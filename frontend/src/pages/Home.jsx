@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next'
-import Topnav from '../components/topnav/Topnav'
 import AgentPreviewCard from '../components/agent/AgentPreviewCard'
 import TitleL from '../components/text/TitleL'
 import TitleM from '../components/text/TitleM'
@@ -18,8 +17,6 @@ function Home() {
     <div className={styles.Home}>
       <div className={styles.HoverBg} />
       <div className={styles.Bg} />
-
-      <Topnav />
       <div className={styles.Content}>
         <section className={styles.AgentSection}>
           <AgentPreviewCard />

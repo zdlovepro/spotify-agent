@@ -2,14 +2,75 @@
   min-height: 100vh;
   width: 100%;
   height: 100vh;
-  overflow-y: hidden;
+  overflow: hidden;
   position: relative;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px 8px 96px;
+  box-sizing: border-box;
+  background:
+    radial-gradient(circle at top, rgba(30, 215, 96, 0.08), transparent 30%),
+    #000;
+  align-items: stretch;
+}
+
+.topbarShell {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.mainShell {
+  grid-row: 2;
+  grid-column: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  border-radius: 18px;
+  background: #121212;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.mainShell > * {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable both-edges;
+}
+
+@media screen and (max-width: 1280px) {
+  .layout {
+    gap: 6px;
+    padding: 6px 6px 96px;
+  }
+}
+
+@media screen and (max-width: 920px) {
+  .layout {
+    padding: 0 0 112px;
+    gap: 0;
+  }
+
+  .mainShell {
+    border-radius: 16px 16px 0 0;
+  }
 }
 
 @media screen and (max-width: 640px) {
   .layout {
+    padding: 0 0 112px;
+    gap: 0;
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .mainShell {
+    grid-row: 2;
+    grid-column: 1;
+    border-radius: 0;
   }
 }

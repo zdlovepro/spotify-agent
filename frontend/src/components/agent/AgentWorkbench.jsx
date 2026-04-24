@@ -182,6 +182,7 @@ function AgentArtifact({
 
 function AgentWorkbench({
   prefilledPrompt = '',
+  autoSendPrefilledPrompt = false,
   onPrefilledPromptConsumed = undefined,
 }) {
   const dispatch = useDispatch()
@@ -224,9 +225,15 @@ function AgentWorkbench({
       return
     }
 
+    if (autoSendPrefilledPrompt) {
+      handleSend(prefilledPrompt).catch(() => {})
+      onPrefilledPromptConsumed?.()
+      return
+    }
+
     setMessage(prefilledPrompt)
     onPrefilledPromptConsumed?.()
-  }, [onPrefilledPromptConsumed, prefilledPrompt])
+  }, [autoSendPrefilledPrompt, onPrefilledPromptConsumed, prefilledPrompt])
 
   async function handleSend(inputMessage) {
     const nextMessage = String(inputMessage || message).trim()

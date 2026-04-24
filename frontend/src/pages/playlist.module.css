@@ -1,9 +1,9 @@
 .PlaylistPage{
-    overflow-y: scroll;
+    overflow-y: auto;
     overflow-x: hidden;
     background: transparent;
     position: relative;
-    margin-bottom: 95px;
+    height: 100%;
     padding-bottom: 16px;
     color: var(--text-white);
 }

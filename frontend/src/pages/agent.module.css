@@ -1,8 +1,9 @@
 .AgentPage {
   position: relative;
-  overflow-y: scroll;
+  overflow-y: auto;
   overflow-x: hidden;
   color: #fff;
+  height: 100%;
   background:
     radial-gradient(circle at top left, rgba(30, 215, 96, 0.1), transparent 26%),
     linear-gradient(180deg, rgba(10, 10, 10, 0.96), rgba(18, 18, 18, 1));

@@ -23,10 +23,10 @@ function AgentPreviewCard() {
     [t],
   )
 
-  function openAgent(prompt = '') {
+  function openAgent(prompt = '', autoSend = false) {
     if (prompt) {
       startNewConversation()
-      navigate('/agent', { state: { prompt } })
+      navigate('/agent', { state: { prompt, autoSend } })
       return
     }
 
@@ -75,7 +75,7 @@ function AgentPreviewCard() {
               key={prompt}
               type="button"
               className={styles.PromptBtn}
-              onClick={() => openAgent(prompt)}
+              onClick={() => openAgent(prompt, true)}
             >
               {prompt}
             </button>
