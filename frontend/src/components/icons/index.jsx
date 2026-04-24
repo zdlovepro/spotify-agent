@@ -1,6 +1,8 @@
 export { default as Corner } from './Corner'
 export { default as Down } from './Down'
 export { default as DownloadApp } from './DownloadApp'
+export { default as AgentActive } from './AgentActive'
+export { default as Agent } from './Agent'
 export { default as HomeActive } from './HomeActive'
 export { default as Home } from './Home'
 export { default as LibraryActive } from './LibraryActive'

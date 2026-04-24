@@ -4,6 +4,7 @@ import Sidebar from './components/sidebar/Sidebar'
 import MobileNavigation from './components/sidebar/MobileNavigation'
 import Footer from './components/footer/Footer'
 import Home from './pages/Home'
+import AgentPage from './pages/Agent'
 import Search from './pages/Search'
 import Library from './pages/Library'
 import PlaylistPage from './pages/Playlist'
@@ -19,6 +20,7 @@ function App() {
         {size.width > CONST.MOBILE_SIZE ? <Sidebar /> : <MobileNavigation />}
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/agent" element={<AgentPage />} />
           <Route path="/search" element={<Search />} />
           <Route path="/library" element={<Library />} />
           <Route path="/library/podcasts" element={<Library />} />
