@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { asyncHandler } from '../middleware/async-handler.js'
 import { attachSpotifyProfile } from '../middleware/attach-spotify-profile.js'
 import { requireSpotifyAccessToken } from '../middleware/require-spotify-access-token.js'
+import { assert } from '../utils/assert.js'
 import { parseInteger } from '../services/spotify-api.js'
 import {
   deleteRecommendationHistory,
@@ -10,17 +11,6 @@ import {
 } from '../services/recommendation-history-store.js'
 
 const router = Router()
-
-function assert(condition, message, status = 400, details = undefined) {
-  if (condition) {
-    return
-  }
-
-  const error = new Error(message)
-  error.status = status
-  error.details = details
-  throw error
-}
 
 router.use(requireSpotifyAccessToken)
 router.use(attachSpotifyProfile)

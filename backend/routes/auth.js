@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import axios from 'axios'
 import crypto from 'crypto'
+import env from '../config/env.js'
 import { asyncHandler } from '../middleware/async-handler.js'
 
 const router = Router()
@@ -19,7 +20,7 @@ const pendingStates = new Map()
 
 function createClientCredentials() {
   return Buffer.from(
-    `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`,
+    `${env.spotifyClientId}:${env.spotifyClientSecret}`,
   ).toString('base64')
 }
 
@@ -60,9 +61,9 @@ router.get('/login', (req, res) => {
 
   const params = new URLSearchParams({
     response_type: 'code',
-    client_id: process.env.SPOTIFY_CLIENT_ID,
+    client_id: env.spotifyClientId,
     scope: SCOPES,
-    redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
+    redirect_uri: env.spotifyRedirectUri,
     state,
   })
 
@@ -74,17 +75,16 @@ router.get(
   asyncHandler(async (req, res) => {
     pruneExpiredStates()
 
-    const frontendUri = process.env.FRONTEND_URI || 'http://127.0.0.1:5173'
     const { code, state, error } = req.query
 
     if (error || !code) {
       return res.redirect(
-        `${frontendUri}?error=${encodeURIComponent(error || 'access_denied')}`,
+        `${env.frontendUri}?error=${encodeURIComponent(error || 'access_denied')}`,
       )
     }
 
     if (!state || !pendingStates.has(state)) {
-      return res.redirect(`${frontendUri}?error=state_mismatch`)
+      return res.redirect(`${env.frontendUri}?error=state_mismatch`)
     }
 
     pendingStates.delete(state)
@@ -94,7 +94,7 @@ router.get(
         new URLSearchParams({
           grant_type: 'authorization_code',
           code,
-          redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
+          redirect_uri: env.spotifyRedirectUri,
         }),
       )
 
@@ -104,7 +104,7 @@ router.get(
         expires_in: String(tokenData.expires_in),
       })
 
-      res.redirect(`${frontendUri}?${params.toString()}`)
+      res.redirect(`${env.frontendUri}?${params.toString()}`)
     } catch (error_) {
       const message =
         error_.response?.data?.error_description ||
@@ -112,7 +112,7 @@ router.get(
         error_.message ||
         'token_exchange_failed'
 
-      res.redirect(`${frontendUri}?error=${encodeURIComponent(message)}`)
+      res.redirect(`${env.frontendUri}?error=${encodeURIComponent(message)}`)
     }
   }),
 )

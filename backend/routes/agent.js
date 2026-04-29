@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { asyncHandler } from '../middleware/async-handler.js'
 import { attachSpotifyProfile } from '../middleware/attach-spotify-profile.js'
 import { requireSpotifyAccessToken } from '../middleware/require-spotify-access-token.js'
+import { assert } from '../utils/assert.js'
 import { runAgent } from '../services/agent/agent-service.js'
 import {
   listAgentFeedback,
@@ -16,17 +17,6 @@ import {
 import { parseInteger } from '../services/spotify-api.js'
 
 const router = Router()
-
-function assert(condition, message, status = 400, details = undefined) {
-  if (condition) {
-    return
-  }
-
-  const error = new Error(message)
-  error.status = status
-  error.details = details
-  throw error
-}
 
 function sanitizeContext(context) {
   if (!context || typeof context !== 'object' || Array.isArray(context)) {

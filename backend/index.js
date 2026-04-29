@@ -1,19 +1,15 @@
 import express from 'express'
 import cors from 'cors'
-import dotenv from 'dotenv'
+import env from './config/env.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import agentRouter from './routes/agent.js'
 import authRouter from './routes/auth.js'
 import historyRouter from './routes/history.js'
 import spotifyRouter from './routes/spotify.js'
 
-dotenv.config()
-
 const app = express()
-const port = process.env.PORT || 8080
-const frontendUri = process.env.FRONTEND_URI || 'http://127.0.0.1:5173'
 const allowedOrigins = new Set([
-  frontendUri,
+  env.frontendUri,
   'http://localhost:5173',
   'http://127.0.0.1:5173',
 ])
@@ -45,6 +41,6 @@ app.get('/api/test', (req, res) => {
 app.use(notFoundHandler)
 app.use(errorHandler)
 
-app.listen(port, () => {
-  console.log(`Server is running on http://127.0.0.1:${port}`)
+app.listen(env.port, () => {
+  console.log(`Server is running on http://127.0.0.1:${env.port}`)
 })
