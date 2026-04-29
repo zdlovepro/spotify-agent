@@ -1,11 +1,14 @@
 import express from 'express'
 import cors from 'cors'
 import env from './config/env.js'
+import { migrateDatabase } from './db/migrate.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import agentRouter from './routes/agent.js'
 import authRouter from './routes/auth.js'
 import historyRouter from './routes/history.js'
 import spotifyRouter from './routes/spotify.js'
+
+migrateDatabase()
 
 const app = express()
 const allowedOrigins = new Set([
