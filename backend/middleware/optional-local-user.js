@@ -1,21 +1,50 @@
+import { getSession, touchSession } from '../services/auth/session-service.js'
+import { findUserById } from '../services/auth/user-service.js'
+
 function normalizeHeaderValue(value) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-export function resolveLocalUserFromRequest(req) {
-  const localUserId = normalizeHeaderValue(req.header('x-local-user-id'))
-  const sessionToken = normalizeHeaderValue(req.header('x-session-token'))
+function extractBearerToken(authorizationHeader) {
+  const value = normalizeHeaderValue(authorizationHeader)
 
-  if (!localUserId && !sessionToken) {
+  if (!value.toLowerCase().startsWith('bearer ')) {
+    return ''
+  }
+
+  return value.slice('bearer '.length).trim()
+}
+
+export function resolveLocalUserFromRequest(req) {
+  const authorizationToken = extractBearerToken(req.header('authorization'))
+  const headerToken = normalizeHeaderValue(req.header('x-session-token'))
+  const sessionToken = authorizationToken || headerToken
+
+  if (!sessionToken) {
     return null
   }
 
+  const session = getSession(sessionToken)
+
+  if (!session) {
+    return null
+  }
+
+  const user = findUserById(session.userId)
+
+  if (!user) {
+    return null
+  }
+
+  const refreshedSession = touchSession(sessionToken) || session
+
   return {
-    id: localUserId || null,
-    sessionToken: sessionToken || null,
+    ...user,
+    session: refreshedSession,
+    sessionToken,
     roles: [],
     providerLinks: [],
-    source: 'placeholder-local-auth',
+    source: 'local-session',
   }
 }
 
@@ -25,6 +54,7 @@ export function optionalLocalUser(req, res, next) {
   req.localUser = localUser
   req.localUserId = localUser?.id || null
   req.localSessionToken = localUser?.sessionToken || null
+  req.localSession = localUser?.session || null
   req.isLocalUserAuthenticated = Boolean(req.localUserId)
 
   next()

@@ -6,6 +6,7 @@ import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import agentRouter from './routes/agent.js'
 import authRouter from './routes/auth.js'
 import historyRouter from './routes/history.js'
+import localAuthRouter from './routes/local-auth.js'
 import spotifyRouter from './routes/spotify.js'
 
 migrateDatabase()
@@ -35,6 +36,7 @@ app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/agent', agentRouter)
 app.use('/api/history', historyRouter)
+app.use('/api/local-auth', localAuthRouter)
 app.use('/api/spotify', spotifyRouter)
 
 app.get('/api/test', (req, res) => {
