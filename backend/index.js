@@ -7,6 +7,7 @@ import agentRouter from './routes/agent.js'
 import authRouter from './routes/auth.js'
 import historyRouter from './routes/history.js'
 import localAuthRouter from './routes/local-auth.js'
+import providersRouter from './routes/providers.js'
 import spotifyRouter from './routes/spotify.js'
 
 migrateDatabase()
@@ -37,6 +38,7 @@ app.use('/api/auth', authRouter)
 app.use('/api/agent', agentRouter)
 app.use('/api/history', historyRouter)
 app.use('/api/local-auth', localAuthRouter)
+app.use('/api/providers', providersRouter)
 app.use('/api/spotify', spotifyRouter)
 
 app.get('/api/test', (req, res) => {

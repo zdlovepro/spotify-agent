@@ -16,9 +16,9 @@ function extractBearerToken(authorizationHeader) {
 }
 
 export function resolveLocalUserFromRequest(req) {
-  const authorizationToken = extractBearerToken(req.header('authorization'))
   const headerToken = normalizeHeaderValue(req.header('x-session-token'))
-  const sessionToken = authorizationToken || headerToken
+  const authorizationToken = extractBearerToken(req.header('authorization'))
+  const sessionToken = headerToken || authorizationToken
 
   if (!sessionToken) {
     return null
