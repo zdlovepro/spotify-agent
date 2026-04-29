@@ -11,12 +11,17 @@ function Navigation() {
   return (
     <div className={styles.navBtns}>
       {MENU.map((menu) => {
-        const selected = location.pathname === menu.path
+        const selected =
+          menu.path === '/'
+            ? location.pathname === '/'
+            : location.pathname === menu.path ||
+              location.pathname.startsWith(`${menu.path}/`)
+
         return (
           <NavLink
             to={menu.path}
-            end
-            className={({ isActive }) => (isActive ? 'activeLink' : '')}
+            end={menu.path === '/'}
+            className={() => (selected ? 'activeLink' : '')}
             key={menu.title}
           >
             <button className={styles.button}>

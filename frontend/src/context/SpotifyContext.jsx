@@ -54,14 +54,14 @@ export function SpotifyProvider({ children }) {
   }, [])
 
   const request = useCallback(
-    async (path) => {
+    async (path, options = {}) => {
       const activeSession = await ensureValidSession(session)
 
       if (!activeSession) {
         throw new Error('No active Spotify session')
       }
 
-      return spotifyApiRequest(path, activeSession)
+      return spotifyApiRequest(path, activeSession, options)
     },
     [ensureValidSession, session],
   )
@@ -171,6 +171,7 @@ export function SpotifyProvider({ children }) {
         logout,
         playlists,
         profile,
+        request,
       }}
     >
       {children}

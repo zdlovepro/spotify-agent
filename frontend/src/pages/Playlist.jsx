@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { changePlay, changeTrack } from '../store/index.js'
 import { useSpotify } from '../context/SpotifyContext.jsx'
 import { createPlaybackQueue } from '../lib/spotify.js'
-import Topnav from '../components/topnav/Topnav'
 import TextRegularM from '../components/text/TextRegularM'
 import PlayButton from '../components/buttons/PlayButton'
 import IconButton from '../components/buttons/IconButton'
@@ -120,7 +119,6 @@ function PlaylistPage() {
         <div className={styles.gradientBg} />
         <div className={styles.gradientBgSoft} />
         <div className={styles.Bg} />
-        <Topnav />
         <div className={styles.PlaylistSongs}>
           <TextRegularM>{t('playlist_loading')}</TextRegularM>
         </div>
@@ -134,7 +132,6 @@ function PlaylistPage() {
         <div className={styles.gradientBg} />
         <div className={styles.gradientBgSoft} />
         <div className={styles.Bg} />
-        <Topnav />
         <div className={styles.PlaylistSongs}>
           <TextRegularM>{t('playlist_unavailable')}</TextRegularM>
         </div>
@@ -149,8 +146,6 @@ function PlaylistPage() {
       <div className={styles.gradientBg} />
       <div className={styles.gradientBgSoft} />
       <div className={styles.Bg} />
-
-      <Topnav />
 
       <div>
         <PlaylistDetails data={playlist} />

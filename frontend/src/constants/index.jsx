@@ -27,6 +27,13 @@ export const MENU = [
     icon: <Icon.Library />,
     iconSelected: <Icon.LibraryActive />,
   },
+  {
+    title: 'Agent',
+    titleKey: 'nav_agent',
+    path: '/agent',
+    icon: <Icon.Agent />,
+    iconSelected: <Icon.AgentActive />,
+  },
 ]
 
 export const PLAYLISTBTN = [

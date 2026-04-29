@@ -1,8 +1,9 @@
 .LibPage{
     background-color: #121212;
     color: #fff;
-    overflow-y: scroll;
+    overflow-y: auto;
     overflow-x: hidden;
+    height: 100%;
 }
 .Library{
     padding: 32px;

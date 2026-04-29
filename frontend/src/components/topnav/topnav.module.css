@@ -1,103 +1,284 @@
-.Topnav{
+.Topnav {
     position: sticky;
     top: 0;
     right: 0;
     left: 0;
-    height: 60px;
     z-index: 99;
-    background-color: transparent;
+    padding: 16px 32px 12px;
+    background:
+        linear-gradient(180deg, rgba(18, 18, 18, 0.94), rgba(18, 18, 18, 0.82), transparent);
+    backdrop-filter: blur(18px);
+    border-radius: 18px;
 }
-.Topnav div{
-    padding: 0px 32px;
-    height: 60px;
+
+.Inner {
+    min-height: 56px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 16px;
 }
-.Topnav div div{
-    position: relative;
-    margin: 0;
-    padding: 0;
-    display: inline-block;
-    height: auto;
-}
-.Topnav span {
+
+.LeftGroup,
+.RightGroup {
     display: flex;
     align-items: center;
+    gap: 12px;
+    min-width: 0;
 }
-.LangBtn{
-    border: 1px solid rgba(255,255,255,.3);
-    height: 32px;
-    padding: 0 12px;
-    border-radius: 16px;
-    background-color: transparent;
+
+.LeftGroup {
+    flex: 1 1 auto;
+}
+
+.RightGroup {
+    flex: 0 0 auto;
+}
+
+.BrandLink {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
     color: #fff;
-    margin-right: 8px;
+    text-decoration: none;
+    min-width: 0;
+    margin-right: 4px;
+}
+
+.BrandIcon {
+    width: 82px;
+    height: 82px;
+    object-fit: contain;
+}
+
+.BrandText {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+}
+
+.IconLink {
+    color: inherit;
+}
+
+.HomeButton {
+    width: 48px;
+    height: 48px;
+    border-radius: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    transition: transform .2s ease, background-color .2s ease;
+}
+
+.HomeButton:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.HomeButton svg {
+    font-size: 21px;
+}
+
+.HomeButtonActive {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.AgentButton {
+    height: 48px;
+    border-radius: 999px;
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(30, 215, 96, 0.16);
+    border: 1px solid rgba(30, 215, 96, 0.42);
+    color: #1ed760;
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 800;
+    transition: transform .2s ease, background-color .2s ease, color .2s ease;
+}
+
+.AgentButton:hover {
+    transform: translateY(-1px);
+    background: rgba(30, 215, 96, 0.22);
+}
+
+.AgentButton svg {
+    font-size: 18px;
+}
+
+.AgentButtonActive {
+    background: #1ed760;
+    color: #04160a;
+}
+
+.SecondaryRow {
+    margin-top: 12px;
+}
+
+.LangBtn,
+.SecondaryBtn,
+.ProfileBtn {
+    height: 36px;
+    border-radius: 999px;
+    color: #fff;
     cursor: pointer;
+    transition: transform .2s ease, border-color .2s ease, background-color .2s ease;
 }
+
+.LangBtn:hover,
+.SecondaryBtn:hover,
+.ProfileBtn:hover {
+    transform: translateY(-1px);
+}
+
+.LangBtn {
+    border: 1px solid rgba(255, 255, 255, .16);
+    padding: 0 14px;
+    background-color: rgba(255, 255, 255, .04);
+}
+
 .LangBtn:hover {
-    border-color: #fff;
+    border-color: rgba(255, 255, 255, .34);
 }
-.StatusText{
-    margin-right: 12px;
+
+.StatusText {
     max-width: 220px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    color: rgba(255,255,255,.7);
+    color: rgba(255, 255, 255, .7);
 }
-.SecondaryBtn{
-    border: 1px solid rgba(255,255,255,.2);
-    height: 32px;
-    padding: 0 12px;
-    border-radius: 16px;
+
+.SecondaryBtn {
+    border: 1px solid rgba(255, 255, 255, .12);
+    padding: 0 14px;
     background-color: transparent;
-    color: #fff;
-    cursor: pointer;
-    margin-right: 8px;
 }
-.ProfileBtn{
-    border: none;
-    height: 32px;
-    padding: 0px 16px;
-    border-radius: 16px;
-    background-color: rgba(0,0,0,.7);
-    color: #fff;
-    cursor: pointer;
+
+.ProfileBtn {
+    border: 0;
+    padding: 0 16px;
+    background-color: rgba(255, 255, 255, .09);
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-@media screen and (max-width: 640px) {
-    .Topnav{
-        background-color: #121212;
-        height: 50px;
+
+@media screen and (max-width: 1360px) {
+    .Topnav {
+        padding: 14px 24px 10px;
     }
-    .Topnav div{
-        height: 50px;
-        padding: 0px 16px;
+
+    .BrandIcon {
+        width: 64px;
+        height: 64px;
     }
-    .StatusText{
+
+    .BrandText {
         display: none;
     }
-    .Topnav div div{
-        position: absolute;
-        left: 0;
-        top: 46px;
-        right: 0;
-        padding: 8px 16px;
-        background: #121212;
-        border-top: 1px solid #333333;
-        border-bottom: 1px solid #333333;
+}
+
+@media screen and (max-width: 1180px) {
+    .LeftGroup,
+    .RightGroup {
+        gap: 10px;
     }
-    .Topnav div nav{
-        position: absolute;
-        left: 0;
-        top: 46px;
-        right: 0;
-        padding: 8px 16px;
-        background: #121212;
-        border-top: 1px solid #333333;
-        border-bottom: 1px solid #333333;
-        display: grid;
-        grid-template-columns: 128px 106px 98px 94px;
-        overflow-x: scroll;
+
+    .AgentButton {
+        padding: 0 14px;
+    }
+
+    .LangBtn,
+    .SecondaryBtn,
+    .ProfileBtn {
+        height: 34px;
+        font-size: 13px;
+    }
+
+    .ProfileBtn {
+        max-width: 140px;
+    }
+}
+
+@media screen and (max-width: 980px) {
+    .Topnav {
+        padding: 12px 18px 10px;
+    }
+
+    .Inner {
+        flex-wrap: wrap;
+        row-gap: 10px;
+    }
+
+    .LeftGroup {
+        width: 100%;
+        order: 2;
+    }
+
+    .RightGroup {
+        order: 1;
+        margin-left: auto;
+    }
+
+    .SecondaryBtn {
+        display: none;
+    }
+}
+
+@media screen and (max-width: 760px) {
+    .Topnav {
+        border-radius: 0;
+    }
+
+    .AgentButton span {
+        display: none;
+    }
+
+    .ProfileBtn {
+        max-width: 110px;
+    }
+}
+
+@media screen and (max-width: 640px) {
+    .Topnav {
+        padding: 12px 16px 8px;
+        background-color: #121212;
+        border-radius: 0;
+    }
+
+    .Inner {
+        min-height: 50px;
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .LeftGroup,
+    .RightGroup {
+        width: 100%;
+        gap: 8px;
+    }
+
+    .AgentButton span {
+        display: none;
+    }
+
+    .BrandText {
+        display: none;
+    }
+
+    .StatusText {
+        display: none;
+    }
+
+    .SecondaryRow {
+        margin-top: 10px;
     }
 }

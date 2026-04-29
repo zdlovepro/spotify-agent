@@ -1,7 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import TitleM from '../components/text/TitleM'
-import Topnav from '../components/topnav/Topnav'
 import PlaylistCardM from '../components/cards/PlaylistCardM'
 import { useSpotify } from '../context/SpotifyContext.jsx'
 import { PLAYLIST } from '../data/index.js'
@@ -15,7 +14,6 @@ function Library() {
 
   return (
     <div className={styles.LibPage}>
-      <Topnav tabButtons={true} />
       <div className={styles.Library}>
         <Routes>
           <Route path="/" element={<PlaylistTab playlists={playlistItems} />} />

@@ -1,6 +1,6 @@
 import { configureStore, createSlice } from '@reduxjs/toolkit'
 import { PLAYLIST } from '../data/index.js'
-import { createPlaybackQueue } from '../lib/spotify.js'
+import { createAgentPlaybackQueue, createPlaybackQueue } from '../lib/spotify.js'
 
 const initialQueue = createPlaybackQueue(PLAYLIST[0])
 
@@ -88,6 +88,68 @@ const playerSlice = createSlice({
 
 export const { changePlay, changeTrack, nextTrack, previousTrack } =
   playerSlice.actions
+
+export function startAgentPlayback({
+  tracks,
+  startIndex = 0,
+  playlistId = `agent-${Date.now()}`,
+  playlistTitle = 'Agent Queue',
+}) {
+  return (dispatch) => {
+    const queue = createAgentPlaybackQueue(tracks, {
+      playlistId,
+      playlistTitle,
+    })
+
+    if (!queue.some((track) => track.playable)) {
+      return
+    }
+
+    dispatch(
+      changeTrack({
+        queue,
+        startIndex,
+      }),
+    )
+    dispatch(changePlay(true))
+  }
+}
+
+export function executePlayerActions(actions = []) {
+  return (dispatch) => {
+    for (const action of actions) {
+      switch (action?.type) {
+        case 'player.replace_queue':
+          dispatch(
+            startAgentPlayback({
+              tracks: action.payload?.tracks || [],
+              startIndex: action.payload?.startIndex || 0,
+              playlistId:
+                action.payload?.playlistId || `agent-${Date.now()}`,
+              playlistTitle: action.payload?.playlistTitle || 'Agent Queue',
+            }),
+          )
+          break
+        case 'player.next':
+          dispatch(nextTrack())
+          dispatch(changePlay(true))
+          break
+        case 'player.previous':
+          dispatch(previousTrack())
+          dispatch(changePlay(true))
+          break
+        case 'player.pause':
+          dispatch(changePlay(false))
+          break
+        case 'player.resume':
+          dispatch(changePlay(true))
+          break
+        default:
+          break
+      }
+    }
+  }
+}
 
 export const store = configureStore({
   reducer: {

@@ -1,44 +1,213 @@
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useSelector } from 'react-redux'
 import { useSpotify } from '../../context/SpotifyContext.jsx'
-import TitleS from '../text/TitleS'
-import TextRegularM from '../text/TextRegularM'
-import PlaylistButton from './PlaylistButton'
 import { PLAYLISTBTN } from '../../constants/index.jsx'
 import { PLAYLIST } from '../../data/index.js'
+import * as Icons from '../icons/index.jsx'
 import styles from './playlist.module.css'
+
+function normalizeType(item) {
+  const rawType = String(item.type || 'playlist').toLowerCase()
+
+  if (rawType.includes('album') || rawType.includes('alb')) {
+    return 'album'
+  }
+
+  if (rawType.includes('artist')) {
+    return 'artist'
+  }
+
+  if (rawType.includes('podcast')) {
+    return 'podcast'
+  }
+
+  return 'playlist'
+}
+
+function getItemImage(item) {
+  return item.imgUrl || item.cover || item.playlistData?.[0]?.songimg || ''
+}
+
+function getTypeLabel(item, t) {
+  switch (normalizeType(item)) {
+    case 'album':
+      return t('search_result_album')
+    case 'artist':
+      return t('search_result_artist')
+    case 'podcast':
+      return t('podcasts')
+    default:
+      return t('search_result_playlist')
+  }
+}
 
 function Playlist() {
   const { t } = useTranslation()
   const { isAuthenticated, playlists } = useSpotify()
-  const libraryPlaylists = isAuthenticated
-    ? playlists
-    : PLAYLIST.filter((item) => item.type === 'playlist')
+  const activePlaylistId = useSelector((state) => state.player.trackData.playlistId)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('playlist')
+  const [sortMode, setSortMode] = useState('recent')
+
+  const librarySource = isAuthenticated ? playlists : PLAYLIST
+
+  const libraryItems = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+
+    const filteredItems = librarySource.filter((item) => {
+      const itemType = normalizeType(item)
+
+      if (filter !== 'all' && itemType !== filter) {
+        return false
+      }
+
+      if (!normalizedQuery) {
+        return true
+      }
+
+      const searchText = `${item.title || ''} ${item.artist || ''} ${item.description || ''}`
+        .toLowerCase()
+        .trim()
+
+      return searchText.includes(normalizedQuery)
+    })
+
+    if (sortMode === 'title') {
+      return [...filteredItems].sort((left, right) =>
+        String(left.title || '').localeCompare(String(right.title || '')),
+      )
+    }
+
+    return filteredItems
+  }, [filter, librarySource, query, sortMode])
+
+  const filterItems = [
+    { key: 'playlist', label: t('library_filter_playlists') },
+    { key: 'album', label: t('library_filter_albums') },
+    { key: 'podcast', label: t('podcasts') },
+  ]
 
   return (
     <div className={styles.Playlist}>
-      <TitleS>{t('playlists')}</TitleS>
+      <header className={styles.Header}>
+        <button type="button" className={styles.LibraryTitle}>
+          <span>{t('nav_yourLibrary')}</span>
+        </button>
 
-      <div>
-        {PLAYLISTBTN.map((playlist) => (
-          <PlaylistButton
-            href={playlist.path}
-            ImgName={playlist.ImgName}
-            key={playlist.title}
+        <div className={styles.HeaderActions}>
+          <button
+            type="button"
+            className={styles.IconAction}
+            aria-label={t('library_action_create')}
+            title={t('library_action_create')}
           >
-            {t(playlist.titleKey)}
-          </PlaylistButton>
+            +
+          </button>
+          <button
+            type="button"
+            className={styles.IconAction}
+            aria-label={t('library_action_expand')}
+            title={t('library_action_expand')}
+          >
+            ↗
+          </button>
+        </div>
+      </header>
+
+      <div className={styles.FilterRow}>
+        {filterItems.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={`${styles.FilterChip} ${filter === item.key ? styles.ActiveChip : ''}`}
+            onClick={() => setFilter(item.key)}
+          >
+            {item.label}
+          </button>
         ))}
       </div>
 
-      <hr className={styles.hr} />
+      <div className={styles.UtilityRow}>
+        <label className={styles.SearchField}>
+          <Icons.Search />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t('library_search_placeholder')}
+            type="search"
+          />
+        </label>
 
-      <div>
-        {libraryPlaylists.map((list) => (
-          <Link to={`/playlist/${list.link}`} key={list.title}>
-            <TextRegularM>{list.title}</TextRegularM>
-          </Link>
-        ))}
+        <button
+          type="button"
+          className={styles.SortButton}
+          onClick={() =>
+            setSortMode((currentMode) =>
+              currentMode === 'recent' ? 'title' : 'recent',
+            )
+          }
+        >
+          {sortMode === 'recent'
+            ? t('library_sort_recent')
+            : t('library_sort_title')}
+        </button>
+      </div>
+
+      {!isAuthenticated && (
+        <div className={styles.Shortcuts}>
+          {PLAYLISTBTN.map((item) => (
+            <div key={item.title} className={styles.ShortcutCard}>
+              <span>{t(item.titleKey)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className={styles.List}>
+        {libraryItems.map((list) => {
+          const isActive = activePlaylistId === list.link
+          const image = getItemImage(list)
+
+          return (
+            <Link
+              to={`/playlist/${list.link}`}
+              key={list.link || list.title}
+              className={`${styles.LibraryItem} ${isActive ? styles.ActiveItem : ''}`}
+            >
+              <div
+                className={styles.Cover}
+                style={{
+                  backgroundColor: list.playlistBg || list.hoverColor || '#303030',
+                }}
+              >
+                {image ? (
+                  <img src={image} alt={list.title} />
+                ) : (
+                  <span>♫</span>
+                )}
+              </div>
+
+              <div className={styles.LibraryItemCopy}>
+                <p className={styles.ItemTitle}>{list.title}</p>
+                <p className={styles.ItemMeta}>
+                  {getTypeLabel(list, t)}
+                  {list.artist ? ` • ${list.artist}` : ''}
+                </p>
+              </div>
+
+              {isActive && <span className={styles.PlayingDot} />}
+            </Link>
+          )
+        })}
+
+        {libraryItems.length === 0 && (
+          <div className={styles.EmptyState}>
+            <p>{t('library_empty')}</p>
+            <span>{t('library_empty_hint')}</span>
+          </div>
+        )}
       </div>
     </div>
   )

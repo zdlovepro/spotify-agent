@@ -1,20 +1,28 @@
 import { useState, useEffect } from 'react'
+import useWindowSize from '../../hooks/useWindowSize'
 import useMousePosition from '../../hooks/useMousePosition'
-import { Logo } from '../icons/index.jsx'
 import Playlist from './Playlist'
-import Navigation from './Navigation'
 import styles from './sidebar.module.css'
 
 function Sidebar() {
-  const [width, setWidth] = useState(236)
+  const size = useWindowSize()
+  const minWidth = 280
+  const maxWidth = Math.max(minWidth, Math.min(420, Math.floor(size.width * 0.34)))
+  const [width, setWidth] = useState(328)
   const [isMouseDown, setIsMouseDown] = useState(false)
   const { x } = useMousePosition()
+
+  useEffect(() => {
+    setWidth((currentWidth) =>
+      Math.min(Math.max(currentWidth, minWidth), maxWidth),
+    )
+  }, [maxWidth])
 
   useEffect(() => {
     if (!isMouseDown) return
 
     const handleMove = () => {
-      if (x > 200 && x < 316) {
+      if (x > minWidth && x < maxWidth) {
         setWidth(x)
       }
     }
@@ -25,24 +33,21 @@ function Sidebar() {
 
     document.addEventListener('mousemove', handleMove)
     document.addEventListener('mouseup', handleUp)
-    return () => {
+      return () => {
       document.removeEventListener('mousemove', handleMove)
       document.removeEventListener('mouseup', handleUp)
     }
-  }, [isMouseDown, x])
+  }, [isMouseDown, maxWidth, minWidth, x])
 
   return (
-    <nav className={styles.SideNavbar} style={{ width: `${width}px` }}>
+    <nav
+      className={styles.SideNavbar}
+      style={{ width: `${Math.min(width, maxWidth)}px` }}
+    >
       <div className={styles.Fixed}>
-        <div>
-          <Logo />
-        </div>
-        <div>
-          <Navigation />
-        </div>
-        <div>
+        <section className={styles.LibrarySection}>
           <Playlist />
-        </div>
+        </section>
       </div>
       <div
         className={`${styles.changeWidth} ${isMouseDown ? styles.ActiveChange : ''}`}
