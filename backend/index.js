@@ -5,6 +5,7 @@ import { migrateDatabase } from './db/migrate.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import agentRouter from './routes/agent.js'
 import authRouter from './routes/auth.js'
+import catalogRouter from './routes/catalog.js'
 import historyRouter from './routes/history.js'
 import localAuthRouter from './routes/local-auth.js'
 import providersRouter from './routes/providers.js'
@@ -36,6 +37,7 @@ app.use(express.json())
 
 app.use('/api/auth', authRouter)
 app.use('/api/agent', agentRouter)
+app.use('/api/catalog', catalogRouter)
 app.use('/api/history', historyRouter)
 app.use('/api/local-auth', localAuthRouter)
 app.use('/api/providers', providersRouter)
