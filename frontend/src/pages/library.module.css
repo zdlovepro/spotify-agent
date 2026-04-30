@@ -18,6 +18,34 @@
     gap: 24px;
     grid-template-columns: repeat(auto-fill,minmax(var(--cards-column-width),1fr));
 }
+
+.EmptyState {
+    display: grid;
+    gap: 14px;
+    padding: 22px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.EmptyText {
+    margin: 16px 0 0;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.7;
+}
+
+.PrimaryBtn {
+    width: fit-content;
+    min-height: 44px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #1ed760, #17b44f);
+    color: #04160a;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 @media screen and (max-width: 640px) {
     .Library{
         padding: 16px;

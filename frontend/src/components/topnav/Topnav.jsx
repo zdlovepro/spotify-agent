@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { useSpotify } from '../../context/SpotifyContext.jsx'
+import AuthDialog from '../auth/AuthDialog.jsx'
 import appIcon from '../../assets/topbar-picture.png'
 import * as Icons from '../icons/index.jsx'
 import SearchBox from './SearchBox'
@@ -9,8 +12,22 @@ import styles from './topnav.module.css'
 
 function Topnav() {
   const { t, i18n } = useTranslation()
-  const { error, isAuthenticated, login, logout, profile } = useSpotify()
+  const {
+    error: authError,
+    isAuthenticated,
+    logout,
+    openAuthDialog,
+    user,
+  } = useAuth()
+  const {
+    connect,
+    disconnect,
+    error: spotifyError,
+    isConnected,
+    profile,
+  } = useSpotify()
   const location = useLocation()
+  const [connectHint, setConnectHint] = useState('')
 
   const toggleLanguage = () => {
     const next = i18n.language === 'zh' ? 'en' : 'zh'
@@ -21,6 +38,37 @@ function Topnav() {
   const isHome = location.pathname === '/'
   const showLibraryTabs =
     location.pathname === '/library' || location.pathname.startsWith('/library/')
+  const isSpotifyEnhanced = isAuthenticated && isConnected
+  const statusText = connectHint || spotifyError || authError
+  const displayName =
+    user?.displayName || user?.email || profile?.display_name || t('appName')
+  const modeLabel = !isAuthenticated
+    ? t('mode_guest')
+    : isSpotifyEnhanced
+      ? t('mode_spotify_enhanced')
+      : t('mode_local')
+
+  useEffect(() => {
+    if (isAuthenticated || isConnected) {
+      setConnectHint('')
+    }
+  }, [isAuthenticated, isConnected])
+
+  function handleConnectSpotify() {
+    if (!isAuthenticated) {
+      setConnectHint(t('spotify_requires_local_account'))
+      openAuthDialog('login')
+      return
+    }
+
+    setConnectHint('')
+    connect(location.pathname)
+  }
+
+  function handleDisconnectSpotify() {
+    setConnectHint('')
+    disconnect()
+  }
 
   return (
     <nav className={styles.Topnav}>
@@ -51,7 +99,19 @@ function Topnav() {
         </div>
 
         <div className={styles.RightGroup}>
-          {error && <small className={styles.StatusText}>{error}</small>}
+          {statusText && <small className={styles.StatusText}>{statusText}</small>}
+
+          <span
+            className={`${styles.ModeBadge} ${
+              isSpotifyEnhanced
+                ? styles.ModeBadgeEnhanced
+                : isAuthenticated
+                  ? styles.ModeBadgeLocal
+                  : styles.ModeBadgeGuest
+            }`}
+          >
+            {modeLabel}
+          </span>
 
           <button className={styles.LangBtn} onClick={toggleLanguage}>
             {i18n.language === 'zh' ? 'EN' : '中文'}
@@ -59,17 +119,40 @@ function Topnav() {
 
           {isAuthenticated ? (
             <>
+              <button
+                className={styles.SecondaryBtn}
+                onClick={isConnected ? handleDisconnectSpotify : handleConnectSpotify}
+              >
+                {isConnected ? t('spotify_disconnect') : t('spotify_connect')}
+              </button>
+              <button className={styles.ProfileBtn} title={displayName}>
+                {displayName}
+              </button>
               <button className={styles.SecondaryBtn} onClick={logout}>
                 {t('logout')}
               </button>
-              <button className={styles.ProfileBtn}>
-                {profile?.display_name || t('appName')}
-              </button>
             </>
           ) : (
-            <button className={styles.ProfileBtn} onClick={login}>
-              {t('login')}
-            </button>
+            <>
+              <button
+                className={styles.SecondaryBtn}
+                onClick={handleConnectSpotify}
+              >
+                {t('spotify_connect')}
+              </button>
+              <button
+                className={styles.SecondaryBtn}
+                onClick={() => openAuthDialog('register')}
+              >
+                {t('register')}
+              </button>
+              <button
+                className={styles.ProfileBtn}
+                onClick={() => openAuthDialog('login')}
+              >
+                {t('login')}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -79,6 +162,8 @@ function Topnav() {
           <LibraryTabBtn />
         </div>
       )}
+
+      <AuthDialog />
     </nav>
   )
 }
