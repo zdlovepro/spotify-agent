@@ -1,4 +1,4 @@
-import { buildUserTasteProfile } from './memory-service.js'
+import { createEmptyMemoryProfile } from './memory-service.js'
 import {
   buildConversationTitle,
   classifyIntent,
@@ -25,15 +25,6 @@ const genreKeywordMap = [
   { seed: 'party', keywords: ['派对', 'party'] },
   { seed: 'work-out', keywords: ['运动', '健身', 'workout', 'work-out'] },
 ]
-
-function createEmptyMemoryProfile() {
-  return {
-    topTracks: [],
-    topArtists: [],
-    recentRecommendations: [],
-    recentFeedback: [],
-  }
-}
 
 function normalizeMessage(message) {
   return String(message || '').trim()
@@ -711,11 +702,13 @@ export async function runAgent({
   const memoryProfile =
     intentResult.intent === 'control_player'
       ? createEmptyMemoryProfile()
-      : await buildUserTasteProfile({
-          mode,
-          localUserId,
-          providerLinks,
-        })
+      : mode === 'guest'
+        ? createEmptyMemoryProfile()
+        : await tools.run('memory.get_user_profile', {
+            topLimit: 5,
+            recommendationLimit: 5,
+            feedbackLimit: 5,
+          })
 
   let result
 

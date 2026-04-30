@@ -3,7 +3,7 @@ import { getUserTopItems, parseInteger } from '../spotify-api.js'
 import { listStoredFeedback } from './agent-feedback-service.js'
 import { listStoredRecommendationRuns } from './agent-recommendation-service.js'
 
-function createEmptyMemoryProfile() {
+export function createEmptyMemoryProfile() {
   return {
     topTracks: [],
     topArtists: [],
@@ -41,9 +41,8 @@ function uniqueBy(items, selector) {
   })
 }
 
-function mapLibraryTrack(track = {}) {
-  const rawArtists = Array.isArray(track.artists) ? track.artists : []
-  const artists = rawArtists
+function normalizeArtistNames(artists) {
+  return (Array.isArray(artists) ? artists : [])
     .map((artist) => {
       if (typeof artist === 'string') {
         return artist.trim()
@@ -56,6 +55,9 @@ function mapLibraryTrack(track = {}) {
       return ''
     })
     .filter(Boolean)
+}
+
+export function mapLibraryTrack(track = {}) {
   const sourceType =
     typeof track.source_type === 'string'
       ? track.source_type
@@ -78,23 +80,23 @@ function mapLibraryTrack(track = {}) {
     sourceType,
     sourceId,
     name: track.title || track.name || 'Unknown track',
-    artists,
+    artists: normalizeArtistNames(track.artists),
     popularity: null,
   }
 }
 
-function mapSpotifyTrack(track = {}) {
+export function mapSpotifyTrack(track = {}) {
   return {
     id: track.id,
     sourceType: 'spotify',
     sourceId: `spotify:track:${track.id}`,
     name: track.name,
-    artists: (track.artists || []).map((artist) => artist.name),
+    artists: normalizeArtistNames(track.artists),
     popularity: track.popularity ?? null,
   }
 }
 
-function mapSpotifyArtist(artist = {}) {
+export function mapSpotifyArtist(artist = {}) {
   return {
     id: artist.id,
     sourceType: 'spotify',
@@ -153,10 +155,29 @@ function collectPlaylistTracks(localUserId, limit) {
   return collectedTracks
 }
 
-export async function buildUserTasteProfile({
-  mode,
+function normalizeRecommendationHistoryEntries(entries = []) {
+  return entries.map((entry) => ({
+    id: entry.id,
+    title: entry.title,
+    prompt: entry.prompt,
+    seeds: entry.seeds,
+    createdAt: entry.createdAt,
+  }))
+}
+
+function normalizeFeedbackEntries(entries = []) {
+  return entries.map((entry) => ({
+    id: entry.id,
+    feedback: entry.feedback,
+    recommendationId: entry.recommendationId,
+    messageId: entry.messageId,
+    note: entry.note,
+    createdAt: entry.createdAt,
+  }))
+}
+
+export function buildLocalTasteProfile({
   localUserId,
-  providerLinks = {},
   recommendationLimit = 5,
   topLimit = 5,
   feedbackLimit = 5,
@@ -179,71 +200,17 @@ export async function buildUserTasteProfile({
     .map((favorite) => mapLibraryTrack(favorite))
     .filter((track) => track.id)
   const playlistTracks = collectPlaylistTracks(localUserId, safeTopLimit)
-  const localTracks = uniqueBy(
+  const topTracks = uniqueBy(
     [...favoriteTracks, ...playlistTracks],
     (track) => track.sourceId || track.id,
+  ).slice(0, safeTopLimit)
+  const topArtists = deriveArtistsFromTracks(topTracks, safeTopLimit)
+  const recentRecommendations = normalizeRecommendationHistoryEntries(
+    listStoredRecommendationRuns(localUserId, safeHistoryLimit),
   )
-  const recentRecommendations = listStoredRecommendationRuns(
-    localUserId,
-    safeHistoryLimit,
-  ).map((entry) => ({
-    id: entry.id,
-    title: entry.title,
-    prompt: entry.prompt,
-    seeds: entry.seeds,
-    createdAt: entry.createdAt,
-  }))
-  const recentFeedback = listStoredFeedback(localUserId, safeFeedbackLimit).map(
-    (entry) => ({
-      id: entry.id,
-      feedback: entry.feedback,
-      recommendationId: entry.recommendationId,
-      messageId: entry.messageId,
-      note: entry.note,
-      createdAt: entry.createdAt,
-    }),
+  const recentFeedback = normalizeFeedbackEntries(
+    listStoredFeedback(localUserId, safeFeedbackLimit),
   )
-
-  let topTracks = localTracks.slice(0, safeTopLimit)
-  let topArtists = deriveArtistsFromTracks(localTracks, safeTopLimit)
-
-  const spotifyProviderLink = providerLinks.spotify
-
-  if (
-    mode === 'spotify_enhanced' &&
-    spotifyProviderLink?.accessToken
-  ) {
-    const [topTracksResult, topArtistsResult] = await Promise.allSettled([
-      getUserTopItems(spotifyProviderLink.accessToken, 'tracks', {
-        time_range: 'medium_term',
-        limit: safeTopLimit,
-        offset: 0,
-      }),
-      getUserTopItems(spotifyProviderLink.accessToken, 'artists', {
-        time_range: 'medium_term',
-        limit: safeTopLimit,
-        offset: 0,
-      }),
-    ])
-
-    if (topTracksResult.status === 'fulfilled') {
-      const spotifyTracks = (topTracksResult.value.items || []).map(mapSpotifyTrack)
-      topTracks = uniqueBy(
-        [...spotifyTracks, ...topTracks],
-        (track) => track.sourceId || track.id,
-      ).slice(0, safeTopLimit)
-    }
-
-    if (topArtistsResult.status === 'fulfilled') {
-      const spotifyArtists = (topArtistsResult.value.items || []).map(
-        mapSpotifyArtist,
-      )
-      topArtists = uniqueBy(
-        [...spotifyArtists, ...topArtists],
-        (artist) => artist.sourceId || artist.id,
-      ).slice(0, safeTopLimit)
-    }
-  }
 
   return {
     topTracks,
@@ -253,6 +220,81 @@ export async function buildUserTasteProfile({
   }
 }
 
+export function mergeSpotifyEnhancement(
+  memoryProfile,
+  {
+    spotifyTopTracks = [],
+    spotifyTopArtists = [],
+    topLimit = 5,
+  } = {},
+) {
+  const safeTopLimit = parseInteger(topLimit, 5, { min: 1, max: 10 })
+
+  return {
+    ...memoryProfile,
+    topTracks: uniqueBy(
+      [...spotifyTopTracks, ...(memoryProfile.topTracks || [])],
+      (track) => track.sourceId || track.id,
+    ).slice(0, safeTopLimit),
+    topArtists: uniqueBy(
+      [...spotifyTopArtists, ...(memoryProfile.topArtists || [])],
+      (artist) => artist.sourceId || artist.id,
+    ).slice(0, safeTopLimit),
+  }
+}
+
+export async function buildUserTasteProfile({
+  mode,
+  localUserId,
+  providerLinks = {},
+  recommendationLimit = 5,
+  topLimit = 5,
+  feedbackLimit = 5,
+}) {
+  const localProfile = buildLocalTasteProfile({
+    localUserId,
+    recommendationLimit,
+    topLimit,
+    feedbackLimit,
+  })
+
+  if (!localUserId || mode !== 'spotify_enhanced' || !providerLinks.spotify?.accessToken) {
+    return localProfile
+  }
+
+  const safeTopLimit = parseInteger(topLimit, 5, { min: 1, max: 10 })
+  const [topTracksResult, topArtistsResult] = await Promise.allSettled([
+    getUserTopItems(providerLinks.spotify.accessToken, 'tracks', {
+      time_range: 'medium_term',
+      limit: safeTopLimit,
+      offset: 0,
+    }),
+    getUserTopItems(providerLinks.spotify.accessToken, 'artists', {
+      time_range: 'medium_term',
+      limit: safeTopLimit,
+      offset: 0,
+    }),
+  ])
+
+  return mergeSpotifyEnhancement(localProfile, {
+    spotifyTopTracks:
+      topTracksResult.status === 'fulfilled'
+        ? (topTracksResult.value.items || []).map(mapSpotifyTrack)
+        : [],
+    spotifyTopArtists:
+      topArtistsResult.status === 'fulfilled'
+        ? (topArtistsResult.value.items || []).map(mapSpotifyArtist)
+        : [],
+    topLimit: safeTopLimit,
+  })
+}
+
 export default {
+  createEmptyMemoryProfile,
+  buildLocalTasteProfile,
+  mergeSpotifyEnhancement,
   buildUserTasteProfile,
+  mapLibraryTrack,
+  mapSpotifyTrack,
+  mapSpotifyArtist,
 }
