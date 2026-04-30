@@ -29,6 +29,14 @@ function normalizeVisibility(value) {
   return value === 'public' ? 'public' : 'private'
 }
 
+function normalizePlaylistSourceType(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return LOCAL_PLAYLIST_SOURCE_TYPE
+  }
+
+  return value.trim()
+}
+
 function sanitizeTrackReference(input) {
   assert(input && typeof input === 'object' && !Array.isArray(input), 'track is required')
 
@@ -157,8 +165,13 @@ export function createPlaylist(ownerUserId, input = {}) {
   const coverImageUrl =
     typeof input.cover_image_url === 'string' ? input.cover_image_url.trim() : null
   const visibility = normalizeVisibility(input.visibility)
-  const sourceType = LOCAL_PLAYLIST_SOURCE_TYPE
-  const sourceId = createPlaylistSourceId(id)
+  const sourceType = normalizePlaylistSourceType(input.source_type)
+  const sourceId =
+    typeof input.source_id === 'string' && input.source_id.trim()
+      ? input.source_id.trim()
+      : sourceType === LOCAL_PLAYLIST_SOURCE_TYPE
+        ? createPlaylistSourceId(id)
+        : `${sourceType}:playlist:${id}`
 
   db.prepare(
     `

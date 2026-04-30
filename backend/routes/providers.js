@@ -18,6 +18,11 @@ import {
   SPOTIFY_PROVIDER_NAME,
   SPOTIFY_SCOPES,
 } from '../services/provider/spotify-provider-service.js'
+import {
+  importAllSpotifyPlaylists,
+  importSpotifyPlaylist,
+  syncSpotifySavedTracks,
+} from '../services/provider/spotify-library-import-service.js'
 
 const router = Router()
 const STATE_TTL_MS = 10 * 60 * 1000
@@ -232,6 +237,49 @@ router.delete(
     res.json({
       provider: SPOTIFY_PROVIDER_NAME,
       disconnected: removed,
+    })
+  }),
+)
+
+router.post(
+  '/spotify/import/playlists',
+  requireLocalUser,
+  asyncHandler(async (req, res) => {
+    const result = await importAllSpotifyPlaylists(req.localUserId)
+
+    res.status(201).json({
+      provider: SPOTIFY_PROVIDER_NAME,
+      importedCount: result.importedCount,
+      items: result.items,
+    })
+  }),
+)
+
+router.post(
+  '/spotify/import/playlists/:spotifyPlaylistId',
+  requireLocalUser,
+  asyncHandler(async (req, res) => {
+    const result = await importSpotifyPlaylist(
+      req.localUserId,
+      req.params.spotifyPlaylistId,
+    )
+
+    res.status(201).json({
+      provider: SPOTIFY_PROVIDER_NAME,
+      ...result,
+    })
+  }),
+)
+
+router.post(
+  '/spotify/sync/saved-tracks',
+  requireLocalUser,
+  asyncHandler(async (req, res) => {
+    const result = await syncSpotifySavedTracks(req.localUserId)
+
+    res.status(201).json({
+      provider: SPOTIFY_PROVIDER_NAME,
+      ...result,
     })
   }),
 )

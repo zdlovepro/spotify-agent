@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { changePlay, changeTrack } from '../../store/index.js'
 import { createPlaybackQueue } from '../../lib/spotify.js'
@@ -9,6 +10,7 @@ import PlayButton from '../buttons/PlayButton'
 import styles from './playlist-card-m.module.css'
 
 function PlaylistCardM({ data }) {
+  const { t } = useTranslation()
   const dispatch = useDispatch()
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
@@ -44,6 +46,9 @@ function PlaylistCardM({ data }) {
             <img src={data.imgUrl} alt={data.title} />
           </div>
           <div className={styles.Title}>
+            {data.sourceLabel && (
+              <span className={styles.SourceBadge}>{t(data.sourceLabel)}</span>
+            )}
             <TextBoldL>{data.title}</TextBoldL>
             <TextRegularM>{data.artist}</TextRegularM>
           </div>

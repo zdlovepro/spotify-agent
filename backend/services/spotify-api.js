@@ -108,6 +108,19 @@ export async function getPlaylist(accessToken, playlistId, { market }) {
   )
 }
 
+export async function getPlaylistTracks(
+  accessToken,
+  playlistId,
+  { limit, offset, market },
+) {
+  return spotifyGet(
+    `/playlists/${playlistId}/tracks`,
+    accessToken,
+    { limit, offset, market },
+    { ttlMs: 30_000 },
+  )
+}
+
 export async function searchSpotify(
   accessToken,
   { q, type, limit, offset, market, include_external },

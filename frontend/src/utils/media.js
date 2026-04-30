@@ -46,6 +46,8 @@ export function getLocalAudioStreamUrl(asset, sessionToken = '') {
 }
 
 export function createLocalAudioTrack(asset, sessionToken = '') {
+  const audioUrl = getLocalAudioStreamUrl(asset, sessionToken)
+
   return {
     id: asset.id,
     source_type: 'local_audio',
@@ -53,7 +55,9 @@ export function createLocalAudioTrack(asset, sessionToken = '') {
     name: asset.title || asset.originalFilename || 'Local audio',
     artists: Array.isArray(asset.artists) ? asset.artists : [],
     duration_ms: asset.durationMs || 0,
-    preview_url: getLocalAudioStreamUrl(asset, sessionToken),
+    audio_url: audioUrl,
+    playMode: 'local',
+    playable: true,
     image: fallbackArtwork,
   }
 }

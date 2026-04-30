@@ -5,6 +5,10 @@ import { useAgent } from '../../context/AgentContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSpotify } from '../../context/SpotifyContext.jsx'
 import {
+  getTrackPlaybackStatusKey,
+  resolveTrackPlaybackMeta,
+} from '../../lib/spotify.js'
+import {
   executePlayerActions,
   startAgentPlayback,
 } from '../../store/index.js'
@@ -29,7 +33,11 @@ function getFeedbackKey(message) {
 }
 
 function canPlayTracks(tracks = []) {
-  return tracks.some((track) => track.previewUrl || track.preview_url)
+  return tracks.some((track) => resolveTrackPlaybackMeta(track).playable)
+}
+
+function getTrackPlaybackLabel(track, t) {
+  return t(getTrackPlaybackStatusKey(track))
 }
 
 function AgentArtifact({
@@ -83,9 +91,7 @@ function AgentArtifact({
                 </span>
               </div>
               <span className={styles.TrackTag}>
-                {artifacts.track.previewUrl
-                  ? t('agent_listenable')
-                  : t('agent_not_listenable')}
+                {getTrackPlaybackLabel(artifacts.track, t)}
               </span>
             </div>
           )}
@@ -132,9 +138,7 @@ function AgentArtifact({
                     </span>
                   </div>
                   <span className={styles.TrackTag}>
-                    {track.previewUrl || track.preview_url
-                      ? t('agent_listenable')
-                      : t('agent_not_listenable')}
+                    {getTrackPlaybackLabel(track, t)}
                   </span>
                 </div>
               ))}

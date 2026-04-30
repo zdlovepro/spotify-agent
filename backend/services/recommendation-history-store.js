@@ -20,7 +20,20 @@ function sanitizeTrack(track = {}) {
         : track.album?.name || '',
     image: track.image || track.image_url || '',
     previewUrl: track.previewUrl || track.preview_url || '',
+    audioUrl: track.audioUrl || track.audio_url || '',
     durationMs: track.durationMs ?? track.duration_ms ?? null,
+    playable:
+      typeof track.playable === 'boolean'
+        ? track.playable
+        : Boolean(track.audioUrl || track.audio_url || track.previewUrl || track.preview_url),
+    playMode:
+      track.playMode ||
+      track.play_mode ||
+      (track.audioUrl || track.audio_url
+        ? 'local'
+        : track.previewUrl || track.preview_url
+          ? 'preview'
+          : 'unavailable'),
   }
 }
 

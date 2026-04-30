@@ -25,6 +25,13 @@
     flex-wrap: wrap;
 }
 
+.ImportBar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+}
+
 .Grid{
     margin-top: 24px;
     display: grid;

@@ -1,10 +1,13 @@
 import { useSelector } from 'react-redux'
+import { useTranslation } from 'react-i18next'
 import * as Icons from '../icons/index.jsx'
 import TextRegularM from '../text/TextRegularM'
 import IconButton from '../buttons/IconButton'
+import { getTrackPlaybackStatusKey } from '../../lib/spotify.js'
 import styles from './footer-left.module.css'
 
 function FooterLeft() {
+  const { t } = useTranslation()
   const trackData = useSelector((state) => state.player.trackData)
 
   return (
@@ -17,6 +20,9 @@ function FooterLeft() {
         <TextRegularM>
           <small>{trackData.trackArtist}</small>
         </TextRegularM>
+        <span className={styles.PlaybackBadge}>
+          {t(getTrackPlaybackStatusKey(trackData))}
+        </span>
       </div>
       <IconButton icon={<Icons.Like />} activeicon={<Icons.LikeActive />} />
       <IconButton icon={<Icons.Corner />} activeicon={<Icons.Corner />} />

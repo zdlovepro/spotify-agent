@@ -3,6 +3,7 @@ import {
   buildConversationTitle,
   classifyIntent,
 } from './intent-classifier.js'
+import { createTrackArtifact, createTrackArtifacts } from './track-artifact.js'
 import { createAgentToolRegistry } from './tool-registry.js'
 
 const genreKeywordMap = [
@@ -52,24 +53,6 @@ function extractAlbumName(track) {
   return track?.album?.name || ''
 }
 
-function mapTrackArtifact(track) {
-  return {
-    id: track.id,
-    source_type: track.source_type || track.sourceType || 'spotify',
-    source_id:
-      track.source_id || track.sourceId || `${track.source_type || 'spotify'}:track:${track.id}`,
-    name: track.name,
-    artists: (track.artists || []).map((artist) =>
-      typeof artist === 'string' ? artist : artist.name,
-    ),
-    album: extractAlbumName(track),
-    image: getPrimaryImage(track),
-    previewUrl: track.preview_url || track.previewUrl || '',
-    durationMs: track.duration_ms ?? track.durationMs ?? 0,
-    uri: track.external_url || track.source_id || track.sourceId || '',
-  }
-}
-
 function mapArtistArtifact(artist) {
   return {
     id: artist.id,
@@ -101,9 +84,11 @@ function mapAlbumArtifact(album) {
 }
 
 function buildPlayerQueue(tracks) {
-  return tracks
-    .filter((track) => track.preview_url || track.previewUrl)
-    .map((track) => mapTrackArtifact(track))
+  return createTrackArtifacts(tracks)
+}
+
+function findFirstPlayableIndex(tracks = []) {
+  return tracks.findIndex((track) => track.playable)
 }
 
 function stripPrefixes(message, prefixes) {
@@ -292,7 +277,7 @@ async function handleSearchEntity({ message, context, tools }) {
       actions: [],
       artifacts: {
         entityType: 'track',
-        track: mapTrackArtifact(track),
+        track: createTrackArtifact(track),
       },
     }
   }
@@ -361,7 +346,7 @@ async function handleSearchEntity({ message, context, tools }) {
       actions: [],
       artifacts: {
         entityType: 'track',
-        track: mapTrackArtifact(track),
+        track: createTrackArtifact(track),
       },
     }
   }
@@ -411,19 +396,20 @@ async function handlePlayMusic({ message, tools }) {
     })
     const playlistTracks = (playlist.tracks || []).map((item) => item.track).filter(Boolean)
     const queue = buildPlayerQueue(playlistTracks)
+    const startIndex = findFirstPlayableIndex(queue)
 
     return {
-      reply: queue.length
+      reply: startIndex >= 0
         ? `我找到歌单《${playlist.name}》，已经把其中可试听的歌曲整理成播放队列。`
         : `我找到歌单《${playlist.name}》，但里面暂时没有可用的预览音频。`,
       intent: 'play_music',
-      actions: queue.length
+      actions: startIndex >= 0
         ? [
             {
               type: 'player.replace_queue',
               payload: {
                 tracks: queue,
-                startIndex: 0,
+                startIndex,
               },
             },
           ]
@@ -455,19 +441,20 @@ async function handlePlayMusic({ message, tools }) {
       ),
     )
     const queue = buildPlayerQueue(artistTracks)
+    const startIndex = findFirstPlayableIndex(queue)
 
     return {
-      reply: queue.length
+      reply: startIndex >= 0
         ? `我找到 ${firstArtist.name} 了，已经把可试听的歌曲整理成播放队列。`
         : `我找到 ${firstArtist.name} 了，但暂时没有拿到可试听的预览音频。`,
       intent: 'play_music',
-      actions: queue.length
+      actions: startIndex >= 0
         ? [
             {
               type: 'player.replace_queue',
               payload: {
                 tracks: queue,
-                startIndex: 0,
+                startIndex,
               },
             },
           ]
@@ -488,7 +475,7 @@ async function handlePlayMusic({ message, tools }) {
         actions: [],
         artifacts: {
           resultType: 'track',
-          track: mapTrackArtifact(firstTrack),
+          track: createTrackArtifact(firstTrack),
         },
       }
     }
@@ -507,7 +494,7 @@ async function handlePlayMusic({ message, tools }) {
       ],
       artifacts: {
         resultType: 'track',
-        track: mapTrackArtifact(firstTrack),
+        track: createTrackArtifact(firstTrack),
       },
     }
   }
@@ -518,19 +505,20 @@ async function handlePlayMusic({ message, tools }) {
     })
     const playlistTracks = (playlist.tracks || []).map((item) => item.track).filter(Boolean)
     const queue = buildPlayerQueue(playlistTracks)
+    const startIndex = findFirstPlayableIndex(queue)
 
     return {
-      reply: queue.length
+      reply: startIndex >= 0
         ? `我找到歌单《${playlist.name}》，已经把其中可试听的歌曲整理成播放队列。`
         : `我找到歌单《${playlist.name}》，但里面暂时没有可用的预览音频。`,
       intent: 'play_music',
-      actions: queue.length
+      actions: startIndex >= 0
         ? [
             {
               type: 'player.replace_queue',
               payload: {
                 tracks: queue,
-                startIndex: 0,
+                startIndex,
               },
             },
           ]
@@ -645,9 +633,9 @@ async function handleRecommendation({
 
   const avoidSourceIds = new Set(memoryProfile.avoidSourceIds || [])
   const tracks = recommendationTracks
-    .map((track) => mapTrackArtifact(track))
+    .map((track) => createTrackArtifact(track))
     .filter((track) => !avoidSourceIds.has(track.source_id || track.sourceId || ''))
-  const playableTracks = tracks.filter((track) => track.previewUrl)
+  const firstPlayableIndex = findFirstPlayableIndex(tracks)
   const historyEntry = await tools.run('history.save_recommendation', {
     title: buildConversationTitle(message),
     prompt: message,
@@ -668,17 +656,17 @@ async function handleRecommendation({
   const genreText = seedGenres.length ? `，并参考 ${seedGenres.join('、')} 这类风格` : ''
 
   return {
-    reply: playableTracks.length
+    reply: firstPlayableIndex >= 0
       ? `${modeLeadText}${genreText}，整理出一组推荐，并且已经准备成可播放队列。`
       : `${modeLeadText}${genreText}，整理出一组推荐结果，不过这次没有拿到足够的预览音频，所以先把结果保存下来了。`,
     intent: 'generate_recommendation',
-    actions: playableTracks.length
+    actions: firstPlayableIndex >= 0
       ? [
           {
             type: 'player.replace_queue',
             payload: {
-              tracks: playableTracks,
-              startIndex: 0,
+              tracks,
+              startIndex: firstPlayableIndex,
             },
           },
         ]
