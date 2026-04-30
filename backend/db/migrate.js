@@ -1,5 +1,20 @@
 import db from './index.js'
 
+function getExistingColumns(tableName) {
+  return db
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all()
+    .map((column) => column.name)
+}
+
+function addColumnIfMissing(tableName, columnName, definition) {
+  const existingColumns = getExistingColumns(tableName)
+
+  if (!existingColumns.includes(columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`)
+  }
+}
+
 const schemaStatements = [
   `
     CREATE TABLE IF NOT EXISTS users (
@@ -305,6 +320,20 @@ const runMigrationTransaction = db.transaction(() => {
   for (const statement of schemaStatements) {
     db.exec(statement)
   }
+
+  addColumnIfMissing('library_playlist_items', 'title', 'TEXT')
+  addColumnIfMissing('library_playlist_items', 'artists_json', "TEXT NOT NULL DEFAULT '[]'")
+  addColumnIfMissing('library_playlist_items', 'album_json', "TEXT NOT NULL DEFAULT '{}'")
+  addColumnIfMissing('library_playlist_items', 'image_url', 'TEXT')
+  addColumnIfMissing('library_playlist_items', 'preview_url', 'TEXT')
+  addColumnIfMissing('library_playlist_items', 'duration_ms', 'INTEGER')
+
+  addColumnIfMissing('library_favorites', 'title', 'TEXT')
+  addColumnIfMissing('library_favorites', 'artists_json', "TEXT NOT NULL DEFAULT '[]'")
+  addColumnIfMissing('library_favorites', 'album_json', "TEXT NOT NULL DEFAULT '{}'")
+  addColumnIfMissing('library_favorites', 'image_url', 'TEXT')
+  addColumnIfMissing('library_favorites', 'preview_url', 'TEXT')
+  addColumnIfMissing('library_favorites', 'duration_ms', 'INTEGER')
 
   db.pragma('user_version = 1')
 })
