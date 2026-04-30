@@ -1,52 +1,13 @@
-import crypto from 'crypto'
-import { fileURLToPath } from 'url'
-import { mkdir, readFile, writeFile } from 'fs/promises'
-import path from 'path'
-
-const currentFilePath = fileURLToPath(import.meta.url)
-const currentDirectory = path.dirname(currentFilePath)
-const dataDirectory = path.join(currentDirectory, '..', 'data')
-const feedbackFilePath = path.join(dataDirectory, 'agent-feedback.json')
-const maxEntriesPerUser = 100
-
-let writeQueue = Promise.resolve()
-
-async function ensureFeedbackFile() {
-  await mkdir(dataDirectory, { recursive: true })
-
-  try {
-    await readFile(feedbackFilePath, 'utf8')
-  } catch {
-    await writeFile(feedbackFilePath, JSON.stringify({}, null, 2))
-  }
-}
-
-async function readFeedbackData() {
-  await ensureFeedbackFile()
-
-  const raw = await readFile(feedbackFilePath, 'utf8')
-
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return {}
-  }
-}
-
-function queueWrite(mutator) {
-  writeQueue = writeQueue.then(async () => {
-    const data = await readFeedbackData()
-    const nextData = await mutator(data)
-    await writeFile(feedbackFilePath, JSON.stringify(nextData, null, 2))
-    return nextData
-  })
-
-  return writeQueue
-}
+import { assert } from '../utils/assert.js'
+import { resolveLocalUserId } from './auth/resolve-local-user-id.js'
+import {
+  listStoredFeedback,
+  saveStoredFeedback,
+} from './agent/agent-feedback-service.js'
 
 function sanitizeFeedbackEntry(entry = {}) {
   return {
-    id: entry.id || crypto.randomUUID(),
+    id: entry.id || '',
     feedback: entry.feedback || 'like',
     conversationId: entry.conversationId || '',
     messageId: entry.messageId || '',
@@ -60,25 +21,28 @@ function sanitizeFeedbackEntry(entry = {}) {
   }
 }
 
-export async function listAgentFeedback(userId, limit = 20) {
-  const data = await readFeedbackData()
-  const entries = Array.isArray(data[userId]) ? data[userId] : []
+function requireLocalUserId(localUserIdOrLegacyUserId) {
+  const resolvedLocalUserId = resolveLocalUserId(localUserIdOrLegacyUserId)
 
-  return entries.slice(0, limit)
+  assert(
+    resolvedLocalUserId,
+    'localUserId is required; legacy spotifyUserId callers must be mapped to a local account first',
+    401,
+  )
+
+  return resolvedLocalUserId
 }
 
-export async function saveAgentFeedback(userId, payload) {
-  const entry = sanitizeFeedbackEntry(payload)
+export async function listAgentFeedback(localUserIdOrLegacyUserId, limit = 20) {
+  const localUserId = requireLocalUserId(localUserIdOrLegacyUserId)
+  const entries = listStoredFeedback(localUserId, limit)
 
-  await queueWrite((data) => {
-    const currentEntries = Array.isArray(data[userId]) ? data[userId] : []
-    const nextEntries = [entry, ...currentEntries].slice(0, maxEntriesPerUser)
+  return entries.map((entry) => sanitizeFeedbackEntry(entry))
+}
 
-    return {
-      ...data,
-      [userId]: nextEntries,
-    }
-  })
+export async function saveAgentFeedback(localUserIdOrLegacyUserId, payload) {
+  const localUserId = requireLocalUserId(localUserIdOrLegacyUserId)
+  const entry = saveStoredFeedback(localUserId, payload)
 
-  return entry
+  return sanitizeFeedbackEntry(entry)
 }
