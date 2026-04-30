@@ -12,9 +12,8 @@ import { getUserTopItems, parseInteger } from '../spotify-api.js'
 import { saveStoredRecommendationRun } from './agent-recommendation-service.js'
 import {
   buildLocalTasteProfile,
-  createEmptyMemoryProfile,
-  mapSpotifyArtist,
-  mapSpotifyTrack,
+  buildSpotifyEnhancedProfile,
+  buildUserTasteProfile,
   mergeSpotifyEnhancement,
 } from './memory-service.js'
 
@@ -258,15 +257,21 @@ export function createAgentToolRegistry({
       ensureLocalUser(localUserId)
 
       const safeTopLimit = parseInteger(args.topLimit, 5, { min: 1, max: 10 })
-      const localProfile = buildLocalTasteProfile({
-        localUserId,
+      const localProfile = buildLocalTasteProfile(localUserId, {
         recommendationLimit: args.recommendationLimit,
         topLimit: safeTopLimit,
         feedbackLimit: args.feedbackLimit,
       })
 
       if (mode !== 'spotify_enhanced') {
-        return localProfile
+        return buildUserTasteProfile({
+          mode,
+          localUserId,
+          providerLinks,
+          recommendationLimit: args.recommendationLimit,
+          topLimit: safeTopLimit,
+          feedbackLimit: args.feedbackLimit,
+        })
       }
 
       const [topTracksResult, topArtistsResult] = await Promise.allSettled([
@@ -282,15 +287,15 @@ export function createAgentToolRegistry({
         }),
       ])
 
-      return mergeSpotifyEnhancement(localProfile, {
-        spotifyTopTracks:
-          topTracksResult.status === 'fulfilled'
-            ? (topTracksResult.value.items || []).map(mapSpotifyTrack)
-            : [],
-        spotifyTopArtists:
-          topArtistsResult.status === 'fulfilled'
-            ? (topArtistsResult.value.items || []).map(mapSpotifyArtist)
-            : [],
+      const spotifyProfile = await buildSpotifyEnhancedProfile(providerLinks.spotify, {
+        topLimit: safeTopLimit,
+        topTracksResponse:
+          topTracksResult.status === 'fulfilled' ? topTracksResult.value : null,
+        topArtistsResponse:
+          topArtistsResult.status === 'fulfilled' ? topArtistsResult.value : null,
+      })
+
+      return mergeSpotifyEnhancement(localProfile, spotifyProfile, {
         topLimit: safeTopLimit,
       })
     })

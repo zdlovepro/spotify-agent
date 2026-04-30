@@ -563,6 +563,11 @@ async function handleRecommendation({
   tools,
 }) {
   const explicitGenres = detectGenreSeeds(message)
+  const defaultGenres = Array.isArray(memoryProfile.defaultGenres)
+    ? memoryProfile.defaultGenres
+    : Array.isArray(memoryProfile.publicSeeds?.genres)
+      ? memoryProfile.publicSeeds.genres
+      : []
   const searchQuery = extractEntityQuery(message)
   const searchResult = await tools.run('catalog.search', {
     q: searchQuery,
@@ -587,11 +592,16 @@ async function handleRecommendation({
     2,
   )
   const memoryTrackIds = limitSeeds(
-    memoryProfile.topTracks.map((track) => extractSpotifyTrackSeed(track)).filter(Boolean),
+    memoryProfile.topTracks
+      .filter((track) =>
+        !(memoryProfile.avoidSourceIds || []).includes(track.sourceId || track.source_id || ''),
+      )
+      .map((track) => extractSpotifyTrackSeed(track))
+      .filter(Boolean),
     3,
   )
   const { seedGenres, seedArtists, seedTracks } = allocateRecommendationSeeds({
-    explicitGenres,
+    explicitGenres: explicitGenres.length ? explicitGenres : defaultGenres,
     searchArtistIds,
     searchTrackIds,
     memoryArtistIds,
@@ -617,9 +627,11 @@ async function handleRecommendation({
   if (!recommendationTracks.length) {
     const fallbackQuery =
       explicitGenres[0] ||
+      defaultGenres[0] ||
       searchResult.results?.artists?.[0]?.name ||
       memoryProfile.topArtists[0]?.name ||
       memoryProfile.topTracks[0]?.name ||
+      memoryProfile.publicSeeds?.query ||
       searchQuery ||
       'pop'
     const fallbackSearch = await tools.run('catalog.search', {
@@ -631,7 +643,10 @@ async function handleRecommendation({
     recommendationTracks = fallbackSearch.results?.tracks || []
   }
 
-  const tracks = recommendationTracks.map((track) => mapTrackArtifact(track))
+  const avoidSourceIds = new Set(memoryProfile.avoidSourceIds || [])
+  const tracks = recommendationTracks
+    .map((track) => mapTrackArtifact(track))
+    .filter((track) => !avoidSourceIds.has(track.source_id || track.sourceId || ''))
   const playableTracks = tracks.filter((track) => track.previewUrl)
   const historyEntry = await tools.run('history.save_recommendation', {
     title: buildConversationTitle(message),
