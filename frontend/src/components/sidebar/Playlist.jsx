@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useSelector } from 'react-redux'
-import { useSpotify } from '../../context/SpotifyContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { PLAYLISTBTN } from '../../constants/index.jsx'
-import { PLAYLIST } from '../../data/index.js'
+import { mapLocalPlaylistSummary } from '../../utils/library.js'
 import * as Icons from '../icons/index.jsx'
 import styles from './playlist.module.css'
 
@@ -45,18 +45,53 @@ function getTypeLabel(item, t) {
 
 function Playlist() {
   const { t } = useTranslation()
-  const { isAuthenticated, playlists } = useSpotify()
+  const navigate = useNavigate()
+  const { isAuthenticated, openAuthDialog, request } = useAuth()
   const activePlaylistId = useSelector((state) => state.player.trackData.playlistId)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('playlist')
   const [sortMode, setSortMode] = useState('recent')
+  const [playlists, setPlaylists] = useState([])
+  const [error, setError] = useState('')
 
-  const librarySource = isAuthenticated ? playlists : PLAYLIST
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadLibrary() {
+      if (!isAuthenticated) {
+        setPlaylists([])
+        setError('')
+        return
+      }
+
+      try {
+        const data = await request('/api/library/playlists')
+
+        if (cancelled) {
+          return
+        }
+
+        setPlaylists((data.items || []).map(mapLocalPlaylistSummary))
+        setError('')
+      } catch (requestError) {
+        if (!cancelled) {
+          setPlaylists([])
+          setError(requestError.message)
+        }
+      }
+    }
+
+    loadLibrary()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated, request])
 
   const libraryItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
 
-    const filteredItems = librarySource.filter((item) => {
+    const filteredItems = playlists.filter((item) => {
       const itemType = normalizeType(item)
 
       if (filter !== 'all' && itemType !== filter) {
@@ -81,13 +116,41 @@ function Playlist() {
     }
 
     return filteredItems
-  }, [filter, librarySource, query, sortMode])
+  }, [filter, playlists, query, sortMode])
 
   const filterItems = [
     { key: 'playlist', label: t('library_filter_playlists') },
     { key: 'album', label: t('library_filter_albums') },
     { key: 'podcast', label: t('podcasts') },
   ]
+
+  async function handleCreatePlaylist() {
+    if (!isAuthenticated) {
+      openAuthDialog('login')
+      return
+    }
+
+    try {
+      const data = await request('/api/library/playlists', {
+        method: 'POST',
+        body: {
+          title: t('library_new_playlist'),
+        },
+      })
+      const nextPlaylist = data?.playlist
+        ? mapLocalPlaylistSummary(data.playlist)
+        : null
+
+      if (!nextPlaylist) {
+        return
+      }
+
+      setPlaylists((currentPlaylists) => [nextPlaylist, ...currentPlaylists])
+      navigate(`/playlist/${nextPlaylist.link}`)
+    } catch (requestError) {
+      setError(requestError.message)
+    }
+  }
 
   return (
     <div className={styles.Playlist}>
@@ -102,6 +165,7 @@ function Playlist() {
             className={styles.IconAction}
             aria-label={t('library_action_create')}
             title={t('library_action_create')}
+            onClick={handleCreatePlaylist}
           >
             +
           </button>
@@ -162,10 +226,24 @@ function Playlist() {
               <span>{t(item.titleKey)}</span>
             </div>
           ))}
+          <button
+            type="button"
+            className={styles.AuthCta}
+            onClick={() => openAuthDialog('login')}
+          >
+            {t('library_sign_in_cta')}
+          </button>
         </div>
       )}
 
       <div className={styles.List}>
+        {error && (
+          <div className={styles.EmptyState}>
+            <p>{t('library_error_title')}</p>
+            <span>{error}</span>
+          </div>
+        )}
+
         {libraryItems.map((list) => {
           const isActive = activePlaylistId === list.link
           const image = getItemImage(list)
@@ -182,18 +260,14 @@ function Playlist() {
                   backgroundColor: list.playlistBg || list.hoverColor || '#303030',
                 }}
               >
-                {image ? (
-                  <img src={image} alt={list.title} />
-                ) : (
-                  <span>♫</span>
-                )}
+                {image ? <img src={image} alt={list.title} /> : <span>♪</span>}
               </div>
 
               <div className={styles.LibraryItemCopy}>
                 <p className={styles.ItemTitle}>{list.title}</p>
                 <p className={styles.ItemMeta}>
                   {getTypeLabel(list, t)}
-                  {list.artist ? ` • ${list.artist}` : ''}
+                  {list.artist ? ` · ${list.artist}` : ''}
                 </p>
               </div>
 
@@ -202,10 +276,12 @@ function Playlist() {
           )
         })}
 
-        {libraryItems.length === 0 && (
+        {!error && libraryItems.length === 0 && (
           <div className={styles.EmptyState}>
-            <p>{t('library_empty')}</p>
-            <span>{t('library_empty_hint')}</span>
+            <p>{isAuthenticated ? t('library_empty') : t('library_guest_title')}</p>
+            <span>
+              {isAuthenticated ? t('library_empty_hint') : t('library_guest_body')}
+            </span>
           </div>
         )}
       </div>

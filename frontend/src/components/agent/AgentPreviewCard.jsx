@@ -3,13 +3,15 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { useAgent } from '../../context/AgentContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { useSpotify } from '../../context/SpotifyContext.jsx'
 import styles from './agent-preview-card.module.css'
 
 function AgentPreviewCard() {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const { isAuthenticated, login, profile } = useSpotify()
+  const { isAuthenticated, openAuthDialog, user } = useAuth()
+  const { isConnected, profile } = useSpotify()
   const { conversations, currentConversation, startNewConversation } = useAgent()
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
@@ -62,9 +64,9 @@ function AgentPreviewCard() {
             <button
               type="button"
               className={styles.SecondaryBtn}
-              onClick={login}
+              onClick={() => openAuthDialog('login')}
             >
-              {t('agent_login_cta')}
+              {t('agent_guest_cta')}
             </button>
           )}
         </div>
@@ -88,7 +90,9 @@ function AgentPreviewCard() {
           <span className={styles.StatLabel}>{t('agent_preview_conversations')}</span>
           <span className={styles.StatValue}>{conversations.length}</span>
           <p className={styles.StatText}>
-            {currentConversation?.title || t('agent_no_conversations')}
+            {isAuthenticated
+              ? currentConversation?.title || t('agent_no_conversations')
+              : t('agent_guest_saved_note')}
           </p>
         </div>
 
@@ -96,14 +100,17 @@ function AgentPreviewCard() {
           <span className={styles.StatLabel}>{t('agent_now_playing')}</span>
           <span className={styles.StatValue}>{trackData.trackName || '...'}</span>
           <p className={styles.StatText}>
-            {trackData.trackArtist || profile?.display_name || t('appName')}
+            {trackData.trackArtist ||
+              profile?.display_name ||
+              user?.displayName ||
+              t('appName')}
           </p>
           <div className={styles.StatusRow}>
             <span className={styles.Pill}>
               {isPlaying ? t('agent_player_playing') : t('agent_player_paused')}
             </span>
             <span className={styles.Pill}>
-              {isAuthenticated ? t('agent_ready') : t('agent_login_cta')}
+              {isConnected ? t('spotify_connected') : t('spotify_not_connected')}
             </span>
           </div>
         </div>

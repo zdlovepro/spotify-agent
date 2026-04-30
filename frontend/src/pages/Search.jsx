@@ -5,7 +5,7 @@ import { useDispatch } from 'react-redux'
 import fallbackArtwork from '../assets/hero.png'
 import SearchPageCard from '../components/cards/SearchPageCard'
 import { SEARCHCARDS } from '../data/index.js'
-import { useSpotify } from '../context/SpotifyContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 import { startAgentPlayback } from '../store/index.js'
 import styles from './search.module.css'
 
@@ -43,17 +43,17 @@ function getMeta(item, type, t) {
         ? t('search_listenable_meta')
         : t('search_not_listenable_meta')
     case 'artist':
-      return item.followers?.total
+      return item.followers
         ? t('search_followers', {
-            count: item.followers.total.toLocaleString(),
+            count: Number(item.followers).toLocaleString(),
           })
         : ''
     case 'album':
       return item.release_date || ''
     case 'playlist':
-      return item.tracks?.total
+      return item.total_tracks
         ? t('search_tracks_count', {
-            count: item.tracks.total,
+            count: item.total_tracks,
           })
         : ''
     default:
@@ -236,7 +236,7 @@ function Search() {
   const navigate = useNavigate()
   const dispatch = useDispatch()
   const [searchParams] = useSearchParams()
-  const { isAuthenticated, login, request } = useSpotify()
+  const { request } = useAuth()
   const query = searchParams.get('q')?.trim() || ''
   const [results, setResults] = useState({
     tracks: [],
@@ -251,7 +251,7 @@ function Search() {
     let cancelled = false
 
     async function runSearch() {
-      if (!query || !isAuthenticated) {
+      if (!query) {
         setResults({
           tracks: [],
           artists: [],
@@ -271,17 +271,17 @@ function Search() {
           type: 'track,artist,album,playlist',
           limit: '6',
         })
-        const data = await request(`/api/spotify/search?${params.toString()}`)
+        const data = await request(`/api/catalog/search?${params.toString()}`)
 
         if (cancelled) {
           return
         }
 
         setResults({
-          tracks: data.tracks?.items || [],
-          artists: data.artists?.items || [],
-          albums: data.albums?.items || [],
-          playlists: data.playlists?.items || [],
+          tracks: data.results?.tracks || [],
+          artists: data.results?.artists || [],
+          albums: data.results?.albums || [],
+          playlists: data.results?.playlists || [],
         })
         setSearchError('')
       } catch (error) {
@@ -300,7 +300,7 @@ function Search() {
     return () => {
       cancelled = true
     }
-  }, [isAuthenticated, query, request])
+  }, [query, request])
 
   const resultCount = useMemo(
     () =>
@@ -404,33 +404,19 @@ function Search() {
               </div>
             </section>
 
-            {!isAuthenticated && (
-              <section className={styles.LoginCard}>
-                <h2 className={styles.SectionTitle}>{t('search_login_title')}</h2>
-                <p className={styles.EmptyText}>{t('search_login_body')}</p>
-                <button
-                  type="button"
-                  className={styles.PrimaryBtn}
-                  onClick={login}
-                >
-                  {t('login')}
-                </button>
-              </section>
-            )}
-
-            {isAuthenticated && isSearching && (
+            {isSearching && (
               <section className={styles.EmptyState}>
                 <p className={styles.EmptyText}>{t('search_loading')}</p>
               </section>
             )}
 
-            {isAuthenticated && !isSearching && searchError && (
+            {!isSearching && searchError && (
               <section className={styles.EmptyState}>
                 <p className={styles.EmptyText}>{searchError}</p>
               </section>
             )}
 
-            {isAuthenticated && !isSearching && !searchError && !resultCount && (
+            {!isSearching && !searchError && !resultCount && (
               <section className={styles.EmptyState}>
                 <h2 className={styles.SectionTitle}>{t('search_no_results')}</h2>
                 <p className={styles.EmptyText}>{t('search_try_agent')}</p>
@@ -446,7 +432,7 @@ function Search() {
               </section>
             )}
 
-            {isAuthenticated && !isSearching && resultCount > 0 && (
+            {!isSearching && resultCount > 0 && (
               <>
                 <SearchSection
                   title={t('search_section_tracks')}

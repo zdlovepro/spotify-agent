@@ -6,7 +6,7 @@ import {
   useMemo,
   useState,
 } from 'react'
-import { useSpotify } from './SpotifyContext.jsx'
+import { useAuth } from './AuthContext.jsx'
 
 const AgentContext = createContext(null)
 
@@ -65,7 +65,7 @@ function mapFeedbackItems(items = []) {
 }
 
 export function AgentProvider({ children }) {
-  const { isAuthenticated, request } = useSpotify()
+  const { isAuthenticated, request } = useAuth()
   const [conversations, setConversations] = useState([])
   const [currentConversation, setCurrentConversation] = useState(
     createEmptyConversation(),
@@ -112,7 +112,11 @@ export function AgentProvider({ children }) {
 
   const refreshAgentState = useCallback(async () => {
     if (!isAuthenticated) {
-      resetState()
+      setConversations([])
+      setFeedbackMap({})
+      setCurrentConversation(createEmptyConversation())
+      setIsBootstrapping(false)
+      setError('')
       return
     }
 
@@ -165,7 +169,9 @@ export function AgentProvider({ children }) {
 
         setCurrentConversation(data.conversation)
         setConversations((currentList) =>
-          upsertConversationSummary(currentList, data.conversation),
+          isAuthenticated
+            ? upsertConversationSummary(currentList, data.conversation)
+            : currentList,
         )
         setError('')
 
@@ -177,7 +183,7 @@ export function AgentProvider({ children }) {
         setIsSending(false)
       }
     },
-    [currentConversation.id, request],
+    [currentConversation.id, isAuthenticated, request],
   )
 
   const submitFeedback = useCallback(

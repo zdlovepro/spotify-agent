@@ -3,67 +3,118 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from 'react'
+import { useAuth } from './AuthContext.jsx'
+import { BACKEND_BASE_URL } from '../utils/api.js'
 import {
-  BACKEND_BASE_URL,
-  clearStoredSession,
-  getStoredSession,
   mapSpotifyPlaylist,
   mapSpotifyPlaylistDetails,
-  readSessionFromSearch,
-  refreshSpotifySession,
-  sessionNeedsRefresh,
-  spotifyApiRequest,
-  storeSession,
 } from '../lib/spotify.js'
 
 const SpotifyContext = createContext(null)
 
+function readProviderCallback(search) {
+  const params = new URLSearchParams(search)
+
+  if (params.get('provider') !== 'spotify') {
+    return null
+  }
+
+  return {
+    connected: params.get('connected') === '1',
+    error: params.get('error') || '',
+  }
+}
+
 export function SpotifyProvider({ children }) {
-  const [session, setSession] = useState(() => getStoredSession())
+  const {
+    isAuthenticated: isLocalAuthenticated,
+    request: authRequest,
+    user,
+  } = useAuth()
+  const [connection, setConnection] = useState(null)
   const [profile, setProfile] = useState(null)
   const [playlists, setPlaylists] = useState([])
   const [playlistCache, setPlaylistCache] = useState({})
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const logout = useCallback(() => {
-    clearStoredSession()
-    setSession(null)
+  const clearSpotifyState = useCallback(() => {
+    setConnection(null)
     setProfile(null)
     setPlaylists([])
     setPlaylistCache({})
-    setError('')
   }, [])
 
-  const ensureValidSession = useCallback(async (currentSession) => {
-    if (!currentSession) {
+  const refreshConnectionState = useCallback(async () => {
+    if (!isLocalAuthenticated) {
+      clearSpotifyState()
+      setError('')
+      setIsLoading(false)
       return null
     }
 
-    if (!sessionNeedsRefresh(currentSession)) {
-      return currentSession
+    try {
+      const data = await authRequest('/api/providers')
+      const spotifyLink = (data.items || []).find((item) => item.provider === 'spotify')
+
+      setConnection(spotifyLink || null)
+      setError('')
+      return spotifyLink || null
+    } catch (requestError) {
+      clearSpotifyState()
+      setError(requestError.message)
+      return null
+    }
+  }, [authRequest, clearSpotifyState, isLocalAuthenticated])
+
+  const connect = useCallback(
+    (returnTo = window.location.pathname) => {
+      if (!isLocalAuthenticated) {
+        setError('Sign in to AgentMusic first')
+        return
+      }
+
+      const params = new URLSearchParams({
+        return_to: returnTo || '/',
+      })
+
+      window.location.href = `${BACKEND_BASE_URL}/api/providers/spotify/connect?${params.toString()}`
+    },
+    [isLocalAuthenticated],
+  )
+
+  const disconnect = useCallback(async () => {
+    if (!isLocalAuthenticated) {
+      return
     }
 
-    const refreshedSession = await refreshSpotifySession(currentSession)
-    storeSession(refreshedSession)
-    setSession(refreshedSession)
-
-    return refreshedSession
-  }, [])
+    try {
+      await authRequest('/api/providers/spotify/disconnect', {
+        method: 'DELETE',
+      })
+      clearSpotifyState()
+      setError('')
+    } catch (requestError) {
+      setError(requestError.message)
+    }
+  }, [authRequest, clearSpotifyState, isLocalAuthenticated])
 
   const request = useCallback(
     async (path, options = {}) => {
-      const activeSession = await ensureValidSession(session)
-
-      if (!activeSession) {
-        throw new Error('No active Spotify session')
+      if (!isLocalAuthenticated) {
+        throw new Error('Local sign-in required')
       }
 
-      return spotifyApiRequest(path, activeSession, options)
+      if (!connection?.connected) {
+        throw new Error('Spotify connection required')
+      }
+
+      return authRequest(path, options)
     },
-    [ensureValidSession, session],
+    [authRequest, connection?.connected, isLocalAuthenticated],
   )
 
   const getPlaylistDetails = useCallback(
@@ -85,34 +136,34 @@ export function SpotifyProvider({ children }) {
     [playlistCache, request],
   )
 
-  const login = useCallback(() => {
-    window.location.href = `${BACKEND_BASE_URL}/api/auth/login`
-  }, [])
-
   useEffect(() => {
-    const { session: callbackSession, error: callbackError } =
-      readSessionFromSearch(window.location.search)
+    const callbackState = readProviderCallback(window.location.search)
 
-    if (!callbackSession && !callbackError) {
+    if (!callbackState) {
       return
     }
 
     window.history.replaceState({}, document.title, window.location.pathname)
 
-    if (callbackError) {
-      setError(callbackError)
+    if (callbackState.error) {
+      setError(callbackState.error)
       return
     }
 
-    if (callbackSession) {
-      storeSession(callbackSession)
-      setSession(callbackSession)
-      setError('')
+    if (callbackState.connected) {
+      refreshConnectionState().catch(() => {})
     }
-  }, [])
+  }, [refreshConnectionState])
 
   useEffect(() => {
-    if (!session) {
+    refreshConnectionState().catch(() => {})
+  }, [refreshConnectionState, user?.id])
+
+  useEffect(() => {
+    if (!isLocalAuthenticated || !connection?.connected) {
+      setProfile(null)
+      setPlaylists([])
+      setPlaylistCache({})
       return
     }
 
@@ -123,8 +174,8 @@ export function SpotifyProvider({ children }) {
 
       try {
         const [profileData, playlistData] = await Promise.all([
-          request('/api/spotify/me'),
-          request('/api/spotify/playlists?limit=20'),
+          authRequest('/api/spotify/me'),
+          authRequest('/api/spotify/playlists?limit=20'),
         ])
 
         if (cancelled) {
@@ -134,12 +185,13 @@ export function SpotifyProvider({ children }) {
         setProfile(profileData)
         setPlaylists((playlistData.items || []).map(mapSpotifyPlaylist))
         setError('')
-      } catch (err) {
-        if (cancelled) {
-          return
+      } catch (requestError) {
+        if (!cancelled) {
+          setError(requestError.message)
+          setProfile(null)
+          setPlaylists([])
+          setPlaylistCache({})
         }
-
-        setError(err.message)
       } finally {
         if (!cancelled) {
           setIsLoading(false)
@@ -152,30 +204,41 @@ export function SpotifyProvider({ children }) {
     return () => {
       cancelled = true
     }
-  }, [request, session])
+  }, [authRequest, connection?.connected, isLocalAuthenticated])
 
-  useEffect(() => {
-    if (error === 'No active Spotify session') {
-      logout()
-    }
-  }, [error, logout])
+  const value = useMemo(
+    () => ({
+      connection,
+      connect,
+      disconnect,
+      error,
+      getPlaylistDetails,
+      isAuthenticated: Boolean(connection?.connected),
+      isConnected: Boolean(connection?.connected),
+      isLoading,
+      login: connect,
+      logout: disconnect,
+      playlists,
+      profile,
+      refreshConnectionState,
+      request,
+    }),
+    [
+      connect,
+      connection,
+      disconnect,
+      error,
+      getPlaylistDetails,
+      isLoading,
+      playlists,
+      profile,
+      refreshConnectionState,
+      request,
+    ],
+  )
 
   return (
-    <SpotifyContext.Provider
-      value={{
-        error,
-        getPlaylistDetails,
-        isAuthenticated: Boolean(session?.accessToken),
-        isLoading,
-        login,
-        logout,
-        playlists,
-        profile,
-        request,
-      }}
-    >
-      {children}
-    </SpotifyContext.Provider>
+    <SpotifyContext.Provider value={value}>{children}</SpotifyContext.Provider>
   )
 }
 

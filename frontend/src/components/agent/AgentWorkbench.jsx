@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useTranslation } from 'react-i18next'
 import { useAgent } from '../../context/AgentContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { useSpotify } from '../../context/SpotifyContext.jsx'
 import {
   executePlayerActions,
@@ -187,7 +188,8 @@ function AgentWorkbench({
 }) {
   const dispatch = useDispatch()
   const { t } = useTranslation()
-  const { isAuthenticated, isLoading, login, profile } = useSpotify()
+  const { isAuthenticated, openAuthDialog, user } = useAuth()
+  const { isConnected, profile } = useSpotify()
   const {
     conversations,
     currentConversation,
@@ -245,9 +247,10 @@ function AgentWorkbench({
     const response = await sendMessage({
       message: nextMessage,
       context: {
-        currentTrackId: trackData.source === 'spotify' || trackData.source === 'agent'
-          ? trackData.id
-          : '',
+        currentTrackId:
+          trackData.source === 'spotify' || trackData.source === 'agent'
+            ? trackData.id
+            : '',
         currentPlaylistId: trackData.playlistId || '',
         playerState: isPlaying ? 'playing' : 'paused',
       },
@@ -286,18 +289,9 @@ function AgentWorkbench({
     })
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className={styles.LoginCard}>
-        <p className={styles.Eyebrow}>{t('agent_title')}</p>
-        <h2 className={styles.Title}>{t('agent_login_title')}</h2>
-        <p className={styles.Subtitle}>{t('agent_login_body')}</p>
-        <button type="button" className={styles.PrimaryBtn} onClick={login}>
-          {t('agent_login_cta')}
-        </button>
-      </div>
-    )
-  }
+  const identityLabel = isAuthenticated
+    ? user?.displayName || user?.email || t('appName')
+    : t('agent_guest_label')
 
   return (
     <div className={styles.Shell}>
@@ -318,48 +312,73 @@ function AgentWorkbench({
         </div>
 
         <div className={styles.SummaryCard}>
+          <p className={styles.Eyebrow}>{t('agent_mode_title')}</p>
+          <strong className={styles.ConversationTitle}>
+            {isAuthenticated ? t('agent_mode_local') : t('agent_mode_guest')}
+          </strong>
+          <p className={styles.NowPlaying}>
+            {isAuthenticated ? t('agent_saved_hint') : t('agent_guest_body')}
+          </p>
+          {!isAuthenticated && (
+            <button
+              type="button"
+              className={styles.PrimaryBtn}
+              onClick={() => openAuthDialog('login')}
+            >
+              {t('agent_guest_cta')}
+            </button>
+          )}
+        </div>
+
+        <div className={styles.SummaryCard}>
           <p className={styles.Eyebrow}>{t('agent_now_playing')}</p>
           <strong className={styles.ConversationTitle}>
             {trackData.trackName || t('appName')}
           </strong>
           <p className={styles.NowPlaying}>
-            {(trackData.trackArtist || profile?.display_name || t('appName'))}
+            {trackData.trackArtist || profile?.display_name || identityLabel}
           </p>
         </div>
 
         <div className={styles.ConversationList}>
-          {isBootstrapping ? (
-            <div className={styles.SummaryCard}>
-              <p className={styles.StatusText}>{t('agent_loading_conversations')}</p>
-            </div>
-          ) : conversations.length ? (
-            conversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                type="button"
-                className={`${styles.ConversationBtn} ${
-                  currentConversation.id === conversation.id
-                    ? styles.ConversationActive
-                    : ''
-                }`}
-                onClick={() => loadConversation(conversation.id)}
-              >
-                <span className={styles.ConversationTitle}>
-                  {conversation.title || t('agent_new_chat')}
-                </span>
-                <span className={styles.ConversationPreview}>
-                  {conversation.lastMessagePreview || t('agent_no_messages')}
-                </span>
-                <span className={styles.ConversationMeta}>
-                  {t('agent_message_count', {
-                    count: conversation.messageCount || 0,
-                  })}
-                </span>
-              </button>
-            ))
+          {isAuthenticated ? (
+            isBootstrapping ? (
+              <div className={styles.SummaryCard}>
+                <p className={styles.StatusText}>{t('agent_loading_conversations')}</p>
+              </div>
+            ) : conversations.length ? (
+              conversations.map((conversation) => (
+                <button
+                  key={conversation.id}
+                  type="button"
+                  className={`${styles.ConversationBtn} ${
+                    currentConversation.id === conversation.id
+                      ? styles.ConversationActive
+                      : ''
+                  }`}
+                  onClick={() => loadConversation(conversation.id)}
+                >
+                  <span className={styles.ConversationTitle}>
+                    {conversation.title || t('agent_new_chat')}
+                  </span>
+                  <span className={styles.ConversationPreview}>
+                    {conversation.lastMessagePreview || t('agent_no_messages')}
+                  </span>
+                  <span className={styles.ConversationMeta}>
+                    {t('agent_message_count', {
+                      count: conversation.messageCount || 0,
+                    })}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className={styles.SummaryCard}>
+                <p className={styles.StatusText}>{t('agent_no_conversations')}</p>
+              </div>
+            )
           ) : (
             <div className={styles.SummaryCard}>
-              <p className={styles.StatusText}>{t('agent_no_conversations')}</p>
+              <p className={styles.StatusText}>{t('agent_guest_saved_note')}</p>
             </div>
           )}
         </div>
@@ -374,13 +393,14 @@ function AgentWorkbench({
             </h2>
             <div className={styles.HeaderMeta}>
               <span className={styles.Pill}>
-                {isLoading ? t('agent_working') : t('agent_ready')}
+                {isSending ? t('agent_working') : t('agent_ready')}
               </span>
               <span className={styles.Pill}>
                 {isPlaying ? t('agent_player_playing') : t('agent_player_paused')}
               </span>
+              <span className={styles.Pill}>{identityLabel}</span>
               <span className={styles.Pill}>
-                {profile?.display_name || t('appName')}
+                {isConnected ? t('spotify_connected') : t('spotify_not_connected')}
               </span>
             </div>
           </div>
@@ -438,7 +458,9 @@ function AgentWorkbench({
           ) : (
             <div className={styles.EmptyState}>
               <h3 className={styles.EmptyTitle}>{t('agent_empty_title')}</h3>
-              <p className={styles.EmptyText}>{t('agent_empty_hint')}</p>
+              <p className={styles.EmptyText}>
+                {isAuthenticated ? t('agent_empty_hint') : t('agent_guest_body')}
+              </p>
               <div className={styles.QuickPrompts}>
                 {quickPrompts.map((prompt) => (
                   <button
@@ -471,7 +493,10 @@ function AgentWorkbench({
               placeholder={t('agent_message_placeholder')}
             />
             <p className={`${styles.StatusText} ${error ? styles.ErrorText : ''}`}>
-              {error || t('agent_input_hint')}
+              {error ||
+                (isAuthenticated
+                  ? t('agent_input_hint')
+                  : t('agent_guest_saved_note'))}
             </p>
           </div>
           <button

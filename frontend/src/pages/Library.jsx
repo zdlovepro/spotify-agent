@@ -1,26 +1,92 @@
+import { useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import TitleM from '../components/text/TitleM'
 import PlaylistCardM from '../components/cards/PlaylistCardM'
-import { useSpotify } from '../context/SpotifyContext.jsx'
-import { PLAYLIST } from '../data/index.js'
+import { useAuth } from '../context/AuthContext.jsx'
+import { mapLocalPlaylistSummary } from '../utils/library.js'
 import styles from './library.module.css'
 
 function Library() {
-  const { isAuthenticated, playlists } = useSpotify()
-  const playlistItems = isAuthenticated
-    ? playlists
-    : PLAYLIST.filter((item) => item.type === 'playlist')
+  const { isAuthenticated, openAuthDialog, request } = useAuth()
+  const [playlists, setPlaylists] = useState([])
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadLibrary() {
+      if (!isAuthenticated) {
+        setPlaylists([])
+        setError('')
+        return
+      }
+
+      try {
+        const data = await request('/api/library/playlists')
+
+        if (cancelled) {
+          return
+        }
+
+        setPlaylists((data.items || []).map(mapLocalPlaylistSummary))
+        setError('')
+      } catch (requestError) {
+        if (!cancelled) {
+          setError(requestError.message)
+          setPlaylists([])
+        }
+      }
+    }
+
+    loadLibrary()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated, request])
 
   return (
     <div className={styles.LibPage}>
       <div className={styles.Library}>
-        <Routes>
-          <Route path="/" element={<PlaylistTab playlists={playlistItems} />} />
-          <Route path="/podcasts" element={<PodcastTab />} />
-          <Route path="/artists" element={<ArtistTab />} />
-          <Route path="/albums" element={<AlbumTab />} />
-        </Routes>
+        {!isAuthenticated && (
+          <section className={styles.EmptyState}>
+            <TitleM>{t('library_guest_title')}</TitleM>
+            <p className={styles.EmptyText}>{t('library_guest_body')}</p>
+            <button
+              type="button"
+              className={styles.PrimaryBtn}
+              onClick={() => openAuthDialog('login')}
+            >
+              {t('library_sign_in_cta')}
+            </button>
+          </section>
+        )}
+
+        {isAuthenticated && error && (
+          <section className={styles.EmptyState}>
+            <TitleM>{t('library_error_title')}</TitleM>
+            <p className={styles.EmptyText}>{error}</p>
+          </section>
+        )}
+
+        {isAuthenticated && !error && (
+          <Routes>
+            <Route path="/" element={<PlaylistTab playlists={playlists} />} />
+            <Route
+              path="/podcasts"
+              element={<PlaceholderTab translationKey="podcasts" />}
+            />
+            <Route
+              path="/artists"
+              element={<PlaceholderTab translationKey="artists" />}
+            />
+            <Route
+              path="/albums"
+              element={<PlaceholderTab translationKey="albums" />}
+            />
+          </Routes>
+        )}
       </div>
     </div>
   )
@@ -28,51 +94,28 @@ function Library() {
 
 function PlaylistTab({ playlists }) {
   const { t } = useTranslation()
+
   return (
     <div>
       <TitleM>{t('playlists')}</TitleM>
       <div className={styles.Grid}>
-        {playlists.map((item) => (
-          <PlaylistCardM key={item.title} data={item} />
-        ))}
+        {playlists.length ? (
+          playlists.map((item) => <PlaylistCardM key={item.link} data={item} />)
+        ) : (
+          <p className={styles.EmptyText}>{t('library_empty')}</p>
+        )}
       </div>
     </div>
   )
 }
 
-function PodcastTab() {
+function PlaceholderTab({ translationKey }) {
   const { t } = useTranslation()
-  return (
-    <div>
-      <TitleM>{t('podcasts')}</TitleM>
-      <div className={styles.Grid}>
-        {PLAYLIST.filter((item) => item.type === 'podcast').map((item) => (
-          <PlaylistCardM key={item.title} data={item} />
-        ))}
-      </div>
-    </div>
-  )
-}
 
-function ArtistTab() {
-  const { t } = useTranslation()
   return (
     <div>
-      <TitleM>{t('artists')}</TitleM>
-    </div>
-  )
-}
-
-function AlbumTab() {
-  const { t } = useTranslation()
-  return (
-    <div>
-      <TitleM>{t('albums')}</TitleM>
-      <div className={styles.Grid}>
-        {PLAYLIST.filter((item) => item.type === 'albüm').map((item) => (
-          <PlaylistCardM key={item.title} data={item} />
-        ))}
-      </div>
+      <TitleM>{t(translationKey)}</TitleM>
+      <p className={styles.EmptyText}>{t('library_placeholder_body')}</p>
     </div>
   )
 }

@@ -3,8 +3,13 @@ import { useParams } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { useTranslation } from 'react-i18next'
 import { changePlay, changeTrack } from '../store/index.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import { useSpotify } from '../context/SpotifyContext.jsx'
 import { createPlaybackQueue } from '../lib/spotify.js'
+import {
+  mapCatalogPlaylistDetails,
+  mapLocalPlaylistDetails,
+} from '../utils/library.js'
 import TextRegularM from '../components/text/TextRegularM'
 import PlayButton from '../components/buttons/PlayButton'
 import IconButton from '../components/buttons/IconButton'
@@ -20,7 +25,8 @@ function PlaylistPage() {
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const { path } = useParams()
   const { t } = useTranslation()
-  const { getPlaylistDetails, isAuthenticated } = useSpotify()
+  const { isAuthenticated, request } = useAuth()
+  const { getPlaylistDetails, isConnected } = useSpotify()
   const [playlist, setPlaylist] = useState(null)
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
 
@@ -36,18 +42,43 @@ function PlaylistPage() {
         return
       }
 
-      if (!isAuthenticated) {
-        setPlaylist(null)
-        return
-      }
-
       setIsLoadingPlaylist(true)
 
       try {
-        const spotifyPlaylist = await getPlaylistDetails(path)
+        if (isAuthenticated) {
+          try {
+            const localPlaylist = await request(`/api/library/playlists/${path}`)
+
+            if (!cancelled && localPlaylist?.playlist) {
+              setPlaylist(mapLocalPlaylistDetails(localPlaylist.playlist))
+              return
+            }
+          } catch {
+            // Ignore and continue to provider fallbacks.
+          }
+        }
+
+        if (isConnected) {
+          try {
+            const spotifyPlaylist = await getPlaylistDetails(path)
+
+            if (!cancelled && spotifyPlaylist) {
+              setPlaylist(spotifyPlaylist)
+              return
+            }
+          } catch {
+            // Ignore and continue to public catalog.
+          }
+        }
+
+        const publicPlaylist = await request(`/api/catalog/playlists/${path}`)
 
         if (!cancelled) {
-          setPlaylist(spotifyPlaylist)
+          setPlaylist(publicPlaylist ? mapCatalogPlaylistDetails(publicPlaylist) : null)
+        }
+      } catch {
+        if (!cancelled) {
+          setPlaylist(null)
         }
       } finally {
         if (!cancelled) {
@@ -61,7 +92,7 @@ function PlaylistPage() {
     return () => {
       cancelled = true
     }
-  }, [getPlaylistDetails, isAuthenticated, path])
+  }, [getPlaylistDetails, isAuthenticated, isConnected, path, request])
 
   useEffect(() => {
     if (playlist?.playlistBg) {
