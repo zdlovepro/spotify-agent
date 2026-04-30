@@ -1,4 +1,4 @@
-import { buildUserTasteProfile } from './memory-service.js'
+import { createEmptyMemoryProfile } from './memory-service.js'
 import {
   buildConversationTitle,
   classifyIntent,
@@ -34,54 +34,76 @@ function unique(items) {
   return [...new Set(items.filter(Boolean))]
 }
 
+function getPrimaryImage(entity) {
+  return (
+    entity?.image ||
+    entity?.image_url ||
+    entity?.images?.[0]?.url ||
+    entity?.album?.images?.[0]?.url ||
+    ''
+  )
+}
+
+function extractAlbumName(track) {
+  if (typeof track?.album === 'string') {
+    return track.album
+  }
+
+  return track?.album?.name || ''
+}
+
 function mapTrackArtifact(track) {
   return {
     id: track.id,
+    source_type: track.source_type || track.sourceType || 'spotify',
+    source_id:
+      track.source_id || track.sourceId || `${track.source_type || 'spotify'}:track:${track.id}`,
     name: track.name,
-    artists: (track.artists || []).map((artist) => artist.name),
-    album: track.album?.name || '',
-    image: track.album?.images?.[0]?.url || '',
-    previewUrl: track.preview_url || '',
-    durationMs: track.duration_ms || 0,
-    uri: track.uri || '',
+    artists: (track.artists || []).map((artist) =>
+      typeof artist === 'string' ? artist : artist.name,
+    ),
+    album: extractAlbumName(track),
+    image: getPrimaryImage(track),
+    previewUrl: track.preview_url || track.previewUrl || '',
+    durationMs: track.duration_ms ?? track.durationMs ?? 0,
+    uri: track.external_url || track.source_id || track.sourceId || '',
   }
 }
 
 function mapArtistArtifact(artist) {
   return {
     id: artist.id,
+    source_type: artist.source_type || artist.sourceType || 'spotify',
+    source_id:
+      artist.source_id || artist.sourceId || `${artist.source_type || 'spotify'}:artist:${artist.id}`,
     name: artist.name,
     genres: artist.genres || [],
-    followers: artist.followers?.total || 0,
+    followers: artist.followers ?? 0,
     popularity: artist.popularity || 0,
-    image: artist.images?.[0]?.url || '',
+    image: getPrimaryImage(artist),
   }
 }
 
 function mapAlbumArtifact(album) {
   return {
     id: album.id,
+    source_type: album.source_type || album.sourceType || 'spotify',
+    source_id:
+      album.source_id || album.sourceId || `${album.source_type || 'spotify'}:album:${album.id}`,
     name: album.name,
-    artists: (album.artists || []).map((artist) => artist.name),
-    releaseDate: album.release_date || '',
-    totalTracks: album.total_tracks || 0,
-    image: album.images?.[0]?.url || '',
+    artists: (album.artists || []).map((artist) =>
+      typeof artist === 'string' ? artist : artist.name,
+    ),
+    releaseDate: album.release_date || album.releaseDate || '',
+    totalTracks: album.total_tracks || album.totalTracks || 0,
+    image: getPrimaryImage(album),
   }
 }
 
 function buildPlayerQueue(tracks) {
   return tracks
-    .filter((track) => track.preview_url)
-    .map((track) => ({
-      id: track.id,
-      name: track.name,
-      artists: (track.artists || []).map((artist) => artist.name),
-      album: track.album?.name || '',
-      image: track.album?.images?.[0]?.url || '',
-      previewUrl: track.preview_url || '',
-      durationMs: track.duration_ms || 0,
-      uri: track.uri || '',
-    }))
+    .filter((track) => track.preview_url || track.previewUrl)
+    .map((track) => mapTrackArtifact(track))
 }
 
 function stripPrefixes(message, prefixes) {
@@ -101,7 +123,7 @@ function extractEntityQuery(message) {
     /介绍一下/g,
     /介绍/g,
     /查一下/g,
-    /查查/g,
+    /查询/g,
     /搜索/g,
     /看看/g,
     /告诉我/g,
@@ -117,10 +139,9 @@ function extractPlaybackQuery(message) {
     /帮我/g,
     /给我/g,
     /播放/g,
-    /放一下/g,
     /放一首/g,
     /来一首/g,
-    /听一下/g,
+    /听一首/g,
     /播一下/g,
     /play/gi,
   ])
@@ -142,6 +163,52 @@ function detectGenreSeeds(message) {
 
 function limitSeeds(items, maxCount) {
   return unique(items).slice(0, Math.max(0, maxCount))
+}
+
+function extractSpotifyTrackSeed(track) {
+  if (track?.sourceType === 'spotify' && track?.id) {
+    return track.id
+  }
+
+  if (track?.source_type === 'spotify' && track?.id) {
+    return track.id
+  }
+
+  if (typeof track?.sourceId === 'string' && track.sourceId.startsWith('spotify:track:')) {
+    return track.sourceId.split(':').slice(2).join(':')
+  }
+
+  if (typeof track?.source_id === 'string' && track.source_id.startsWith('spotify:track:')) {
+    return track.source_id.split(':').slice(2).join(':')
+  }
+
+  return ''
+}
+
+function extractSpotifyArtistSeed(artist) {
+  if (artist?.sourceType === 'spotify' && artist?.id) {
+    return artist.id
+  }
+
+  if (artist?.source_type === 'spotify' && artist?.id) {
+    return artist.id
+  }
+
+  if (
+    typeof artist?.sourceId === 'string' &&
+    artist.sourceId.startsWith('spotify:artist:')
+  ) {
+    return artist.sourceId.split(':').slice(2).join(':')
+  }
+
+  if (
+    typeof artist?.source_id === 'string' &&
+    artist.source_id.startsWith('spotify:artist:')
+  ) {
+    return artist.source_id.split(':').slice(2).join(':')
+  }
+
+  return ''
 }
 
 function allocateRecommendationSeeds({
@@ -211,13 +278,13 @@ async function handleSearchEntity({ message, context, tools }) {
     /当前这首|当前歌曲|this song|current song/i.test(normalized) &&
     context.currentTrackId
   ) {
-    const track = await tools.run('spotify.get_track', {
+    const track = await tools.run('catalog.get_track', {
       trackId: context.currentTrackId,
     })
 
     return {
       reply: `当前这首歌是《${track.name}》，来自 ${
-        track.album?.name || '未知专辑'
+        extractAlbumName(track) || '未知专辑'
       }，演唱者是 ${(track.artists || [])
         .map((artist) => artist.name)
         .join('、')}。`,
@@ -231,45 +298,43 @@ async function handleSearchEntity({ message, context, tools }) {
   }
 
   const query = extractEntityQuery(message)
-  const searchResult = await tools.run('spotify.search', {
+  const searchResult = await tools.run('catalog.search', {
     q: query,
     type: 'artist,track,album',
     limit: 5,
   })
-
+  const firstArtist = searchResult.results?.artists?.[0]
+  const firstAlbum = searchResult.results?.albums?.[0]
+  const firstTrack = searchResult.results?.tracks?.[0]
   const wantsArtist = /歌手|artist|谁唱/i.test(normalized)
   const wantsAlbum = /专辑|album/i.test(normalized)
   const wantsTrack = /歌曲|这首歌|track|song/i.test(normalized)
 
-  if (wantsArtist && searchResult.artists?.items?.[0]) {
-    const artist = await tools.run('spotify.get_artist', {
-      artistId: searchResult.artists.items[0].id,
-    })
-    const topTracks = await tools.run('spotify.get_artist_top_tracks', {
-      artistId: artist.id,
+  if (wantsArtist && firstArtist) {
+    const artist = await tools.run('catalog.get_artist', {
+      artistId: firstArtist.id,
     })
 
     return {
       reply: `${artist.name} 的主要风格是 ${
-        (artist.genres || []).slice(0, 3).join('、') || '未标注'
-      }，Spotify 热度为 ${artist.popularity || 0}。我也顺手找到了他/她的热门歌曲。`,
+        (artist.genres || []).slice(0, 3).join('、') || '暂未标注'
+      }，当前热度大约是 ${artist.popularity || 0}。`,
       intent: 'search_entity',
       actions: [],
       artifacts: {
         entityType: 'artist',
         artist: mapArtistArtifact(artist),
-        topTracks: (topTracks.tracks || []).map(mapTrackArtifact),
       },
     }
   }
 
-  if (wantsAlbum && searchResult.albums?.items?.[0]) {
-    const album = await tools.run('spotify.get_album', {
-      albumId: searchResult.albums.items[0].id,
+  if (wantsAlbum && firstAlbum) {
+    const album = await tools.run('catalog.get_album', {
+      albumId: firstAlbum.id,
     })
 
     return {
-      reply: `我找到了专辑《${album.name}》，发行时间是 ${
+      reply: `我找到专辑《${album.name}》，发行时间是 ${
         album.release_date || '未知'
       }，共 ${album.total_tracks || 0} 首歌。`,
       intent: 'search_entity',
@@ -281,16 +346,16 @@ async function handleSearchEntity({ message, context, tools }) {
     }
   }
 
-  if ((wantsTrack || !wantsArtist) && searchResult.tracks?.items?.[0]) {
-    const track = await tools.run('spotify.get_track', {
-      trackId: searchResult.tracks.items[0].id,
+  if ((wantsTrack || !wantsArtist) && firstTrack) {
+    const track = await tools.run('catalog.get_track', {
+      trackId: firstTrack.id,
     })
 
     return {
       reply: `我找到《${track.name}》了，演唱者是 ${(track.artists || [])
         .map((artist) => artist.name)
         .join('、')}，所属专辑是 ${
-        track.album?.name || '未知专辑'
+        extractAlbumName(track) || '未知专辑'
       }。`,
       intent: 'search_entity',
       actions: [],
@@ -301,27 +366,22 @@ async function handleSearchEntity({ message, context, tools }) {
     }
   }
 
-  if (searchResult.artists?.items?.[0]) {
-    const artist = await tools.run('spotify.get_artist', {
-      artistId: searchResult.artists.items[0].id,
-    })
-
+  if (firstArtist) {
     return {
-      reply: `我优先找到了艺人 ${artist.name}，风格偏 ${
-        (artist.genres || []).slice(0, 3).join('、') || '未标注'
+      reply: `我优先找到艺人 ${firstArtist.name}，风格偏 ${
+        (firstArtist.genres || []).slice(0, 3).join('、') || '暂未标注'
       }。`,
       intent: 'search_entity',
       actions: [],
       artifacts: {
         entityType: 'artist',
-        artist: mapArtistArtifact(artist),
+        artist: mapArtistArtifact(firstArtist),
       },
     }
   }
 
   return {
-    reply:
-      '我暂时没有找到足够匹配的歌曲、歌手或专辑信息，你可以换一个更具体的关键词。',
+    reply: '我暂时没有找到足够匹配的歌曲、歌手或专辑信息，你可以换一个更具体的关键词。',
     intent: 'search_entity',
     actions: [],
     artifacts: {},
@@ -334,25 +394,28 @@ async function handlePlayMusic({ message, tools }) {
   const wantsPlaylist = /歌单|playlist/i.test(normalized)
   const wantsArtist = /歌手|artist/i.test(normalized)
 
-  const searchResult = await tools.run('spotify.search', {
+  const searchResult = await tools.run('catalog.search', {
     q: query,
     type: 'track,playlist,artist',
-    limit: 5,
+    limit: 8,
   })
+  const firstPlaylist = searchResult.results?.playlists?.[0]
+  const firstArtist = searchResult.results?.artists?.[0]
+  const firstTrack =
+    searchResult.results?.tracks?.find((track) => track.preview_url) ||
+    searchResult.results?.tracks?.[0]
 
-  if (wantsPlaylist && searchResult.playlists?.items?.[0]) {
-    const playlist = await tools.run('spotify.get_playlist', {
-      playlistId: searchResult.playlists.items[0].id,
+  if (wantsPlaylist && firstPlaylist) {
+    const playlist = await tools.run('catalog.get_playlist', {
+      playlistId: firstPlaylist.id,
     })
-    const playlistTracks = (playlist.tracks?.items || [])
-      .map((item) => item.track)
-      .filter(Boolean)
+    const playlistTracks = (playlist.tracks || []).map((item) => item.track).filter(Boolean)
     const queue = buildPlayerQueue(playlistTracks)
 
     return {
       reply: queue.length
-        ? `我找到了歌单《${playlist.name}》，已经把其中可试听的歌曲整理成播放队列。`
-        : `我找到了歌单《${playlist.name}》，但里面暂时没有可用的预览音频。`,
+        ? `我找到歌单《${playlist.name}》，已经把其中可试听的歌曲整理成播放队列。`
+        : `我找到歌单《${playlist.name}》，但里面暂时没有可用的预览音频。`,
       intent: 'play_music',
       actions: queue.length
         ? [
@@ -370,7 +433,7 @@ async function handlePlayMusic({ message, tools }) {
         playlist: {
           id: playlist.id,
           name: playlist.name,
-          image: playlist.images?.[0]?.url || '',
+          image: getPrimaryImage(playlist),
           owner: playlist.owner?.display_name || '',
         },
         tracks: queue,
@@ -378,17 +441,25 @@ async function handlePlayMusic({ message, tools }) {
     }
   }
 
-  if (wantsArtist && searchResult.artists?.items?.[0]) {
-    const artist = searchResult.artists.items[0]
-    const topTracks = await tools.run('spotify.get_artist_top_tracks', {
-      artistId: artist.id,
+  if (wantsArtist && firstArtist) {
+    const artistTrackSearch = await tools.run('catalog.search', {
+      q: firstArtist.name,
+      type: 'track',
+      limit: 10,
     })
-    const queue = buildPlayerQueue(topTracks.tracks || [])
+    const artistTracks = (artistTrackSearch.results?.tracks || []).filter((track) =>
+      (track.artists || []).some(
+        (artist) =>
+          artist.id === firstArtist.id ||
+          artist.name.toLowerCase() === firstArtist.name.toLowerCase(),
+      ),
+    )
+    const queue = buildPlayerQueue(artistTracks)
 
     return {
       reply: queue.length
-        ? `我找到 ${artist.name} 了，已经把可试听的热门歌曲整理成播放队列。`
-        : `我找到 ${artist.name} 了，但他/她的热门歌曲里没有可用的预览音频。`,
+        ? `我找到 ${firstArtist.name} 了，已经把可试听的歌曲整理成播放队列。`
+        : `我找到 ${firstArtist.name} 了，但暂时没有拿到可试听的预览音频。`,
       intent: 'play_music',
       actions: queue.length
         ? [
@@ -403,61 +474,55 @@ async function handlePlayMusic({ message, tools }) {
         : [],
       artifacts: {
         resultType: 'artist',
-        artist: mapArtistArtifact(artist),
+        artist: mapArtistArtifact(firstArtist),
         tracks: queue,
       },
     }
   }
 
-  if (searchResult.tracks?.items?.[0]) {
-    const track =
-      searchResult.tracks.items.find((item) => item.preview_url) ||
-      searchResult.tracks.items[0]
-
-    if (!track.preview_url) {
+  if (firstTrack) {
+    if (!firstTrack.preview_url) {
       return {
-        reply: `我找到了《${track.name}》，但 Spotify 没有提供预览音频，所以这首歌现在还不能在网页里直接试听。`,
+        reply: `我找到《${firstTrack.name}》了，但这个来源没有提供预览音频，所以现在还不能直接试听。`,
         intent: 'play_music',
         actions: [],
         artifacts: {
           resultType: 'track',
-          track: mapTrackArtifact(track),
+          track: mapTrackArtifact(firstTrack),
         },
       }
     }
 
     return {
-      reply: `我找到《${track.name}》了，已经准备好播放它的预览。`,
+      reply: `我找到《${firstTrack.name}》了，已经准备好播放它的预览。`,
       intent: 'play_music',
       actions: [
         {
           type: 'player.replace_queue',
           payload: {
-            tracks: buildPlayerQueue([track]),
+            tracks: buildPlayerQueue([firstTrack]),
             startIndex: 0,
           },
         },
       ],
       artifacts: {
         resultType: 'track',
-        track: mapTrackArtifact(track),
+        track: mapTrackArtifact(firstTrack),
       },
     }
   }
 
-  if (searchResult.playlists?.items?.[0]) {
-    const playlist = await tools.run('spotify.get_playlist', {
-      playlistId: searchResult.playlists.items[0].id,
+  if (firstPlaylist) {
+    const playlist = await tools.run('catalog.get_playlist', {
+      playlistId: firstPlaylist.id,
     })
-    const playlistTracks = (playlist.tracks?.items || [])
-      .map((item) => item.track)
-      .filter(Boolean)
+    const playlistTracks = (playlist.tracks || []).map((item) => item.track).filter(Boolean)
     const queue = buildPlayerQueue(playlistTracks)
 
     return {
       reply: queue.length
-        ? `我找到了歌单《${playlist.name}》，已经把其中可试听的歌曲整理成播放队列。`
-        : `我找到了歌单《${playlist.name}》，但里面暂时没有可用的预览音频。`,
+        ? `我找到歌单《${playlist.name}》，已经把其中可试听的歌曲整理成播放队列。`
+        : `我找到歌单《${playlist.name}》，但里面暂时没有可用的预览音频。`,
       intent: 'play_music',
       actions: queue.length
         ? [
@@ -475,7 +540,7 @@ async function handlePlayMusic({ message, tools }) {
         playlist: {
           id: playlist.id,
           name: playlist.name,
-          image: playlist.images?.[0]?.url || '',
+          image: getPrimaryImage(playlist),
           owner: playlist.owner?.display_name || '',
         },
         tracks: queue,
@@ -492,54 +557,97 @@ async function handlePlayMusic({ message, tools }) {
 }
 
 async function handleRecommendation({
+  mode,
   message,
   memoryProfile,
   tools,
 }) {
   const explicitGenres = detectGenreSeeds(message)
+  const defaultGenres = Array.isArray(memoryProfile.defaultGenres)
+    ? memoryProfile.defaultGenres
+    : Array.isArray(memoryProfile.publicSeeds?.genres)
+      ? memoryProfile.publicSeeds.genres
+      : []
   const searchQuery = extractEntityQuery(message)
-  const searchResult = await tools.run('spotify.search', {
+  const searchResult = await tools.run('catalog.search', {
     q: searchQuery,
     type: 'artist,track',
     limit: 5,
   })
 
   const searchArtistIds = limitSeeds(
-    (searchResult.artists?.items || []).map((artist) => artist.id),
+    (searchResult.results?.artists || [])
+      .map((artist) => extractSpotifyArtistSeed(artist))
+      .filter(Boolean),
     2,
   )
   const searchTrackIds = limitSeeds(
-    (searchResult.tracks?.items || []).map((track) => track.id),
+    (searchResult.results?.tracks || [])
+      .map((track) => extractSpotifyTrackSeed(track))
+      .filter(Boolean),
     3,
   )
-
   const memoryArtistIds = limitSeeds(
-    memoryProfile.topArtists.map((artist) => artist.id),
+    memoryProfile.topArtists.map((artist) => extractSpotifyArtistSeed(artist)).filter(Boolean),
     2,
   )
   const memoryTrackIds = limitSeeds(
-    memoryProfile.topTracks.map((track) => track.id),
+    memoryProfile.topTracks
+      .filter((track) =>
+        !(memoryProfile.avoidSourceIds || []).includes(track.sourceId || track.source_id || ''),
+      )
+      .map((track) => extractSpotifyTrackSeed(track))
+      .filter(Boolean),
     3,
   )
-
   const { seedGenres, seedArtists, seedTracks } = allocateRecommendationSeeds({
-    explicitGenres,
+    explicitGenres: explicitGenres.length ? explicitGenres : defaultGenres,
     searchArtistIds,
     searchTrackIds,
     memoryArtistIds,
     memoryTrackIds,
   })
+  let recommendationTracks = []
 
-  const recommendations = await tools.run('spotify.get_recommendations', {
-    seed_artists: seedArtists.join(','),
-    seed_tracks: seedTracks.join(','),
-    seed_genres: seedGenres.join(','),
-    limit: 12,
-  })
+  if (seedArtists.length || seedTracks.length) {
+    try {
+      const recommendations = await tools.run('catalog.get_recommendations', {
+        seed_artists: seedArtists.join(','),
+        seed_tracks: seedTracks.join(','),
+        seed_genres: seedGenres.join(','),
+        limit: 10,
+      })
 
-  const tracks = (recommendations.tracks || []).map(mapTrackArtifact)
+      recommendationTracks = recommendations.tracks || []
+    } catch {
+      recommendationTracks = []
+    }
+  }
+
+  if (!recommendationTracks.length) {
+    const fallbackQuery =
+      explicitGenres[0] ||
+      defaultGenres[0] ||
+      searchResult.results?.artists?.[0]?.name ||
+      memoryProfile.topArtists[0]?.name ||
+      memoryProfile.topTracks[0]?.name ||
+      memoryProfile.publicSeeds?.query ||
+      searchQuery ||
+      'pop'
+    const fallbackSearch = await tools.run('catalog.search', {
+      q: fallbackQuery,
+      type: 'track',
+      limit: 10,
+    })
+
+    recommendationTracks = fallbackSearch.results?.tracks || []
+  }
+
+  const avoidSourceIds = new Set(memoryProfile.avoidSourceIds || [])
+  const tracks = recommendationTracks
+    .map((track) => mapTrackArtifact(track))
+    .filter((track) => !avoidSourceIds.has(track.source_id || track.sourceId || ''))
   const playableTracks = tracks.filter((track) => track.previewUrl)
-
   const historyEntry = await tools.run('history.save_recommendation', {
     title: buildConversationTitle(message),
     prompt: message,
@@ -551,13 +659,18 @@ async function handleRecommendation({
     },
     tracks,
   })
-
-  const genreText = seedGenres.length ? `，并结合 ${seedGenres.join('、')} 这种风格` : ''
+  const modeLeadText =
+    mode === 'spotify_enhanced'
+      ? '我结合了你站内偏好和已绑定的 Spotify 画像'
+      : mode === 'local_user'
+        ? '我结合了你在 AgentMusic 里的收藏和歌单'
+        : '我先按公开目录和你的描述'
+  const genreText = seedGenres.length ? `，并参考 ${seedGenres.join('、')} 这类风格` : ''
 
   return {
     reply: playableTracks.length
-      ? `我根据你的近期偏好${genreText}，整理出一组新的推荐，并且已经准备成可播放队列。`
-      : '我整理出了一组推荐结果，但这些歌曲里没有足够的预览音频，所以这次先把结果保存到历史推荐里了。',
+      ? `${modeLeadText}${genreText}，整理出一组推荐，并且已经准备成可播放队列。`
+      : `${modeLeadText}${genreText}，整理出一组推荐结果，不过这次没有拿到足够的预览音频，所以先把结果保存下来了。`,
     intent: 'generate_recommendation',
     actions: playableTracks.length
       ? [
@@ -574,38 +687,43 @@ async function handleRecommendation({
       recommendationId: historyEntry.id,
       recommendationTitle: historyEntry.title,
       tracks,
-      seeds: historyEntry.seeds,
+      seeds: historyEntry.seeds || {
+        artists: seedArtists,
+        tracks: seedTracks,
+        genres: seedGenres,
+      },
       memoryProfile,
     },
   }
 }
 
 export async function runAgent({
-  accessToken,
-  userId,
+  mode = 'guest',
+  localUserId = null,
+  providerLinks = {},
   message,
   context = {},
+  conversationId = '',
 }) {
   const toolCalls = []
   const intentResult = classifyIntent(message)
   const tools = createAgentToolRegistry({
-    accessToken,
-    userId,
+    mode,
+    localUserId,
+    providerLinks,
     toolCalls,
+    conversationId,
   })
-
   const memoryProfile =
     intentResult.intent === 'control_player'
-      ? {
-          topTracks: [],
-          topArtists: [],
-          recentRecommendations: [],
-          recentFeedback: [],
-        }
-      : await buildUserTasteProfile({
-          accessToken,
-          userId,
-        })
+      ? createEmptyMemoryProfile()
+      : mode === 'guest'
+        ? createEmptyMemoryProfile()
+        : await tools.run('memory.get_user_profile', {
+            topLimit: 5,
+            recommendationLimit: 5,
+            feedbackLimit: 5,
+          })
 
   let result
 
@@ -629,6 +747,7 @@ export async function runAgent({
     case 'generate_recommendation':
     default:
       result = await handleRecommendation({
+        mode,
         message,
         memoryProfile,
         tools,
@@ -638,9 +757,14 @@ export async function runAgent({
 
   return {
     ...result,
+    mode,
     confidence: intentResult.confidence,
     toolCalls,
     memoryProfile,
     conversationTitle: buildConversationTitle(message),
   }
+}
+
+export default {
+  runAgent,
 }

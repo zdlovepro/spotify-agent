@@ -1,19 +1,22 @@
 import express from 'express'
 import cors from 'cors'
-import dotenv from 'dotenv'
+import env from './config/env.js'
+import { migrateDatabase } from './db/migrate.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import agentRouter from './routes/agent.js'
 import authRouter from './routes/auth.js'
+import catalogRouter from './routes/catalog.js'
 import historyRouter from './routes/history.js'
+import libraryRouter from './routes/library.js'
+import localAuthRouter from './routes/local-auth.js'
+import providersRouter from './routes/providers.js'
 import spotifyRouter from './routes/spotify.js'
 
-dotenv.config()
+migrateDatabase()
 
 const app = express()
-const port = process.env.PORT || 8080
-const frontendUri = process.env.FRONTEND_URI || 'http://127.0.0.1:5173'
 const allowedOrigins = new Set([
-  frontendUri,
+  env.frontendUri,
   'http://localhost:5173',
   'http://127.0.0.1:5173',
 ])
@@ -35,7 +38,11 @@ app.use(express.json())
 
 app.use('/api/auth', authRouter)
 app.use('/api/agent', agentRouter)
+app.use('/api/catalog', catalogRouter)
 app.use('/api/history', historyRouter)
+app.use('/api/library', libraryRouter)
+app.use('/api/local-auth', localAuthRouter)
+app.use('/api/providers', providersRouter)
 app.use('/api/spotify', spotifyRouter)
 
 app.get('/api/test', (req, res) => {
@@ -45,6 +52,6 @@ app.get('/api/test', (req, res) => {
 app.use(notFoundHandler)
 app.use(errorHandler)
 
-app.listen(port, () => {
-  console.log(`Server is running on http://127.0.0.1:${port}`)
+app.listen(env.port, () => {
+  console.log(`Server is running on http://127.0.0.1:${env.port}`)
 })

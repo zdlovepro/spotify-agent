@@ -1,26 +1,26 @@
 const controlPatterns = [
-  { intent: 'control_player', action: 'next', pattern: /(下一首|next|skip)/i },
+  { intent: 'control_player', action: 'next', pattern: /(下一首|下一个|next|skip)/i },
   {
     intent: 'control_player',
     action: 'previous',
-    pattern: /(上一首|prev|previous)/i,
+    pattern: /(上一首|上一个|prev|previous)/i,
   },
   {
     intent: 'control_player',
     action: 'pause',
-    pattern: /(暂停|pause|先停一下)/i,
+    pattern: /(暂停|先停一下|pause|stop)/i,
   },
   {
     intent: 'control_player',
     action: 'resume',
-    pattern: /(继续播放|恢复播放|继续|resume)/i,
+    pattern: /(继续播放|恢复播放|继续|resume|play again)/i,
   },
 ]
 
 const searchPatterns =
-  /(介绍|是谁|谁唱|歌手|专辑|歌曲信息|bio|artist|album|track info|歌词)/i
+  /(介绍|是什么|谁唱|歌手|专辑|歌曲信息|bio|artist|album|track info|歌词|信息)/i
 const playPatterns =
-  /(播放|放一下|放一首|来一首|听一下|play|listen to|播一下)/i
+  /(播放|放一首|来一首|听一首|play|listen to|播一下)/i
 const recommendPatterns =
   /(推荐|来点|适合|随机|歌单|想听|类似|风格|mood|recommend|discover)/i
 
@@ -76,4 +76,9 @@ export function classifyIntent(message) {
     intent: 'generate_recommendation',
     confidence: 0.5,
   }
+}
+
+export default {
+  buildConversationTitle,
+  classifyIntent,
 }

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/async-handler.js'
 import { requireSpotifyAccessToken } from '../middleware/require-spotify-access-token.js'
+import { assert } from '../utils/assert.js'
 import {
   getCategories,
   getAlbum,
@@ -23,17 +24,6 @@ import {
 } from '../services/spotify-api.js'
 
 const router = Router()
-
-function assert(condition, message, status = 400, details = undefined) {
-  if (condition) {
-    return
-  }
-
-  const error = new Error(message)
-  error.status = status
-  error.details = details
-  throw error
-}
 
 router.use(requireSpotifyAccessToken)
 
