@@ -155,6 +155,35 @@
     color: rgba(255, 255, 255, .7);
 }
 
+.ModeBadge {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .01em;
+    white-space: nowrap;
+}
+
+.ModeBadgeGuest {
+    background: rgba(255, 255, 255, .08);
+    color: rgba(255, 255, 255, .86);
+}
+
+.ModeBadgeLocal {
+    background: rgba(86, 157, 255, .16);
+    color: #a8caff;
+}
+
+.ModeBadgeEnhanced {
+    background: rgba(30, 215, 96, .18);
+    color: #8ff0b4;
+    border: 1px solid rgba(30, 215, 96, .28);
+}
+
 .SecondaryBtn {
     border: 1px solid rgba(255, 255, 255, .12);
     padding: 0 14px;
@@ -228,7 +257,8 @@
         margin-left: auto;
     }
 
-    .SecondaryBtn {
+    .SecondaryBtn,
+    .ModeBadge {
         display: none;
     }
 }

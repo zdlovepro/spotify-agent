@@ -101,7 +101,7 @@ function buildQueryPrompt(query) {
 }
 
 function buildEmptyQueryPrompt(query) {
-  return `I couldn't find "${query}" on Spotify. Please recommend similar music from a different angle.`
+  return `I couldn't find "${query}" in the public music catalog. Please recommend similar music from a different angle.`
 }
 
 function buildBrowsePrompt() {

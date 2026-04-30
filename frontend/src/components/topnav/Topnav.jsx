@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -26,6 +27,7 @@ function Topnav() {
     profile,
   } = useSpotify()
   const location = useLocation()
+  const [connectHint, setConnectHint] = useState('')
 
   const toggleLanguage = () => {
     const next = i18n.language === 'zh' ? 'en' : 'zh'
@@ -36,9 +38,37 @@ function Topnav() {
   const isHome = location.pathname === '/'
   const showLibraryTabs =
     location.pathname === '/library' || location.pathname.startsWith('/library/')
-  const statusText = spotifyError || authError
+  const isSpotifyEnhanced = isAuthenticated && isConnected
+  const statusText = connectHint || spotifyError || authError
   const displayName =
     user?.displayName || user?.email || profile?.display_name || t('appName')
+  const modeLabel = !isAuthenticated
+    ? t('mode_guest')
+    : isSpotifyEnhanced
+      ? t('mode_spotify_enhanced')
+      : t('mode_local')
+
+  useEffect(() => {
+    if (isAuthenticated || isConnected) {
+      setConnectHint('')
+    }
+  }, [isAuthenticated, isConnected])
+
+  function handleConnectSpotify() {
+    if (!isAuthenticated) {
+      setConnectHint(t('spotify_requires_local_account'))
+      openAuthDialog('login')
+      return
+    }
+
+    setConnectHint('')
+    connect(location.pathname)
+  }
+
+  function handleDisconnectSpotify() {
+    setConnectHint('')
+    disconnect()
+  }
 
   return (
     <nav className={styles.Topnav}>
@@ -71,6 +101,18 @@ function Topnav() {
         <div className={styles.RightGroup}>
           {statusText && <small className={styles.StatusText}>{statusText}</small>}
 
+          <span
+            className={`${styles.ModeBadge} ${
+              isSpotifyEnhanced
+                ? styles.ModeBadgeEnhanced
+                : isAuthenticated
+                  ? styles.ModeBadgeLocal
+                  : styles.ModeBadgeGuest
+            }`}
+          >
+            {modeLabel}
+          </span>
+
           <button className={styles.LangBtn} onClick={toggleLanguage}>
             {i18n.language === 'zh' ? 'EN' : '中文'}
           </button>
@@ -79,9 +121,7 @@ function Topnav() {
             <>
               <button
                 className={styles.SecondaryBtn}
-                onClick={() =>
-                  isConnected ? disconnect() : connect(location.pathname)
-                }
+                onClick={isConnected ? handleDisconnectSpotify : handleConnectSpotify}
               >
                 {isConnected ? t('spotify_disconnect') : t('spotify_connect')}
               </button>
@@ -94,6 +134,12 @@ function Topnav() {
             </>
           ) : (
             <>
+              <button
+                className={styles.SecondaryBtn}
+                onClick={handleConnectSpotify}
+              >
+                {t('spotify_connect')}
+              </button>
               <button
                 className={styles.SecondaryBtn}
                 onClick={() => openAuthDialog('register')}

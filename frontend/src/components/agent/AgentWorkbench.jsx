@@ -189,7 +189,7 @@ function AgentWorkbench({
   const dispatch = useDispatch()
   const { t } = useTranslation()
   const { isAuthenticated, openAuthDialog, user } = useAuth()
-  const { isConnected, profile } = useSpotify()
+  const { connect, isConnected, profile } = useSpotify()
   const {
     conversations,
     currentConversation,
@@ -292,6 +292,16 @@ function AgentWorkbench({
   const identityLabel = isAuthenticated
     ? user?.displayName || user?.email || t('appName')
     : t('agent_guest_label')
+  const modeLabel = !isAuthenticated
+    ? t('mode_guest')
+    : isConnected
+      ? t('mode_spotify_enhanced')
+      : t('mode_local')
+  const modeDescription = !isAuthenticated
+    ? t('agent_guest_body')
+    : isConnected
+      ? t('agent_spotify_unlocked_body')
+      : t('agent_spotify_locked_body')
 
   return (
     <div className={styles.Shell}>
@@ -313,12 +323,8 @@ function AgentWorkbench({
 
         <div className={styles.SummaryCard}>
           <p className={styles.Eyebrow}>{t('agent_mode_title')}</p>
-          <strong className={styles.ConversationTitle}>
-            {isAuthenticated ? t('agent_mode_local') : t('agent_mode_guest')}
-          </strong>
-          <p className={styles.NowPlaying}>
-            {isAuthenticated ? t('agent_saved_hint') : t('agent_guest_body')}
-          </p>
+          <strong className={styles.ConversationTitle}>{modeLabel}</strong>
+          <p className={styles.NowPlaying}>{modeDescription}</p>
           {!isAuthenticated && (
             <button
               type="button"
@@ -326,6 +332,15 @@ function AgentWorkbench({
               onClick={() => openAuthDialog('login')}
             >
               {t('agent_guest_cta')}
+            </button>
+          )}
+          {isAuthenticated && !isConnected && (
+            <button
+              type="button"
+              className={styles.PrimaryBtn}
+              onClick={() => connect('/agent')}
+            >
+              {t('spotify_connect')}
             </button>
           )}
         </div>

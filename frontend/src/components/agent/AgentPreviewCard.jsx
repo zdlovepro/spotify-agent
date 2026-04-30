@@ -11,7 +11,7 @@ function AgentPreviewCard() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { isAuthenticated, openAuthDialog, user } = useAuth()
-  const { isConnected, profile } = useSpotify()
+  const { connect, isConnected, profile } = useSpotify()
   const { conversations, currentConversation, startNewConversation } = useAgent()
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
@@ -41,6 +41,11 @@ function AgentPreviewCard() {
         <p className={styles.Eyebrow}>{t('agent_title')}</p>
         <h2 className={styles.Title}>{t('agent_preview_title')}</h2>
         <p className={styles.Text}>{t('agent_preview_body')}</p>
+        <p className={styles.Text}>
+          {isConnected
+            ? t('agent_spotify_unlocked_body')
+            : t('agent_spotify_locked_body')}
+        </p>
 
         <div className={styles.Actions}>
           <button
@@ -51,7 +56,7 @@ function AgentPreviewCard() {
             {t('agent_open_workspace')}
           </button>
           {isAuthenticated ? (
-            currentConversation?.id && (
+            currentConversation?.id ? (
               <button
                 type="button"
                 className={styles.SecondaryBtn}
@@ -59,7 +64,15 @@ function AgentPreviewCard() {
               >
                 {t('agent_continue_conversation')}
               </button>
-            )
+            ) : !isConnected ? (
+              <button
+                type="button"
+                className={styles.SecondaryBtn}
+                onClick={() => connect('/')}
+              >
+                {t('spotify_connect')}
+              </button>
+            ) : null
           ) : (
             <button
               type="button"

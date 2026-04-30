@@ -129,6 +129,8 @@
     "agent_mode_guest": "Guest mode",
     "agent_mode_local": "Local account mode",
     "agent_saved_hint": "This account can save conversations, playlists, and feedback in AgentMusic.",
+    "agent_spotify_locked_body": "Connect Spotify after signing in to unlock your Spotify top tracks, artists, and enhanced recommendation context.",
+    "agent_spotify_unlocked_body": "Spotify enhancement is active, so the agent can draw from your AgentMusic data plus Spotify taste signals.",
     "auth_local_mode": "AgentMusic account",
     "auth_register_title": "Create your AgentMusic account",
     "auth_register_body": "This account powers your own playlists, favorites, listening history, and saved agent conversations.",
@@ -144,9 +146,13 @@
     "auth_switch_to_login": "I already have an account",
     "auth_switch_to_register": "Create a new account",
     "auth_cancel": "Close",
+    "mode_guest": "Guest mode",
+    "mode_local": "Local account mode",
+    "mode_spotify_enhanced": "Spotify enhanced",
     "spotify_connect": "Connect Spotify",
     "spotify_disconnect": "Disconnect Spotify",
     "spotify_connected": "Spotify connected",
-    "spotify_not_connected": "Spotify not connected"
+    "spotify_not_connected": "Spotify not connected",
+    "spotify_requires_local_account": "Sign in to AgentMusic first, then connect Spotify as an enhancement."
   }
 }
