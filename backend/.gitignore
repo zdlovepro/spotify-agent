@@ -5,3 +5,5 @@ data/*.json
 db/*.sqlite
 db/*.sqlite-shm
 db/*.sqlite-wal
+uploads/*
+!uploads/.gitkeep

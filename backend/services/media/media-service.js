@@ -1,0 +1,223 @@
+import crypto from 'crypto'
+import fs from 'fs'
+import path from 'path'
+import db from '../../db/index.js'
+import env from '../../config/env.js'
+
+fs.mkdirSync(env.uploadsDir, { recursive: true })
+
+function parseJson(value, fallback) {
+  if (!value) {
+    return fallback
+  }
+
+  try {
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
+}
+
+function nowIso() {
+  return new Date().toISOString()
+}
+
+function toPublicAsset(row) {
+  if (!row) {
+    return null
+  }
+
+  const artists = parseJson(
+    row.artists_json,
+    row.artist_name ? [row.artist_name] : [],
+  )
+  const sizeBytes = row.size_bytes ?? row.file_size_bytes ?? null
+  const userId = row.user_id || row.owner_user_id || null
+
+  return {
+    id: row.id,
+    userId,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    originalFilename: row.original_filename,
+    mimeType: row.mime_type,
+    sizeBytes,
+    storagePath: row.storage_path,
+    title: row.title || '',
+    artists,
+    durationMs: row.duration_ms ?? null,
+    createdAt: row.created_at,
+    streamPath: `/api/media/assets/${row.id}/stream`,
+  }
+}
+
+function normalizeArtists(input) {
+  if (Array.isArray(input)) {
+    return input.map((item) => String(item || '').trim()).filter(Boolean)
+  }
+
+  if (typeof input !== 'string') {
+    return []
+  }
+
+  const trimmed = input.trim()
+
+  if (!trimmed) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed)
+
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item || '').trim()).filter(Boolean)
+    }
+  } catch {
+    // Fall through to comma-split parsing.
+  }
+
+  return trimmed
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function resolveAssetRow(userId, assetId) {
+  return db
+    .prepare(
+      `
+        SELECT *
+        FROM audio_assets
+        WHERE id = ?
+          AND (owner_user_id = ? OR user_id = ?)
+        LIMIT 1
+      `,
+    )
+    .get(assetId, userId, userId)
+}
+
+export function createAudioAsset(userId, file, input = {}) {
+  const id = crypto.randomUUID()
+  const now = nowIso()
+  const title =
+    typeof input.title === 'string' && input.title.trim()
+      ? input.title.trim()
+      : path.parse(file.originalname).name
+  const artists = normalizeArtists(input.artists)
+  const durationMs =
+    Number.isFinite(Number(input.duration_ms)) && Number(input.duration_ms) >= 0
+      ? Number(input.duration_ms)
+      : null
+  const sourceType = 'local_audio'
+  const sourceId = `local_audio:${id}`
+  const storagePath = path.resolve(file.path)
+  const sizeBytes = Number(file.size) || 0
+
+  db.prepare(
+    `
+      INSERT INTO audio_assets (
+        id,
+        owner_user_id,
+        user_id,
+        source_type,
+        source_id,
+        storage_type,
+        storage_path,
+        original_filename,
+        mime_type,
+        file_extension,
+        title,
+        artist_name,
+        artists_json,
+        duration_ms,
+        file_size_bytes,
+        size_bytes,
+        metadata_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+  ).run(
+    id,
+    userId,
+    userId,
+    sourceType,
+    sourceId,
+    'local',
+    storagePath,
+    file.originalname,
+    file.mimetype,
+    path.extname(file.originalname).toLowerCase(),
+    title,
+    artists[0] || null,
+    JSON.stringify(artists),
+    durationMs,
+    sizeBytes,
+    sizeBytes,
+    JSON.stringify({
+      uploadField: file.fieldname,
+    }),
+    now,
+    now,
+  )
+
+  return getAudioAsset(userId, id)
+}
+
+export function listAudioAssets(userId) {
+  const rows = db
+    .prepare(
+      `
+        SELECT *
+        FROM audio_assets
+        WHERE owner_user_id = ? OR user_id = ?
+        ORDER BY created_at DESC
+      `,
+    )
+    .all(userId, userId)
+
+  return rows.map(toPublicAsset)
+}
+
+export function getAudioAsset(userId, assetId) {
+  return toPublicAsset(resolveAssetRow(userId, assetId))
+}
+
+export function getAudioAssetStorageRecord(userId, assetId) {
+  return resolveAssetRow(userId, assetId)
+}
+
+export function deleteAudioAsset(userId, assetId) {
+  const row = resolveAssetRow(userId, assetId)
+
+  if (!row) {
+    return null
+  }
+
+  db.prepare(
+    `
+      DELETE FROM audio_assets
+      WHERE id = ?
+        AND (owner_user_id = ? OR user_id = ?)
+    `,
+  ).run(assetId, userId, userId)
+
+  try {
+    fs.unlinkSync(row.storage_path)
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error
+    }
+  }
+
+  return toPublicAsset(row)
+}
+
+export default {
+  createAudioAsset,
+  deleteAudioAsset,
+  getAudioAsset,
+  getAudioAssetStorageRecord,
+  listAudioAssets,
+}

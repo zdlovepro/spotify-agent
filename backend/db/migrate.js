@@ -335,6 +335,10 @@ const runMigrationTransaction = db.transaction(() => {
   addColumnIfMissing('library_favorites', 'preview_url', 'TEXT')
   addColumnIfMissing('library_favorites', 'duration_ms', 'INTEGER')
 
+  addColumnIfMissing('audio_assets', 'user_id', 'TEXT')
+  addColumnIfMissing('audio_assets', 'artists_json', "TEXT NOT NULL DEFAULT '[]'")
+  addColumnIfMissing('audio_assets', 'size_bytes', 'INTEGER')
+
   db.pragma('user_version = 1')
 })
 

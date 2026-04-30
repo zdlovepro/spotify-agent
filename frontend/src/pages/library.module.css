@@ -12,6 +12,19 @@
 .Library h2 {
     margin: 0;
 }
+
+.HiddenInput {
+    display: none;
+}
+
+.SectionHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
 .Grid{
     margin-top: 24px;
     display: grid;
@@ -46,6 +59,79 @@
     cursor: pointer;
 }
 
+.PrimaryBtn:disabled {
+    opacity: .66;
+    cursor: wait;
+}
+
+.SecondaryBtn {
+    min-height: 40px;
+    padding: 0 16px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+}
+
+.AssetSection {
+    margin-top: 40px;
+}
+
+.SectionHint {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.62);
+    line-height: 1.6;
+}
+
+.AssetGrid {
+    margin-top: 20px;
+    display: grid;
+    gap: 18px;
+}
+
+.AssetCard {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr) auto;
+    gap: 18px;
+    align-items: center;
+    padding: 18px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.AssetImage {
+    width: 92px;
+    height: 92px;
+    border-radius: 14px;
+    object-fit: cover;
+}
+
+.AssetCopy {
+    min-width: 0;
+}
+
+.AssetTitle {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.3;
+    color: #fff;
+}
+
+.AssetMeta {
+    margin: 8px 0 0;
+    color: rgba(255, 255, 255, 0.68);
+    line-height: 1.5;
+}
+
+.AssetActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
 @media screen and (max-width: 640px) {
     .Library{
         padding: 16px;
@@ -55,5 +141,13 @@
     .Grid{
         grid-gap: 16px;
         grid-template-columns: 1fr 1fr;
+    }
+
+    .AssetCard {
+        grid-template-columns: 1fr;
+    }
+
+    .AssetActions {
+        justify-content: flex-start;
     }
 }
