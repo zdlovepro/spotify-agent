@@ -63,6 +63,19 @@ export function createLocalAudioTrack(asset, sessionToken = '') {
 }
 
 export function mapLocalAudioCard(asset) {
+  const normalizedExtension = String(asset.fileExtension || '').toLowerCase()
+  const normalizedMimeType = String(asset.mimeType || '').toLowerCase()
+  const fallbackFormatLabel =
+    normalizedExtension === '.mp3' ||
+    normalizedMimeType === 'audio/mpeg' ||
+    normalizedMimeType === 'audio/mp3'
+      ? 'mp3'
+      : normalizedExtension === '.m4a' ||
+          normalizedMimeType === 'audio/mp4' ||
+          normalizedMimeType === 'audio/x-m4a'
+        ? 'm4a'
+        : 'm4a / mp3'
+
   return {
     id: asset.id,
     title: asset.title || asset.originalFilename || 'Local audio',
@@ -70,7 +83,9 @@ export function mapLocalAudioCard(asset) {
       Array.isArray(asset.artists) && asset.artists.length
         ? asset.artists.join(', ')
         : 'Local audio file',
-    durationText: asset.durationMs ? formatDuration(asset.durationMs) : 'm4a',
+    durationText: asset.durationMs
+      ? formatDuration(asset.durationMs)
+      : fallbackFormatLabel,
     sizeText: formatFileSize(asset.sizeBytes || 0),
     imageUrl: fallbackArtwork,
   }

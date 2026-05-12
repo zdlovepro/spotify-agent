@@ -11,6 +11,7 @@ import { BACKEND_BASE_URL } from '../utils/api.js'
 import {
   mapSpotifyPlaylist,
   mapSpotifyPlaylistDetails,
+  resolveTrackPlaybackMeta,
 } from '../lib/spotify.js'
 
 const SpotifyContext = createContext(null)
@@ -38,20 +39,24 @@ export function SpotifyProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [playlists, setPlaylists] = useState([])
   const [playlistCache, setPlaylistCache] = useState({})
+  const [devices, setDevices] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
 
   const clearSpotifyState = useCallback(() => {
     setConnection(null)
     setProfile(null)
     setPlaylists([])
     setPlaylistCache({})
+    setDevices([])
   }, [])
 
   const refreshConnectionState = useCallback(async () => {
     if (!isLocalAuthenticated) {
       clearSpotifyState()
       setError('')
+      setNotice('')
       setIsLoading(false)
       return null
     }
@@ -91,6 +96,7 @@ export function SpotifyProvider({ children }) {
         }
 
         setError('')
+        setNotice('')
         window.location.href = data.authorizeUrl
       } catch (requestError) {
         setError(requestError.message)
@@ -111,6 +117,7 @@ export function SpotifyProvider({ children }) {
       })
       clearSpotifyState()
       setError('')
+      setNotice('spotify_disconnect_success')
     } catch (requestError) {
       setError(requestError.message)
     }
@@ -129,6 +136,79 @@ export function SpotifyProvider({ children }) {
       return authRequest(path, options)
     },
     [authRequest, connection?.connected, isLocalAuthenticated],
+  )
+
+  const refreshDevices = useCallback(async () => {
+    if (!isLocalAuthenticated || !connection?.connected) {
+      setDevices([])
+      return []
+    }
+
+    try {
+      const data = await authRequest('/api/spotify/player/devices')
+      const nextDevices = Array.isArray(data?.devices) ? data.devices : []
+      setDevices(nextDevices)
+      setError('')
+      return nextDevices
+    } catch (requestError) {
+      setDevices([])
+      setError(requestError.message)
+      return []
+    }
+  }, [authRequest, connection?.connected, isLocalAuthenticated])
+
+  const resumeRemotePlayback = useCallback(async () => {
+    const data = await request('/api/spotify/player/play', {
+      method: 'PUT',
+      body: {},
+    })
+
+    await refreshDevices()
+    return data
+  }, [refreshDevices, request])
+
+  const pauseRemotePlayback = useCallback(async () => {
+    const data = await request('/api/spotify/player/pause', {
+      method: 'PUT',
+      body: {},
+    })
+
+    await refreshDevices()
+    return data
+  }, [refreshDevices, request])
+
+  const playRemoteQueue = useCallback(
+    async (queue = [], startIndex = 0) => {
+      const remoteQueue = (Array.isArray(queue) ? queue : [])
+        .map((track, index) => ({
+          index,
+          remoteUri: resolveTrackPlaybackMeta(track).remoteUri,
+        }))
+        .filter((track) => track.remoteUri)
+
+      if (!remoteQueue.length) {
+        throw new Error('No Spotify tracks are available for remote playback')
+      }
+
+      const matchingIndex = remoteQueue.findIndex(
+        (track) => track.index === startIndex,
+      )
+      const offsetPosition = matchingIndex >= 0 ? matchingIndex : 0
+
+      const data = await request('/api/spotify/player/play', {
+        method: 'PUT',
+        body: {
+          uris: remoteQueue.map((track) => track.remoteUri),
+          offset: {
+            position: offsetPosition,
+          },
+        },
+      })
+
+      await refreshDevices()
+      return data
+    },
+    [refreshDevices, request],
   )
 
   const getPlaylistDetails = useCallback(
@@ -161,11 +241,18 @@ export function SpotifyProvider({ children }) {
 
     if (callbackState.error) {
       setError(callbackState.error)
+      setNotice('')
       return
     }
 
     if (callbackState.connected) {
-      refreshConnectionState().catch(() => {})
+      refreshConnectionState()
+        .then((spotifyLink) => {
+          if (spotifyLink?.connected || spotifyLink?.provider === 'spotify') {
+            setNotice('spotify_connect_success')
+          }
+        })
+        .catch(() => {})
     }
   }, [refreshConnectionState])
 
@@ -178,6 +265,7 @@ export function SpotifyProvider({ children }) {
       setProfile(null)
       setPlaylists([])
       setPlaylistCache({})
+      setDevices([])
       return
     }
 
@@ -187,17 +275,34 @@ export function SpotifyProvider({ children }) {
       setIsLoading(true)
 
       try {
-        const [profileData, playlistData] = await Promise.all([
+        const [profileResult, playlistResult, deviceResult] = await Promise.allSettled([
           authRequest('/api/spotify/me'),
           authRequest('/api/spotify/playlists?limit=20'),
+          authRequest('/api/spotify/player/devices'),
         ])
+
+        if (
+          profileResult.status !== 'fulfilled' ||
+          playlistResult.status !== 'fulfilled'
+        ) {
+          throw new Error(
+            profileResult.status === 'rejected'
+              ? profileResult.reason?.message || 'spotify_profile_failed'
+              : playlistResult.reason?.message || 'spotify_playlists_failed',
+          )
+        }
 
         if (cancelled) {
           return
         }
 
-        setProfile(profileData)
-        setPlaylists((playlistData.items || []).map(mapSpotifyPlaylist))
+        setProfile(profileResult.value)
+        setPlaylists((playlistResult.value.items || []).map(mapSpotifyPlaylist))
+        setDevices(
+          deviceResult.status === 'fulfilled' && Array.isArray(deviceResult.value?.devices)
+            ? deviceResult.value.devices
+            : [],
+        )
         setError('')
       } catch (requestError) {
         if (!cancelled) {
@@ -205,6 +310,7 @@ export function SpotifyProvider({ children }) {
           setProfile(null)
           setPlaylists([])
           setPlaylistCache({})
+          setDevices([])
         }
       } finally {
         if (!cancelled) {
@@ -225,28 +331,40 @@ export function SpotifyProvider({ children }) {
       connection,
       connect,
       disconnect,
+      devices,
       error,
       getPlaylistDetails,
       isAuthenticated: Boolean(connection?.connected),
       isConnected: Boolean(connection?.connected),
       isLoading,
       login: connect,
+      notice,
       logout: disconnect,
       playlists,
+      playRemoteQueue,
       profile,
+      pauseRemotePlayback,
       refreshConnectionState,
+      refreshDevices,
+      resumeRemotePlayback,
       request,
     }),
     [
       connect,
       connection,
       disconnect,
+      devices,
       error,
       getPlaylistDetails,
       isLoading,
       playlists,
+      playRemoteQueue,
       profile,
+      pauseRemotePlayback,
+      notice,
       refreshConnectionState,
+      refreshDevices,
+      resumeRemotePlayback,
       request,
     ],
   )

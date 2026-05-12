@@ -1,5 +1,6 @@
 import { useSelector } from 'react-redux'
 import { useTranslation } from 'react-i18next'
+import { useSpotify } from '../../context/SpotifyContext.jsx'
 import * as Icons from '../icons/index.jsx'
 import TextRegularM from '../text/TextRegularM'
 import IconButton from '../buttons/IconButton'
@@ -8,6 +9,7 @@ import styles from './footer-left.module.css'
 
 function FooterLeft() {
   const { t } = useTranslation()
+  const { isConnected } = useSpotify()
   const trackData = useSelector((state) => state.player.trackData)
 
   return (
@@ -21,7 +23,7 @@ function FooterLeft() {
           <small>{trackData.trackArtist}</small>
         </TextRegularM>
         <span className={styles.PlaybackBadge}>
-          {t(getTrackPlaybackStatusKey(trackData))}
+          {t(getTrackPlaybackStatusKey(trackData, { allowRemote: isConnected }))}
         </span>
       </div>
       <IconButton icon={<Icons.Like />} activeicon={<Icons.LikeActive />} />

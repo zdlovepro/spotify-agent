@@ -32,12 +32,15 @@ function getFeedbackKey(message) {
   return message.artifacts?.recommendationId || message.id || ''
 }
 
-function canPlayTracks(tracks = []) {
-  return tracks.some((track) => resolveTrackPlaybackMeta(track).playable)
+function canPlayTracks(tracks = [], allowRemote = false) {
+  return tracks.some((track) => {
+    const playback = resolveTrackPlaybackMeta(track)
+    return playback.playable || (allowRemote && playback.remoteUri)
+  })
 }
 
-function getTrackPlaybackLabel(track, t) {
-  return t(getTrackPlaybackStatusKey(track))
+function getTrackPlaybackLabel(track, t, allowRemote = false) {
+  return t(getTrackPlaybackStatusKey(track, { allowRemote }))
 }
 
 function AgentArtifact({
@@ -46,6 +49,7 @@ function AgentArtifact({
   onSubmitFeedback,
   feedbackState,
   isSubmittingFeedback,
+  isConnected,
   t,
 }) {
   const artifacts = message.artifacts || {}
@@ -64,7 +68,7 @@ function AgentArtifact({
                 artifacts.album?.name ||
                 t('agent_tracks')}
             </p>
-            {tracks.length > 0 && canPlayTracks(tracks) && (
+            {tracks.length > 0 && canPlayTracks(tracks, isConnected) && (
               <button
                 type="button"
                 className={styles.ActionBtn}
@@ -91,7 +95,7 @@ function AgentArtifact({
                 </span>
               </div>
               <span className={styles.TrackTag}>
-                {getTrackPlaybackLabel(artifacts.track, t)}
+                {getTrackPlaybackLabel(artifacts.track, t, isConnected)}
               </span>
             </div>
           )}
@@ -138,7 +142,7 @@ function AgentArtifact({
                     </span>
                   </div>
                   <span className={styles.TrackTag}>
-                    {getTrackPlaybackLabel(track, t)}
+                    {getTrackPlaybackLabel(track, t, isConnected)}
                   </span>
                 </div>
               ))}
@@ -467,6 +471,7 @@ function AgentWorkbench({
                         }
                         feedbackState={feedbackState}
                         isSubmittingFeedback={isSubmittingFeedback}
+                        isConnected={isConnected}
                         t={t}
                       />
                     )}

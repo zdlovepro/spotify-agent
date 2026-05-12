@@ -1,7 +1,9 @@
 import { useRef, useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { nextTrack } from '../../store/index.js'
+import { changePlay, nextTrack } from '../../store/index.js'
 import useWindowSize from '../../hooks/useWindowSize'
+import { useSpotify } from '../../context/SpotifyContext.jsx'
+import { resolveTrackPlaybackMeta } from '../../lib/spotify.js'
 import FooterLeft from './FooterLeft'
 import MusicControlBox from './player/MusicControlBox'
 import MusicProgressBar from './player/MusicProgressBar'
@@ -12,7 +14,11 @@ import styles from './footer.module.css'
 
 function Footer() {
   const dispatch = useDispatch()
+  const { isConnected, pauseRemotePlayback, playRemoteQueue, resumeRemotePlayback } =
+    useSpotify()
   const trackData = useSelector((state) => state.player.trackData)
+  const currentQueue = useSelector((state) => state.player.currentQueue)
+  const currentIndex = useSelector((state) => state.player.currentIndex)
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const size = useWindowSize()
 
@@ -20,6 +26,15 @@ function Footer() {
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
   const audioRef = useRef(null)
+  const previousRemoteKeyRef = useRef('')
+  const previousRemotePlayingRef = useRef(false)
+
+  const playback = resolveTrackPlaybackMeta(trackData)
+  const shouldUseRemotePlayback =
+    isConnected &&
+    Boolean(playback.remoteUri) &&
+    trackData.source !== 'local_audio' &&
+    trackData.playMode !== 'local'
 
   const handleTrackClick = (position) => {
     if (audioRef.current) {
@@ -32,12 +47,62 @@ function Footer() {
       return
     }
 
+    if (shouldUseRemotePlayback) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      setCurrentTime(0)
+      setDuration(0)
+      return
+    }
+
     if (isPlaying) {
       audioRef.current.play().catch(() => {})
     } else {
       audioRef.current.pause()
     }
-  }, [isPlaying, trackData.track])
+  }, [isPlaying, shouldUseRemotePlayback, trackData.track])
+
+  useEffect(() => {
+    if (!shouldUseRemotePlayback) {
+      previousRemoteKeyRef.current = ''
+      previousRemotePlayingRef.current = false
+      return
+    }
+
+    const remoteKey = `${trackData.playlistId || 'queue'}:${currentIndex}:${trackData.id || ''}`
+    const remoteChanged = previousRemoteKeyRef.current !== remoteKey
+    const playingChanged = previousRemotePlayingRef.current !== isPlaying
+
+    async function syncRemotePlayback() {
+      try {
+        if (remoteChanged && isPlaying) {
+          await playRemoteQueue(currentQueue, currentIndex)
+        } else if (playingChanged && isPlaying) {
+          await resumeRemotePlayback()
+        } else if (playingChanged && !isPlaying) {
+          await pauseRemotePlayback()
+        }
+
+        previousRemoteKeyRef.current = remoteKey
+        previousRemotePlayingRef.current = isPlaying
+      } catch {
+        dispatch(changePlay(false))
+      }
+    }
+
+    syncRemotePlayback()
+  }, [
+    currentIndex,
+    currentQueue,
+    dispatch,
+    isPlaying,
+    pauseRemotePlayback,
+    playRemoteQueue,
+    resumeRemotePlayback,
+    shouldUseRemotePlayback,
+    trackData.id,
+    trackData.playlistId,
+  ])
 
   useEffect(() => {
     if (audioRef.current) {
@@ -48,7 +113,7 @@ function Footer() {
   useEffect(() => {
     const audio = audioRef.current
 
-    if (!audio) {
+    if (!audio || shouldUseRemotePlayback) {
       return
     }
 
@@ -56,7 +121,7 @@ function Footer() {
 
     audio.addEventListener('ended', handleEnded)
     return () => audio.removeEventListener('ended', handleEnded)
-  }, [dispatch])
+  }, [dispatch, shouldUseRemotePlayback])
 
   return (
     <footer className={styles.footer}>
@@ -75,6 +140,7 @@ function Footer() {
             handleCurrentTime={setCurrentTime}
             trackData={trackData}
             isPlaying={isPlaying}
+            isRemotePlayback={shouldUseRemotePlayback}
           />
         </div>
         {size.width > CONST.MOBILE_SIZE && (

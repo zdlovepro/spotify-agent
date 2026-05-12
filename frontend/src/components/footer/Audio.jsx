@@ -1,7 +1,7 @@
 import { forwardRef } from 'react'
 
 const Audio = forwardRef(function Audio(
-  { trackData, handleDuration, handleCurrentTime, isPlaying },
+  { trackData, handleDuration, handleCurrentTime, isPlaying, isRemotePlayback = false },
   ref,
 ) {
   return (
@@ -9,7 +9,7 @@ const Audio = forwardRef(function Audio(
       ref={ref}
       onLoadedMetadata={(e) => handleDuration(e.target.duration)}
       onTimeUpdate={(e) => handleCurrentTime(e.target.currentTime)}
-      src={trackData.track}
+      src={isRemotePlayback ? '' : trackData.track}
       autoPlay={isPlaying}
     />
   )

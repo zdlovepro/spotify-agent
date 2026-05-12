@@ -45,9 +45,12 @@ function mapTrackToPlaylistSong(track, index) {
     link: playback.streamUrl,
     audioUrl: playback.audioUrl,
     previewUrl: playback.previewUrl,
+    remoteUri: playback.remoteUri,
     playMode: playback.playMode,
     trackTime: formatDuration(track.duration_ms || track.durationMs || 0),
     playable: playback.playable,
+    sourceId: track.source_id || track.sourceId || '',
+    uri: track.uri || playback.remoteUri,
   }
 }
 

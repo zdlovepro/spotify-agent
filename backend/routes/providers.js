@@ -125,6 +125,7 @@ router.get(
       scope: SPOTIFY_SCOPES,
       redirect_uri: env.spotifyRedirectUri,
       state,
+      show_dialog: 'true',
     })
 
     const authorizeUrl = `https://accounts.spotify.com/authorize?${params.toString()}`

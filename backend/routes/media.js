@@ -15,8 +15,27 @@ import {
 } from '../services/media/media-service.js'
 
 const router = Router()
-const allowedMimeTypes = new Set(['audio/mp4', 'audio/x-m4a'])
-const allowedExtension = '.m4a'
+const allowedMimeTypes = new Set([
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/mpeg',
+  'audio/mp3',
+])
+const allowedExtensions = new Set(['.m4a', '.mp3'])
+
+function getFallbackExtensionForMimeType(mimeType) {
+  const normalizedMimeType = String(mimeType || '').toLowerCase()
+
+  if (normalizedMimeType === 'audio/mpeg' || normalizedMimeType === 'audio/mp3') {
+    return '.mp3'
+  }
+
+  if (normalizedMimeType === 'audio/mp4' || normalizedMimeType === 'audio/x-m4a') {
+    return '.m4a'
+  }
+
+  return '.m4a'
+}
 
 fs.mkdirSync(env.uploadsDir, { recursive: true })
 
@@ -25,7 +44,10 @@ const storage = multer.diskStorage({
     callback(null, env.uploadsDir)
   },
   filename(req, file, callback) {
-    const extension = path.extname(file.originalname || '').toLowerCase() || allowedExtension
+    const originalExtension = path.extname(file.originalname || '').toLowerCase()
+    const extension = allowedExtensions.has(originalExtension)
+      ? originalExtension
+      : getFallbackExtensionForMimeType(file.mimetype)
     callback(null, `${Date.now()}-${crypto.randomUUID()}${extension}`)
   },
 })
@@ -39,14 +61,14 @@ const upload = multer({
     const extension = path.extname(file.originalname || '').toLowerCase()
     const mimeType = String(file.mimetype || '').toLowerCase()
     const isAllowedMime = allowedMimeTypes.has(mimeType)
-    const isAllowedExtension = extension === allowedExtension
+    const isAllowedExtension = allowedExtensions.has(extension)
 
     if (isAllowedMime || isAllowedExtension) {
       callback(null, true)
       return
     }
 
-    const error = new Error('Only non-DRM .m4a audio uploads are allowed')
+    const error = new Error('Only supported local audio files are allowed: .m4a, .mp3')
     error.status = 400
     callback(error)
   },

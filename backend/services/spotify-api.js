@@ -44,6 +44,29 @@ async function spotifyGet(path, accessToken, params = {}, { ttlMs = 0 } = {}) {
   })
 }
 
+async function spotifyMutation(
+  method,
+  path,
+  accessToken,
+  { params = undefined, data = undefined } = {},
+) {
+  try {
+    const response = await spotifyApi.request({
+      method,
+      url: path,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      params,
+      data,
+    })
+
+    return response.data ?? null
+  } catch (error) {
+    throw createSpotifyApiError(error, `Spotify request failed for ${path}`)
+  }
+}
+
 export function parseInteger(value, defaultValue, { min = 0, max = 50 } = {}) {
   const parsed = Number.parseInt(value ?? defaultValue, 10)
 
@@ -261,4 +284,79 @@ export async function getUserTopItems(
     },
     { ttlMs: 60_000 },
   )
+}
+
+export async function getAvailableDevices(accessToken) {
+  return spotifyGet('/me/player/devices', accessToken, {}, { ttlMs: 5_000 })
+}
+
+export async function getCurrentPlaybackState(accessToken) {
+  return spotifyGet('/me/player', accessToken, {}, { ttlMs: 3_000 })
+}
+
+export async function transferPlayback(accessToken, { deviceId, play = true }) {
+  return spotifyMutation('PUT', '/me/player', accessToken, {
+    data: {
+      device_ids: [deviceId],
+      play: Boolean(play),
+    },
+  })
+}
+
+export async function startOrResumePlayback(
+  accessToken,
+  { deviceId = '', uris = null, contextUri = '', offset = null, positionMs = null } = {},
+) {
+  const payload = {}
+
+  if (Array.isArray(uris) && uris.length) {
+    payload.uris = uris
+  }
+
+  if (contextUri) {
+    payload.context_uri = contextUri
+  }
+
+  if (offset && typeof offset === 'object') {
+    const normalizedOffset = {}
+
+    if (typeof offset.uri === 'string' && offset.uri.trim()) {
+      normalizedOffset.uri = offset.uri.trim()
+    }
+
+    if (Number.isFinite(Number(offset.position)) && Number(offset.position) >= 0) {
+      normalizedOffset.position = Number(offset.position)
+    }
+
+    if (Object.keys(normalizedOffset).length) {
+      payload.offset = normalizedOffset
+    }
+  }
+
+  if (Number.isFinite(Number(positionMs)) && Number(positionMs) >= 0) {
+    payload.position_ms = Number(positionMs)
+  }
+
+  return spotifyMutation('PUT', '/me/player/play', accessToken, {
+    params: deviceId ? { device_id: deviceId } : undefined,
+    data: Object.keys(payload).length ? payload : undefined,
+  })
+}
+
+export async function pausePlayback(accessToken, { deviceId = '' } = {}) {
+  return spotifyMutation('PUT', '/me/player/pause', accessToken, {
+    params: deviceId ? { device_id: deviceId } : undefined,
+  })
+}
+
+export async function skipToNextPlayback(accessToken, { deviceId = '' } = {}) {
+  return spotifyMutation('POST', '/me/player/next', accessToken, {
+    params: deviceId ? { device_id: deviceId } : undefined,
+  })
+}
+
+export async function skipToPreviousPlayback(accessToken, { deviceId = '' } = {}) {
+  return spotifyMutation('POST', '/me/player/previous', accessToken, {
+    params: deviceId ? { device_id: deviceId } : undefined,
+  })
 }

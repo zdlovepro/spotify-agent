@@ -104,7 +104,7 @@ function Library() {
 
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('title', file.name.replace(/\.m4a$/i, ''))
+    formData.append('title', file.name.replace(/\.(m4a|mp3)$/i, ''))
     const durationMs = await readAudioDurationMs(file)
 
     if (durationMs) {
@@ -238,7 +238,7 @@ function Library() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".m4a,audio/mp4,audio/x-m4a"
+          accept=".m4a,.mp3,audio/mp4,audio/x-m4a,audio/mpeg,audio/mp3"
           className={styles.HiddenInput}
           onChange={handleFileChange}
         />
@@ -324,14 +324,17 @@ function PlaylistTab({
     <div>
       <div className={styles.SectionHeader}>
         <TitleM>{t('playlists')}</TitleM>
-        <button
-          type="button"
-          className={styles.PrimaryBtn}
-          onClick={onUploadClick}
-          disabled={isUploading}
-        >
-          {isUploading ? t('library_uploading') : t('library_upload_audio')}
-        </button>
+        <div className={styles.SectionActions}>
+          <button
+            type="button"
+            className={styles.PrimaryBtn}
+            onClick={onUploadClick}
+            disabled={isUploading}
+          >
+            {isUploading ? t('library_uploading') : t('library_upload_audio')}
+          </button>
+          <p className={styles.UploadMeta}>{t('library_upload_support')}</p>
+        </div>
       </div>
 
       <div className={styles.ImportBar}>

@@ -24,6 +24,7 @@ function Topnav() {
     disconnect,
     error: spotifyError,
     isConnected,
+    notice: spotifyNotice,
     profile,
   } = useSpotify()
   const location = useLocation()
@@ -39,7 +40,11 @@ function Topnav() {
   const showLibraryTabs =
     location.pathname === '/library' || location.pathname.startsWith('/library/')
   const isSpotifyEnhanced = isAuthenticated && isConnected
-  const statusText = connectHint || spotifyError || authError
+  const statusText =
+    connectHint ||
+    (spotifyNotice ? t(spotifyNotice) : '') ||
+    spotifyError ||
+    authError
   const displayName =
     user?.displayName || user?.email || profile?.display_name || t('appName')
   const modeLabel = !isAuthenticated

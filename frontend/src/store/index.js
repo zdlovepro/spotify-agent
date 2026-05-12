@@ -8,6 +8,11 @@ import {
 
 const initialQueue = createPlaybackQueue(PLAYLIST[0])
 
+function canQueueTrackStart(track) {
+  const playback = resolveTrackPlaybackMeta(track)
+  return playback.playable || Boolean(playback.remoteUri)
+}
+
 function findPlayableIndex(queue, preferredIndex = 0) {
   if (!Array.isArray(queue) || !queue.length) {
     return -1
@@ -15,19 +20,19 @@ function findPlayableIndex(queue, preferredIndex = 0) {
 
   const clampedIndex = Math.max(0, Math.min(preferredIndex, queue.length - 1))
 
-  if (queue[clampedIndex]?.playable) {
+  if (canQueueTrackStart(queue[clampedIndex])) {
     return clampedIndex
   }
 
   const forwardIndex = queue.findIndex(
-    (track, index) => index >= clampedIndex && track.playable,
+    (track, index) => index >= clampedIndex && canQueueTrackStart(track),
   )
 
   if (forwardIndex >= 0) {
     return forwardIndex
   }
 
-  return queue.findIndex((track) => track.playable)
+  return queue.findIndex((track) => canQueueTrackStart(track))
 }
 
 function getAdjacentPlayableIndex(queue, currentIndex, direction) {
@@ -39,7 +44,7 @@ function getAdjacentPlayableIndex(queue, currentIndex, direction) {
     const candidateIndex =
       (currentIndex + direction * step + queue.length) % queue.length
 
-    if (queue[candidateIndex]?.playable) {
+    if (canQueueTrackStart(queue[candidateIndex])) {
       return candidateIndex
     }
   }
@@ -92,6 +97,7 @@ const playerSlice = createSlice({
             track: playback.streamUrl,
             audioUrl: playback.audioUrl,
             previewUrl: playback.previewUrl,
+            remoteUri: playback.remoteUri,
             playMode: playback.playMode,
             playable: playback.playable,
           }
@@ -177,7 +183,9 @@ export function startAgentPlayback({
       playlistTitle,
     })
 
-    if (!queue.some((track) => track.playable)) {
+    if (
+      !queue.some((track) => canQueueTrackStart(track))
+    ) {
       return
     }
 

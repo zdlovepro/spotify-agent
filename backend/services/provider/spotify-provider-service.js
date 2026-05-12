@@ -10,6 +10,8 @@ export const SPOTIFY_SCOPES = [
   'playlist-read-collaborative',
   'user-library-read',
   'user-top-read',
+  'user-read-playback-state',
+  'user-modify-playback-state',
 ].join(' ')
 
 function createClientCredentials() {

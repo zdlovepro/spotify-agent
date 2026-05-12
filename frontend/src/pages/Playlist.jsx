@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useParams } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { useTranslation } from 'react-i18next'
 import { changePlay, changeTrack } from '../store/index.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSpotify } from '../context/SpotifyContext.jsx'
-import { createPlaybackQueue } from '../lib/spotify.js'
+import { canStartTrackPlayback, createPlaybackQueue } from '../lib/spotify.js'
 import {
   mapCatalogPlaylistDetails,
   mapLocalPlaylistDetails,
@@ -21,12 +22,13 @@ import styles from './playlist.module.css'
 
 function PlaylistPage() {
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const { path } = useParams()
   const { t } = useTranslation()
-  const { isAuthenticated, request } = useAuth()
-  const { getPlaylistDetails, isConnected } = useSpotify()
+  const { isAuthenticated, openAuthDialog, request } = useAuth()
+  const { connect, getPlaylistDetails, isConnected } = useSpotify()
   const [playlist, setPlaylist] = useState(null)
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
 
@@ -108,7 +110,9 @@ function PlaylistPage() {
       return
     }
 
-    const queue = createPlaybackQueue(playlist).filter((track) => track.playable)
+    const queue = createPlaybackQueue(playlist).filter((track) =>
+      canStartTrackPlayback(track, { allowRemote: isConnected }),
+    )
 
     if (!queue.length) {
       return
@@ -171,6 +175,27 @@ function PlaylistPage() {
   }
 
   const isthisplay = trackData.playlistId === playlist.link
+  const unavailableTrackCount = (playlist.playlistData || []).filter(
+    (song) => !canStartTrackPlayback(song, { allowRemote: isConnected }),
+  ).length
+
+  function handleConnectSpotify() {
+    if (!isAuthenticated) {
+      openAuthDialog('login')
+      return
+    }
+
+    connect(`/playlist/${path}`).catch(() => {})
+  }
+
+  function handleOpenLocalAudio() {
+    if (!isAuthenticated) {
+      openAuthDialog('login')
+      return
+    }
+
+    navigate('/library')
+  }
 
   return (
     <div className={styles.PlaylistPage}>
@@ -189,6 +214,37 @@ function PlaylistPage() {
           <Icons.More className={styles.moreIcon} />
         </div>
 
+        {unavailableTrackCount > 0 && (
+          <div className={styles.AvailabilityBanner}>
+            <div>
+              <p className={styles.AvailabilityTitle}>
+                {t('playlist_partial_playback_title', {
+                  count: unavailableTrackCount,
+                })}
+              </p>
+              <p className={styles.AvailabilityText}>
+                {t('playlist_partial_playback_body')}
+              </p>
+            </div>
+            <div className={styles.AvailabilityActions}>
+              <button
+                type="button"
+                className={styles.AvailabilityBtn}
+                onClick={handleConnectSpotify}
+              >
+                {t('spotify_connect')}
+              </button>
+              <button
+                type="button"
+                className={styles.AvailabilityBtnSecondary}
+                onClick={handleOpenLocalAudio}
+              >
+                {t('library_upload_audio')}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className={styles.ListHead}>
           <TextRegularM>#</TextRegularM>
           <TextRegularM>{t('playlist_title_col')}</TextRegularM>
@@ -200,8 +256,12 @@ function PlaylistPage() {
             <button
               key={song.id || song.index}
               type="button"
-              disabled={song.playable === false}
-              title={song.playable === false ? t('preview_unavailable') : song.songName}
+              disabled={!canStartTrackPlayback(song, { allowRemote: isConnected })}
+              title={
+                !canStartTrackPlayback(song, { allowRemote: isConnected })
+                  ? t('preview_unavailable')
+                  : song.songName
+              }
               onClick={() => startPlaylist(song.id || song.link)}
               className={styles.SongBtn}
             >

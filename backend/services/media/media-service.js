@@ -22,6 +22,32 @@ function nowIso() {
   return new Date().toISOString()
 }
 
+function resolveFileExtension(file = {}) {
+  const originalNameExtension = path.extname(file.originalname || '').toLowerCase()
+
+  if (originalNameExtension) {
+    return originalNameExtension
+  }
+
+  const storedNameExtension = path.extname(file.filename || '').toLowerCase()
+
+  if (storedNameExtension) {
+    return storedNameExtension
+  }
+
+  const mimeType = String(file.mimetype || '').toLowerCase()
+
+  if (mimeType === 'audio/mpeg' || mimeType === 'audio/mp3') {
+    return '.mp3'
+  }
+
+  if (mimeType === 'audio/mp4' || mimeType === 'audio/x-m4a') {
+    return '.m4a'
+  }
+
+  return ''
+}
+
 function toPublicAsset(row) {
   if (!row) {
     return null
@@ -41,6 +67,7 @@ function toPublicAsset(row) {
     sourceId: row.source_id,
     originalFilename: row.original_filename,
     mimeType: row.mime_type,
+    fileExtension: row.file_extension || '',
     sizeBytes,
     storagePath: row.storage_path,
     title: row.title || '',
@@ -112,6 +139,7 @@ export function createAudioAsset(userId, file, input = {}) {
   const sourceId = `local_audio:${id}`
   const storagePath = path.resolve(file.path)
   const sizeBytes = Number(file.size) || 0
+  const fileExtension = resolveFileExtension(file)
 
   db.prepare(
     `
@@ -148,7 +176,7 @@ export function createAudioAsset(userId, file, input = {}) {
     storagePath,
     file.originalname,
     file.mimetype,
-    path.extname(file.originalname).toLowerCase(),
+    fileExtension,
     title,
     artists[0] || null,
     JSON.stringify(artists),

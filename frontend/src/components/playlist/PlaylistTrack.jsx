@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { changePlay } from '../../store/index.js'
+import { useSpotify } from '../../context/SpotifyContext.jsx'
+import { canStartTrackPlayback } from '../../lib/spotify.js'
 import TextBoldL from '../text/TextBoldL'
 import TextRegularM from '../text/TextRegularM'
 import Playgif from '../../assets/images/now-play.gif'
@@ -9,10 +11,11 @@ import styles from './playlist-track.module.css'
 
 function PlaylistTrack({ data }) {
   const dispatch = useDispatch()
+  const { isConnected } = useSpotify()
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const trackData = useSelector((state) => state.player.trackData)
   const [thisSong, setThisSong] = useState(false)
-  const playable = data.song.playable ?? Boolean(data.song.link)
+  const playable = canStartTrackPlayback(data.song, { allowRemote: isConnected })
   const isAlbumView = data.listType === 'album' || data.listType === 'alb眉m'
 
   useEffect(() => {

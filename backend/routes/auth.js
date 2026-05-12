@@ -3,6 +3,17 @@ import axios from 'axios'
 import crypto from 'crypto'
 import env from '../config/env.js'
 import { asyncHandler } from '../middleware/async-handler.js'
+import { findUserById } from '../services/auth/user-service.js'
+import {
+  consumeOAuthPendingState,
+  pruneExpiredOAuthPendingStates,
+} from '../services/auth/oauth-state-service.js'
+import { linkProvider } from '../services/provider/provider-link-service.js'
+import {
+  buildSpotifyLinkPayload,
+  fetchSpotifyProfile,
+  SPOTIFY_PROVIDER_NAME,
+} from '../services/provider/spotify-provider-service.js'
 
 const router = Router()
 const STATE_TTL_MS = 10 * 60 * 1000
@@ -14,6 +25,8 @@ const SCOPES = [
   'playlist-read-collaborative',
   'user-library-read',
   'user-top-read',
+  'user-read-playback-state',
+  'user-modify-playback-state',
 ].join(' ')
 
 const pendingStates = new Map()
@@ -38,6 +51,26 @@ function pruneExpiredStates() {
   }
 }
 
+function pruneAllSpotifyPendingStates() {
+  pruneExpiredStates()
+  pruneExpiredOAuthPendingStates(SPOTIFY_PROVIDER_NAME)
+}
+
+function buildFrontendRedirect(pathname, params = {}) {
+  const normalizedPath =
+    typeof pathname === 'string' && pathname.startsWith('/') ? pathname : '/'
+  const query = new URLSearchParams()
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      query.set(key, String(value))
+    }
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return `${env.frontendUri}${normalizedPath}${suffix}`
+}
+
 async function exchangeSpotifyToken(body) {
   const response = await axios.post(
     'https://accounts.spotify.com/api/token',
@@ -54,7 +87,7 @@ async function exchangeSpotifyToken(body) {
 }
 
 router.get('/login', (req, res) => {
-  pruneExpiredStates()
+  pruneAllSpotifyPendingStates()
 
   const state = generateRandomString(16)
   pendingStates.set(state, Date.now() + STATE_TTL_MS)
@@ -65,6 +98,7 @@ router.get('/login', (req, res) => {
     scope: SCOPES,
     redirect_uri: env.spotifyRedirectUri,
     state,
+    show_dialog: 'true',
   })
 
   res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`)
@@ -73,7 +107,7 @@ router.get('/login', (req, res) => {
 router.get(
   '/spotify/callback',
   asyncHandler(async (req, res) => {
-    pruneExpiredStates()
+    pruneAllSpotifyPendingStates()
 
     const { code, state, error } = req.query
 
@@ -81,6 +115,64 @@ router.get(
       return res.redirect(
         `${env.frontendUri}?error=${encodeURIComponent(error || 'access_denied')}`,
       )
+    }
+
+    const providerStateEntry =
+      state && typeof state === 'string'
+        ? consumeOAuthPendingState(state, SPOTIFY_PROVIDER_NAME)
+        : null
+
+    if (providerStateEntry) {
+      const localUser = findUserById(providerStateEntry.localUserId)
+
+      if (!localUser) {
+        return res.redirect(
+          buildFrontendRedirect(providerStateEntry.returnTo, {
+            provider: SPOTIFY_PROVIDER_NAME,
+            error: 'local_auth_required',
+          }),
+        )
+      }
+
+      try {
+        const tokenData = await exchangeSpotifyToken(
+          new URLSearchParams({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: env.spotifyRedirectUri,
+          }),
+        )
+
+        const profile = await fetchSpotifyProfile(tokenData.access_token)
+
+        await linkProvider(
+          buildSpotifyLinkPayload({
+            userId: localUser.id,
+            tokenData,
+            profile,
+          }),
+        )
+
+        return res.redirect(
+          buildFrontendRedirect(providerStateEntry.returnTo, {
+            provider: SPOTIFY_PROVIDER_NAME,
+            connected: 1,
+          }),
+        )
+      } catch (error_) {
+        const message =
+          error_.response?.data?.error_description ||
+          error_.response?.data?.error ||
+          error_.message ||
+          'provider_link_failed'
+
+        return res.redirect(
+          buildFrontendRedirect(providerStateEntry.returnTo, {
+            provider: SPOTIFY_PROVIDER_NAME,
+            error: message,
+          }),
+        )
+      }
     }
 
     if (!state || !pendingStates.has(state)) {

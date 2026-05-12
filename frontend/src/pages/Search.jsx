@@ -6,6 +6,8 @@ import fallbackArtwork from '../assets/hero.png'
 import SearchPageCard from '../components/cards/SearchPageCard'
 import { SEARCHCARDS } from '../data/index.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useSpotify } from '../context/SpotifyContext.jsx'
+import { canStartTrackPlayback } from '../lib/spotify.js'
 import { startAgentPlayback } from '../store/index.js'
 import styles from './search.module.css'
 
@@ -108,9 +110,23 @@ function buildBrowsePrompt() {
   return 'Recommend a set of songs that would be good to start with today.'
 }
 
-function ResultCard({ item, type, onAgentAction, onOpenPlaylist, onPlayTrack, t }) {
+function ResultCard({
+  item,
+  type,
+  onAgentAction,
+  onOpenPlaylist,
+  onPlayTrack,
+  onConnectSpotify,
+  onOpenLocalAudio,
+  allowRemotePlayback,
+  t,
+}) {
   const subtitle = getSubtitle(item, type, t)
   const meta = getMeta(item, type, t)
+  const canPlayTrack =
+    type === 'track'
+      ? canStartTrackPlayback(item, { allowRemote: allowRemotePlayback })
+      : false
 
   return (
     <article className={styles.ResultCard}>
@@ -135,16 +151,43 @@ function ResultCard({ item, type, onAgentAction, onOpenPlaylist, onPlayTrack, t 
 
         <div className={styles.ResultActions}>
           {type === 'track' && (
-            <button
-              type="button"
-              className={styles.PrimaryBtn}
-              disabled={!item.preview_url}
-              onClick={() => onPlayTrack(item)}
-            >
-              {item.preview_url
-                ? t('search_play_preview')
-                : t('search_preview_missing')}
-            </button>
+            <>
+              <button
+                type="button"
+                className={styles.PrimaryBtn}
+                disabled={!canPlayTrack}
+                onClick={() => onPlayTrack(item)}
+              >
+                {canPlayTrack
+                  ? allowRemotePlayback && !item.preview_url
+                    ? t('search_play_on_spotify')
+                    : t('search_play_preview')
+                  : t('search_preview_missing')}
+              </button>
+              {!canPlayTrack && (
+                <div className={styles.UnavailableBox}>
+                  <p className={styles.UnavailableText}>
+                    {t('search_unavailable_hint')}
+                  </p>
+                  <div className={styles.UnavailableActions}>
+                    <button
+                      type="button"
+                      className={styles.SecondaryBtn}
+                      onClick={onConnectSpotify}
+                    >
+                      {t('spotify_connect')}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.SecondaryBtn}
+                      onClick={onOpenLocalAudio}
+                    >
+                      {t('library_upload_audio')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {type === 'playlist' && (
@@ -201,6 +244,9 @@ function SearchSection({
   onAgentAction,
   onOpenPlaylist,
   onPlayTrack,
+  onConnectSpotify,
+  onOpenLocalAudio,
+  allowRemotePlayback,
   t,
 }) {
   if (!items.length) {
@@ -223,6 +269,9 @@ function SearchSection({
             onAgentAction={onAgentAction}
             onOpenPlaylist={onOpenPlaylist}
             onPlayTrack={onPlayTrack}
+            onConnectSpotify={onConnectSpotify}
+            onOpenLocalAudio={onOpenLocalAudio}
+            allowRemotePlayback={allowRemotePlayback}
             t={t}
           />
         ))}
@@ -236,7 +285,8 @@ function Search() {
   const navigate = useNavigate()
   const dispatch = useDispatch()
   const [searchParams] = useSearchParams()
-  const { request } = useAuth()
+  const { isAuthenticated, openAuthDialog, request } = useAuth()
+  const { connect, isConnected } = useSpotify()
   const query = searchParams.get('q')?.trim() || ''
   const [results, setResults] = useState({
     tracks: [],
@@ -346,6 +396,24 @@ function Search() {
     navigate(`/playlist/${playlist.id}`)
   }
 
+  function handleConnectSpotify() {
+    if (!isAuthenticated) {
+      openAuthDialog('login')
+      return
+    }
+
+    connect(`/search?q=${encodeURIComponent(query)}`).catch(() => {})
+  }
+
+  function handleOpenLocalAudio() {
+    if (!isAuthenticated) {
+      openAuthDialog('login')
+      return
+    }
+
+    navigate('/library')
+  }
+
   return (
     <div className={styles.SearchPage}>
       <div className={styles.Search}>
@@ -441,6 +509,9 @@ function Search() {
                   onAgentAction={openAgentWithPrompt}
                   onOpenPlaylist={handleOpenPlaylist}
                   onPlayTrack={handlePlayTrack}
+                  onConnectSpotify={handleConnectSpotify}
+                  onOpenLocalAudio={handleOpenLocalAudio}
+                  allowRemotePlayback={isConnected}
                   t={t}
                 />
                 <SearchSection
@@ -450,6 +521,9 @@ function Search() {
                   onAgentAction={openAgentWithPrompt}
                   onOpenPlaylist={handleOpenPlaylist}
                   onPlayTrack={handlePlayTrack}
+                  onConnectSpotify={handleConnectSpotify}
+                  onOpenLocalAudio={handleOpenLocalAudio}
+                  allowRemotePlayback={isConnected}
                   t={t}
                 />
                 <SearchSection
@@ -459,6 +533,9 @@ function Search() {
                   onAgentAction={openAgentWithPrompt}
                   onOpenPlaylist={handleOpenPlaylist}
                   onPlayTrack={handlePlayTrack}
+                  onConnectSpotify={handleConnectSpotify}
+                  onOpenLocalAudio={handleOpenLocalAudio}
+                  allowRemotePlayback={isConnected}
                   t={t}
                 />
                 <SearchSection
@@ -468,6 +545,9 @@ function Search() {
                   onAgentAction={openAgentWithPrompt}
                   onOpenPlaylist={handleOpenPlaylist}
                   onPlayTrack={handlePlayTrack}
+                  onConnectSpotify={handleConnectSpotify}
+                  onOpenLocalAudio={handleOpenLocalAudio}
+                  allowRemotePlayback={isConnected}
                   t={t}
                 />
               </>

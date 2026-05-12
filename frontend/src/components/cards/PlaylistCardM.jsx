@@ -3,7 +3,8 @@ import { useSelector, useDispatch } from 'react-redux'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { changePlay, changeTrack } from '../../store/index.js'
-import { createPlaybackQueue } from '../../lib/spotify.js'
+import { useSpotify } from '../../context/SpotifyContext.jsx'
+import { canStartTrackPlayback, createPlaybackQueue } from '../../lib/spotify.js'
 import TextBoldL from '../text/TextBoldL'
 import TextRegularM from '../text/TextRegularM'
 import PlayButton from '../buttons/PlayButton'
@@ -12,10 +13,13 @@ import styles from './playlist-card-m.module.css'
 function PlaylistCardM({ data }) {
   const { t } = useTranslation()
   const dispatch = useDispatch()
+  const { isConnected } = useSpotify()
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const [isthisplay, setIsthisPlay] = useState(false)
-  const canPlay = (data.playlistData || []).some((song) => song.link)
+  const canPlay = (data.playlistData || []).some((song) =>
+    canStartTrackPlayback(song, { allowRemote: isConnected }),
+  )
 
   function handlePlay(event) {
     event.preventDefault()
