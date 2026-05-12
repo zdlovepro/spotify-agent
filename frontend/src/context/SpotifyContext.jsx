@@ -71,19 +71,33 @@ export function SpotifyProvider({ children }) {
   }, [authRequest, clearSpotifyState, isLocalAuthenticated])
 
   const connect = useCallback(
-    (returnTo = window.location.pathname) => {
+    async (returnTo = window.location.pathname) => {
       if (!isLocalAuthenticated) {
         setError('Sign in to AgentMusic first')
         return
       }
 
-      const params = new URLSearchParams({
-        return_to: returnTo || '/',
-      })
+      try {
+        const params = new URLSearchParams({
+          return_to: returnTo || '/',
+          format: 'json',
+        })
+        const data = await authRequest(
+          `/api/providers/spotify/connect?${params.toString()}`,
+        )
 
-      window.location.href = `${BACKEND_BASE_URL}/api/providers/spotify/connect?${params.toString()}`
+        if (!data?.authorizeUrl) {
+          throw new Error('Spotify authorize URL is unavailable')
+        }
+
+        setError('')
+        window.location.href = data.authorizeUrl
+      } catch (requestError) {
+        setError(requestError.message)
+        throw requestError
+      }
     },
-    [isLocalAuthenticated],
+    [authRequest, isLocalAuthenticated],
   )
 
   const disconnect = useCallback(async () => {

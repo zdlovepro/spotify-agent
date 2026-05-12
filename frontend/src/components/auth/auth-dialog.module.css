@@ -1,11 +1,12 @@
 .Overlay {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 12000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 24px;
+  padding: 132px 24px 32px;
+  overflow-y: auto;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(16px);
 }
@@ -16,6 +17,8 @@
   display: grid;
   gap: 14px;
   padding: 28px;
+  max-height: calc(100vh - 176px);
+  overflow-y: auto;
   border-radius: 24px;
   background:
     radial-gradient(circle at top left, rgba(30, 215, 96, 0.18), transparent 34%),
@@ -129,11 +132,12 @@
 
 @media screen and (max-width: 640px) {
   .Overlay {
-    padding: 16px;
+    padding: 104px 16px 20px;
   }
 
   .Dialog {
     padding: 22px;
+    max-height: calc(100vh - 132px);
   }
 
   .Actions {

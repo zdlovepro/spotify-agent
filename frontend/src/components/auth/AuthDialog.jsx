@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext.jsx'
 import styles from './auth-dialog.module.css'
@@ -58,7 +59,7 @@ function AuthDialog() {
     }
   }
 
-  return (
+  const dialog = (
     <div className={styles.Overlay} role="presentation" onClick={closeAuthDialog}>
       <div
         className={styles.Dialog}
@@ -174,6 +175,12 @@ function AuthDialog() {
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined' || !document.body) {
+    return dialog
+  }
+
+  return createPortal(dialog, document.body)
 }
 
 export default AuthDialog

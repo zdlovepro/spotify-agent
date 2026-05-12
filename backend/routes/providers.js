@@ -3,8 +3,12 @@ import { Router } from 'express'
 import env from '../config/env.js'
 import { asyncHandler } from '../middleware/async-handler.js'
 import { requireLocalUser } from '../middleware/require-local-user.js'
-import { getSession } from '../services/auth/session-service.js'
 import { findUserById } from '../services/auth/user-service.js'
+import {
+  consumeOAuthPendingState,
+  createOAuthPendingState,
+  pruneExpiredOAuthPendingStates,
+} from '../services/auth/oauth-state-service.js'
 import {
   linkProvider,
   listProviderLinks,
@@ -26,16 +30,9 @@ import {
 
 const router = Router()
 const STATE_TTL_MS = 10 * 60 * 1000
-const pendingStates = new Map()
 
 function pruneExpiredStates() {
-  const now = Date.now()
-
-  for (const [state, entry] of pendingStates.entries()) {
-    if (entry.expiresAt <= now) {
-      pendingStates.delete(state)
-    }
-  }
+  pruneExpiredOAuthPendingStates(SPOTIFY_PROVIDER_NAME)
 }
 
 function buildFrontendRedirect(pathname, params = {}) {
@@ -114,11 +111,12 @@ router.get(
         ? req.query.return_to
         : '/'
 
-    pendingStates.set(state, {
+    createOAuthPendingState({
+      state,
+      providerName: SPOTIFY_PROVIDER_NAME,
       localUserId: req.localUserId,
-      localSessionToken: req.localSessionToken,
       returnTo,
-      expiresAt: Date.now() + STATE_TTL_MS,
+      ttlMs: STATE_TTL_MS,
     })
 
     const params = new URLSearchParams({
@@ -158,7 +156,7 @@ router.get(
       )
     }
 
-    const stateEntry = pendingStates.get(state)
+    const stateEntry = consumeOAuthPendingState(state, SPOTIFY_PROVIDER_NAME)
 
     if (!stateEntry) {
       return res.redirect(
@@ -169,15 +167,9 @@ router.get(
       )
     }
 
-    pendingStates.delete(state)
+    const localUser = findUserById(stateEntry.localUserId)
 
-    const session = getSession(stateEntry.localSessionToken)
-    const localUser =
-      session && session.userId === stateEntry.localUserId
-        ? findUserById(stateEntry.localUserId)
-        : null
-
-    if (!session || !localUser) {
+    if (!localUser) {
       return res.redirect(
         buildFrontendRedirect(stateEntry.returnTo, {
           provider: SPOTIFY_PROVIDER_NAME,

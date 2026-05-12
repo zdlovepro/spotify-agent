@@ -70,6 +70,17 @@ const schemaStatements = [
     )
   `,
   `
+    CREATE TABLE IF NOT EXISTS oauth_pending_states (
+      state TEXT PRIMARY KEY,
+      provider_name TEXT NOT NULL,
+      local_user_id TEXT NOT NULL,
+      return_to TEXT NOT NULL DEFAULT '/',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (local_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+  `
     CREATE TABLE IF NOT EXISTS audio_assets (
       id TEXT PRIMARY KEY,
       owner_user_id TEXT,
@@ -273,6 +284,10 @@ const schemaStatements = [
   `
     CREATE INDEX IF NOT EXISTS idx_provider_links_user_id
     ON provider_links(user_id)
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS idx_oauth_pending_states_provider_name
+    ON oauth_pending_states(provider_name)
   `,
   `
     CREATE INDEX IF NOT EXISTS idx_library_playlists_owner_user_id
