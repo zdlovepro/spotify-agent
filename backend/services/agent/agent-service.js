@@ -851,21 +851,67 @@ function collectTracksFromToolExecution(execution) {
 
   switch (tool) {
     case 'catalog.get_track':
+    case 'spotify.get_track':
+    case 'library.get_audio_asset':
       return result ? [result] : []
     case 'catalog.search':
       return result.results?.tracks || []
+    case 'spotify.search_tracks':
+      return result.items || []
     case 'catalog.get_playlist':
+    case 'spotify.get_playlist':
       return (result.tracks || []).map((item) => item.track || item).filter(Boolean)
     case 'catalog.get_recommendations':
+    case 'spotify.get_recommendations':
       return result.tracks || []
+    case 'library.list_audio_assets':
     case 'library.search_local_audio':
       return result.items || []
     case 'library.list_favorites':
       return Array.isArray(result) ? result : []
+    case 'spotify.get_artist_top_tracks':
+    case 'spotify.get_user_top_tracks':
     case 'provider.spotify.get_top_tracks':
       return result.items || []
+    case 'player.play_local':
+    case 'player.replace_queue':
+    case 'player.append_queue':
+      return result.payload?.tracks || []
+    case 'recommendation.save_run':
     case 'history.save_recommendation':
       return result.tracks || []
+    default:
+      return []
+  }
+}
+
+function collectPlayerActionsFromToolExecution(execution) {
+  const { tool, result } = execution
+
+  if (!result?.ok || !result?.type) {
+    return []
+  }
+
+  switch (tool) {
+    case 'player.play_local':
+      return [
+        {
+          type: 'player.replace_queue',
+          payload: result.payload || {},
+        },
+      ]
+    case 'player.replace_queue':
+    case 'player.append_queue':
+    case 'player.pause':
+    case 'player.resume':
+    case 'player.next':
+    case 'player.previous':
+      return [
+        {
+          type: result.type,
+          payload: result.payload || {},
+        },
+      ]
     default:
       return []
   }
@@ -890,7 +936,9 @@ function buildPlannerArtifacts({
   }
 
   const savedRecommendation = executedSteps.find(
-    (step) => step.tool === 'history.save_recommendation',
+    (step) =>
+      step.tool === 'history.save_recommendation' ||
+      step.tool === 'recommendation.save_run',
   )?.result
 
   if (savedRecommendation?.id) {
@@ -900,15 +948,20 @@ function buildPlannerArtifacts({
   }
 
   const trackResult =
+    executedSteps.find((step) => step.tool === 'spotify.get_track')?.result ||
     executedSteps.find((step) => step.tool === 'catalog.get_track')?.result ||
-    executedSteps.find((step) => step.tool === 'library.search_local_audio')?.result?.items?.[0]
+    executedSteps.find((step) => step.tool === 'library.get_audio_asset')?.result ||
+    executedSteps.find((step) => step.tool === 'library.search_local_audio')?.result?.items?.[0] ||
+    executedSteps.find((step) => step.tool === 'library.list_audio_assets')?.result?.items?.[0]
 
   if (trackResult) {
     artifacts.track = createTrackArtifact(trackResult)
   }
 
   const artistResult =
+    executedSteps.find((step) => step.tool === 'spotify.get_artist')?.result ||
     executedSteps.find((step) => step.tool === 'catalog.get_artist')?.result ||
+    executedSteps.find((step) => step.tool === 'spotify.search_artists')?.result?.items?.[0] ||
     executedSteps.find((step) => step.tool === 'catalog.search')?.result?.results?.artists?.[0]
 
   if (artistResult) {
@@ -925,6 +978,7 @@ function buildPlannerArtifacts({
 
   const playlistResult =
     executedSteps.find((step) => step.tool === 'catalog.get_playlist')?.result ||
+    executedSteps.find((step) => step.tool === 'spotify.get_user_playlists')?.result?.items?.[0] ||
     executedSteps.find((step) => step.tool === 'provider.spotify.import_playlist')?.result?.playlist ||
     executedSteps.find((step) => step.tool === 'library.create_playlist')?.result
 
@@ -954,7 +1008,10 @@ function filterTracksForPlannerAction(actionType, trackArtifacts = []) {
     return trackArtifacts.filter((track) => track.sourceType === 'local_audio')
   }
 
-  if (actionType === 'player.play_spotify') {
+  if (
+    actionType === 'player.play_spotify' ||
+    actionType === 'player.play_spotify_uri'
+  ) {
     return trackArtifacts.filter((track) => track.sourceType === 'spotify')
   }
 
@@ -967,6 +1024,7 @@ function mapPlannerPlayerActions(playerActions = [], trackArtifacts = []) {
   for (const playerAction of playerActions) {
     if (
       playerAction.type === 'player.pause' ||
+      playerAction.type === 'player.resume' ||
       playerAction.type === 'player.next' ||
       playerAction.type === 'player.previous'
     ) {
@@ -981,6 +1039,7 @@ function mapPlannerPlayerActions(playerActions = [], trackArtifacts = []) {
       playerAction.type === 'player.play' ||
       playerAction.type === 'player.play_local' ||
       playerAction.type === 'player.play_spotify' ||
+      playerAction.type === 'player.play_spotify_uri' ||
       playerAction.type === 'player.replace_queue'
     ) {
       const plannedTracks = filterTracksForPlannerAction(
@@ -1098,9 +1157,21 @@ async function runDeepSeekPlannedAgent({
       .find((track) => (track.sourceId || track.id) === sourceId),
   )
 
-  const actions = mapPlannerPlayerActions(
+  const toolDrivenActions = executedSteps.flatMap((execution) =>
+    collectPlayerActionsFromToolExecution(execution),
+  )
+  const plannedActions = mapPlannerPlayerActions(
     plannerResponse.plan.playerActions,
     trackArtifacts,
+  )
+  const actions = [...toolDrivenActions, ...plannedActions].filter(
+    (action, index, collection) =>
+      collection.findIndex(
+        (candidate) =>
+          candidate.type === action.type &&
+          JSON.stringify(candidate.payload || {}) ===
+            JSON.stringify(action.payload || {}),
+      ) === index,
   )
   const artifacts = buildPlannerArtifacts({
     plan: plannerResponse.plan,
