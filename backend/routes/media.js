@@ -100,6 +100,7 @@ router.post(
     const asset = createAudioAsset(req.localUserId, req.file, {
       title: req.body?.title,
       artists: req.body?.artists,
+      album: req.body?.album,
       duration_ms: req.body?.duration_ms,
     })
 

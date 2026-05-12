@@ -58,20 +58,18 @@ function toPublicAsset(row) {
     row.artist_name ? [row.artist_name] : [],
   )
   const sizeBytes = row.size_bytes ?? row.file_size_bytes ?? null
-  const userId = row.user_id || row.owner_user_id || null
 
   return {
     id: row.id,
-    userId,
-    sourceType: row.source_type,
-    sourceId: row.source_id,
+    sourceType: 'local_audio',
+    sourceId: row.source_id || `local_audio:${row.id}`,
     originalFilename: row.original_filename,
     mimeType: row.mime_type,
     fileExtension: row.file_extension || '',
     sizeBytes,
-    storagePath: row.storage_path,
     title: row.title || '',
     artists,
+    album: row.album_name || '',
     durationMs: row.duration_ms ?? null,
     createdAt: row.created_at,
     streamPath: `/api/media/assets/${row.id}/stream`,
@@ -131,6 +129,10 @@ export function createAudioAsset(userId, file, input = {}) {
       ? input.title.trim()
       : path.parse(file.originalname).name
   const artists = normalizeArtists(input.artists)
+  const albumName =
+    typeof input.album === 'string' && input.album.trim()
+      ? input.album.trim()
+      : ''
   const durationMs =
     Number.isFinite(Number(input.duration_ms)) && Number(input.duration_ms) >= 0
       ? Number(input.duration_ms)
@@ -156,6 +158,7 @@ export function createAudioAsset(userId, file, input = {}) {
         file_extension,
         title,
         artist_name,
+        album_name,
         artists_json,
         duration_ms,
         file_size_bytes,
@@ -164,7 +167,7 @@ export function createAudioAsset(userId, file, input = {}) {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -179,6 +182,7 @@ export function createAudioAsset(userId, file, input = {}) {
     fileExtension,
     title,
     artists[0] || null,
+    albumName,
     JSON.stringify(artists),
     durationMs,
     sizeBytes,

@@ -145,6 +145,7 @@
     "agent_playback_full": "可完整播放",
     "agent_playback_preview": "仅预览",
     "agent_playback_unavailable": "不可播放",
+    "player_source_local_audio": "本地音频",
     "agent_artist_popularity": "热度 {{popularity}}",
     "agent_guest_cta": "登录以保存聊天",
     "agent_guest_body": "游客模式可以立刻聊天和搜索，但刷新后不会保留长期会话。",

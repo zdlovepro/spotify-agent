@@ -393,10 +393,15 @@ function PlaylistTab({
                     className={styles.AssetImage}
                   />
                   <div className={styles.AssetCopy}>
-                    <h3 className={styles.AssetTitle}>{card.title}</h3>
+                    <div className={styles.AssetTitleRow}>
+                      <h3 className={styles.AssetTitle}>{card.title}</h3>
+                      <span className={styles.FormatBadge}>
+                        {card.formatLabel}
+                      </span>
+                    </div>
                     <p className={styles.AssetMeta}>{card.artistText}</p>
                     <p className={styles.AssetMeta}>
-                      {card.durationText} · {card.sizeText}
+                      {card.durationText} • {card.sizeText}
                     </p>
                   </div>
                   <div className={styles.AssetActions}>

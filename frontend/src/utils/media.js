@@ -47,13 +47,20 @@ export function getLocalAudioStreamUrl(asset, sessionToken = '') {
 
 export function createLocalAudioTrack(asset, sessionToken = '') {
   const audioUrl = getLocalAudioStreamUrl(asset, sessionToken)
+  const artists = Array.isArray(asset.artists) ? asset.artists : []
 
   return {
     id: asset.id,
     source_type: 'local_audio',
     source_id: asset.sourceId || `local_audio:${asset.id}`,
     name: asset.title || asset.originalFilename || 'Local audio',
-    artists: Array.isArray(asset.artists) ? asset.artists : [],
+    artists,
+    album: asset.album || '',
+    originalFilename: asset.originalFilename || '',
+    mimeType: asset.mimeType || '',
+    fileExtension: asset.fileExtension || '',
+    sizeBytes: asset.sizeBytes || 0,
+    streamPath: asset.streamPath || '',
     duration_ms: asset.durationMs || 0,
     audio_url: audioUrl,
     playMode: 'local',
@@ -79,10 +86,12 @@ export function mapLocalAudioCard(asset) {
   return {
     id: asset.id,
     title: asset.title || asset.originalFilename || 'Local audio',
+    albumText: asset.album || '',
     artistText:
       Array.isArray(asset.artists) && asset.artists.length
         ? asset.artists.join(', ')
-        : 'Local audio file',
+        : 'Local audio',
+    formatLabel: fallbackFormatLabel,
     durationText: asset.durationMs
       ? formatDuration(asset.durationMs)
       : fallbackFormatLabel,

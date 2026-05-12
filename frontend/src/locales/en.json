@@ -145,6 +145,7 @@
     "agent_playback_full": "Full playback",
     "agent_playback_preview": "Preview only",
     "agent_playback_unavailable": "Unavailable",
+    "player_source_local_audio": "Local audio",
     "agent_artist_popularity": "Popularity {{popularity}}",
     "agent_guest_cta": "Sign in to save chats",
     "agent_guest_body": "Guest mode lets you chat and search right away, but conversations stay temporary until you sign in.",

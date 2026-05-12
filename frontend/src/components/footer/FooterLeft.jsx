@@ -7,10 +7,33 @@ import IconButton from '../buttons/IconButton'
 import { getTrackPlaybackStatusKey } from '../../lib/spotify.js'
 import styles from './footer-left.module.css'
 
+function getLocalAudioFormatLabel(trackData) {
+  const normalizedExtension = String(trackData.fileExtension || '').toLowerCase()
+
+  if (normalizedExtension === '.mp3') {
+    return 'mp3'
+  }
+
+  if (normalizedExtension === '.m4a') {
+    return 'm4a'
+  }
+
+  return 'm4a / mp3'
+}
+
 function FooterLeft() {
   const { t } = useTranslation()
   const { isConnected } = useSpotify()
   const trackData = useSelector((state) => state.player.trackData)
+  const isLocalAudio =
+    trackData?.source === 'local_audio' || trackData?.sourceType === 'local_audio'
+  const badges = isLocalAudio
+    ? [
+        t('player_source_local_audio'),
+        t('agent_playback_full'),
+        getLocalAudioFormatLabel(trackData),
+      ]
+    : [t(getTrackPlaybackStatusKey(trackData, { allowRemote: isConnected }))]
 
   return (
     <div className={styles.footerLeft}>
@@ -22,9 +45,13 @@ function FooterLeft() {
         <TextRegularM>
           <small>{trackData.trackArtist}</small>
         </TextRegularM>
-        <span className={styles.PlaybackBadge}>
-          {t(getTrackPlaybackStatusKey(trackData, { allowRemote: isConnected }))}
-        </span>
+        <div className={styles.BadgeRow}>
+          {badges.map((badge) => (
+            <span key={badge} className={styles.PlaybackBadge}>
+              {badge}
+            </span>
+          ))}
+        </div>
       </div>
       <IconButton icon={<Icons.Like />} activeicon={<Icons.LikeActive />} />
       <IconButton icon={<Icons.Corner />} activeicon={<Icons.Corner />} />
