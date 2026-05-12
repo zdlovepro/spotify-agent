@@ -301,10 +301,12 @@ router.post(
     const agentResult = await runAgent({
       mode,
       localUserId: req.localUserId,
+      localSessionToken: req.localSessionToken || '',
       providerLinks: req.providerLinks || {},
       message,
       context,
       conversationId: conversation.id,
+      conversation,
     })
 
     const nextMessages = [buildUserMessage(message), buildAssistantMessage(agentResult)]

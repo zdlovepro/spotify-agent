@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import env from '../../config/env.js'
 import { assert } from '../../utils/assert.js'
 import {
   addPlaylistItem,
@@ -7,6 +8,12 @@ import {
   listFavorites,
   listPlaylists,
 } from '../library/library-service.js'
+import { listAudioAssets } from '../media/media-service.js'
+import {
+  importAllSpotifyPlaylists,
+  importSpotifyPlaylist,
+  syncSpotifySavedTracks,
+} from '../provider/spotify-library-import-service.js'
 import { spotifyPublicProvider } from '../provider/spotify-public-provider.js'
 import { getUserTopItems, parseInteger } from '../spotify-api.js'
 import { saveStoredRecommendationRun } from './agent-recommendation-service.js'
@@ -55,6 +62,12 @@ function summarizeResult(name, result) {
         layer: getToolLayer(name),
         playlists: result.length || 0,
       }
+    case 'library.search_local_audio':
+      return {
+        layer: getToolLayer(name),
+        assets: result.items?.length || 0,
+        query: result.query || '',
+      }
     case 'memory.get_user_profile':
       return {
         layer: getToolLayer(name),
@@ -71,6 +84,22 @@ function summarizeResult(name, result) {
       return {
         layer: getToolLayer(name),
         artists: result.items?.length || 0,
+      }
+    case 'provider.spotify.import_playlists':
+      return {
+        layer: getToolLayer(name),
+        importedCount: result.importedCount || 0,
+      }
+    case 'provider.spotify.import_playlist':
+      return {
+        layer: getToolLayer(name),
+        importedTrackCount: result.importedTrackCount || 0,
+        playlistId: result.playlist?.id || '',
+      }
+    case 'provider.spotify.sync_saved_tracks':
+      return {
+        layer: getToolLayer(name),
+        importedCount: result.importedCount || 0,
       }
     case 'library.create_playlist':
       return {
@@ -115,6 +144,55 @@ function createTemporaryRecommendation(args = {}) {
   }
 }
 
+function getBackendOrigin() {
+  try {
+    return new URL(env.spotifyRedirectUri).origin
+  } catch {
+    return `http://127.0.0.1:${env.port}`
+  }
+}
+
+function createLocalAudioStreamUrl(asset = {}, localSessionToken = '') {
+  const streamPath =
+    typeof asset.streamPath === 'string' ? asset.streamPath.trim() : ''
+
+  if (!streamPath) {
+    return ''
+  }
+
+  const baseUrl =
+    streamPath.startsWith('http://') || streamPath.startsWith('https://')
+      ? streamPath
+      : `${getBackendOrigin()}${streamPath}`
+
+  if (!localSessionToken) {
+    return baseUrl
+  }
+
+  const separator = baseUrl.includes('?') ? '&' : '?'
+  return `${baseUrl}${separator}session_token=${encodeURIComponent(localSessionToken)}`
+}
+
+function mapLocalAudioAssetToTrack(asset = {}, localSessionToken = '') {
+  return {
+    id: asset.id,
+    sourceType: 'local_audio',
+    sourceId: asset.sourceId || `local_audio:${asset.id}`,
+    name: asset.title || asset.originalFilename || 'Local audio',
+    artists: Array.isArray(asset.artists) ? asset.artists : [],
+    album: asset.album || '',
+    image: '',
+    mimeType: asset.mimeType || '',
+    fileExtension: asset.fileExtension || '',
+    sizeBytes: asset.sizeBytes || 0,
+    durationMs: asset.durationMs ?? null,
+    streamPath: asset.streamPath || '',
+    audioUrl: createLocalAudioStreamUrl(asset, localSessionToken),
+    playMode: 'local',
+    playable: true,
+  }
+}
+
 function ensureLocalUser(localUserId) {
   assert(localUserId, 'Local account login is required', 401)
 }
@@ -131,6 +209,7 @@ function ensureSpotifyEnhanced(mode, providerLinks) {
 export function createAgentToolRegistry({
   mode,
   localUserId,
+  localSessionToken = '',
   providerLinks,
   toolCalls,
   conversationId,
@@ -238,6 +317,37 @@ export function createAgentToolRegistry({
       ensureLocalUser(localUserId)
       return listPlaylists(localUserId)
     })
+    register('library.search_local_audio', (args = {}) => {
+      ensureLocalUser(localUserId)
+      const query =
+        typeof args.q === 'string' ? args.q.trim().toLowerCase() : ''
+      const limit = parseInteger(args.limit, 10, { min: 1, max: 50 })
+      const items = listAudioAssets(localUserId)
+        .map((asset) => mapLocalAudioAssetToTrack(asset, localSessionToken))
+        .filter((asset) => {
+          if (!query) {
+            return true
+          }
+
+          const haystack = [
+            asset.name,
+            ...(Array.isArray(asset.artists) ? asset.artists : []),
+            asset.album,
+            asset.fileExtension,
+          ]
+            .join(' ')
+            .toLowerCase()
+
+          return haystack.includes(query)
+        })
+        .slice(0, limit)
+
+      return {
+        query,
+        total: items.length,
+        items,
+      }
+    })
     register('library.create_playlist', (args = {}) => {
       ensureLocalUser(localUserId)
       return createPlaylist(localUserId, args)
@@ -319,6 +429,22 @@ export function createAgentToolRegistry({
         limit: parseInteger(args.limit, 5, { min: 1, max: 10 }),
         offset: parseInteger(args.offset, 0, { min: 0, max: 50 }),
       })
+    })
+    register('provider.spotify.import_playlists', async () => {
+      ensureSpotifyEnhanced(mode, providerLinks)
+      ensureLocalUser(localUserId)
+      return importAllSpotifyPlaylists(localUserId)
+    })
+    register('provider.spotify.import_playlist', async (args = {}) => {
+      ensureSpotifyEnhanced(mode, providerLinks)
+      ensureLocalUser(localUserId)
+      assert(args.playlistId, 'playlistId is required', 400)
+      return importSpotifyPlaylist(localUserId, args.playlistId)
+    })
+    register('provider.spotify.sync_saved_tracks', async () => {
+      ensureSpotifyEnhanced(mode, providerLinks)
+      ensureLocalUser(localUserId)
+      return syncSpotifySavedTracks(localUserId)
     })
   }
 

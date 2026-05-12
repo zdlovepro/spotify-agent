@@ -1,4 +1,12 @@
-import { createEmptyMemoryProfile } from './memory-service.js'
+import { listAudioAssets } from '../media/media-service.js'
+import { isDeepSeekConfigured } from '../llm/deepseek-client.js'
+import {
+  getGuestConversation,
+  getStoredConversation,
+  listStoredConversations,
+} from './agent-conversation-service.js'
+import { planAgentWithDeepSeek } from './deepseek-agent-planner.js'
+import { buildUserTasteProfile, createEmptyMemoryProfile } from './memory-service.js'
 import {
   buildConversationTitle,
   classifyIntent,
@@ -685,29 +693,464 @@ async function handleRecommendation({
   }
 }
 
-export async function runAgent({
+function canQueuePlannerTrack(track = {}) {
+  return Boolean(
+    track?.playable ||
+      track?.playMode === 'remote' ||
+      track?.remoteUrl ||
+      track?.uri ||
+      track?.sourceId?.startsWith?.('spotify:track:') ||
+      track?.source_id?.startsWith?.('spotify:track:'),
+  )
+}
+
+function findFirstPlannerQueueIndex(tracks = []) {
+  return tracks.findIndex((track) => canQueuePlannerTrack(track))
+}
+
+function summarizeConversationMessages(conversation) {
+  return (conversation?.messages || []).slice(-6).map((message) => ({
+    role: message.role,
+    content: String(message.content || '').slice(0, 240),
+    intent: message.intent || null,
+    createdAt: message.createdAt || '',
+  }))
+}
+
+function summarizeRecentConversationThreads(localUserId) {
+  if (!localUserId) {
+    return []
+  }
+
+  return listStoredConversations(localUserId, 3).map((conversation) => ({
+    id: conversation.id,
+    title: conversation.title,
+    mode: conversation.mode,
+    lastMessagePreview: conversation.lastMessagePreview || '',
+    updatedAt: conversation.updatedAt,
+  }))
+}
+
+function summarizeLocalAudioAssets(localUserId) {
+  if (!localUserId) {
+    return []
+  }
+
+  return listAudioAssets(localUserId).slice(0, 8).map((asset) => ({
+    id: asset.id,
+    title: asset.title || asset.originalFilename || 'Local audio',
+    artists: Array.isArray(asset.artists) ? asset.artists : [],
+    album: asset.album || '',
+    fileExtension: asset.fileExtension || '',
+    durationMs: asset.durationMs ?? null,
+    sourceType: asset.sourceType || 'local_audio',
+    sourceId: asset.sourceId || `local_audio:${asset.id}`,
+  }))
+}
+
+async function loadPlannerMemoryProfile({
+  mode,
+  localUserId,
+  providerLinks,
+}) {
+  if (mode === 'guest' || !localUserId) {
+    return createEmptyMemoryProfile({
+      mode: 'guest',
+    })
+  }
+
+  return buildUserTasteProfile({
+    mode,
+    localUserId,
+    providerLinks,
+    recommendationLimit: 5,
+    topLimit: 5,
+    feedbackLimit: 5,
+  })
+}
+
+function buildPlannerInput({
+  mode,
+  localUserId,
+  providerLinks,
+  message,
+  context,
+  conversation,
+  memoryProfile,
+  tools,
+}) {
+  return {
+    userMessage: message,
+    currentUserId: localUserId || '',
+    isAuthenticated: Boolean(localUserId),
+    isSpotifyConnected: Boolean(providerLinks?.spotify?.accessToken),
+    spotifyConnectionStatus: {
+      connected: Boolean(providerLinks?.spotify?.accessToken),
+      providerName: providerLinks?.spotify?.providerName || 'spotify',
+    },
+    currentPlaybackState: {
+      playerState: context.playerState || '',
+      currentTrackId: context.currentTrackId || '',
+      currentPlaylistId: context.currentPlaylistId || '',
+    },
+    localAudioSummary: summarizeLocalAudioAssets(localUserId),
+    recentConversationSummary: summarizeConversationMessages(conversation),
+    recentConversationThreads: summarizeRecentConversationThreads(localUserId),
+    recentRecommendationHistory: memoryProfile.recentRecommendations || [],
+    memoryProfileSummary: {
+      mode: memoryProfile.mode,
+      topTracks: (memoryProfile.topTracks || []).slice(0, 5).map((track) => ({
+        name: track.name,
+        sourceId: track.sourceId || track.source_id || '',
+      })),
+      topArtists: (memoryProfile.topArtists || []).slice(0, 5).map((artist) => ({
+        name: artist.name,
+        sourceId: artist.sourceId || artist.source_id || '',
+      })),
+      likedSourceIds: memoryProfile.likedSourceIds || [],
+      avoidSourceIds: memoryProfile.avoidSourceIds || [],
+    },
+    availableTools: tools.listAvailableTools(),
+  }
+}
+
+function mapPlannerIntentToAssistantIntent(intent) {
+  switch (intent) {
+    case 'control_player':
+      return 'control_player'
+    case 'play_music':
+    case 'play_local_audio':
+    case 'play_spotify':
+      return 'play_music'
+    case 'search_music':
+    case 'chat':
+      return 'search_entity'
+    case 'create_playlist':
+    case 'import_spotify_library':
+    case 'recommend_music':
+    default:
+      return 'generate_recommendation'
+  }
+}
+
+function normalizePlaylistArtifact(playlist = {}) {
+  return {
+    id: playlist.id || '',
+    name: playlist.name || playlist.title || 'Playlist',
+    image: getPrimaryImage(playlist),
+    owner:
+      playlist.owner?.display_name ||
+      playlist.owner?.id ||
+      playlist.metadata?.spotifyOwnerName ||
+      '',
+  }
+}
+
+function collectTracksFromToolExecution(execution) {
+  const { tool, result } = execution
+
+  switch (tool) {
+    case 'catalog.get_track':
+      return result ? [result] : []
+    case 'catalog.search':
+      return result.results?.tracks || []
+    case 'catalog.get_playlist':
+      return (result.tracks || []).map((item) => item.track || item).filter(Boolean)
+    case 'catalog.get_recommendations':
+      return result.tracks || []
+    case 'library.search_local_audio':
+      return result.items || []
+    case 'library.list_favorites':
+      return Array.isArray(result) ? result : []
+    case 'provider.spotify.get_top_tracks':
+      return result.items || []
+    case 'history.save_recommendation':
+      return result.tracks || []
+    default:
+      return []
+  }
+}
+
+function buildPlannerArtifacts({
+  plan,
+  executedSteps,
+  trackArtifacts,
+  memoryProfile,
+}) {
+  const artifacts = {
+    planner: {
+      intent: plan.intent,
+      memoryWriteback: plan.memoryWriteback,
+      executedTools: executedSteps.map((step) => step.tool),
+    },
+  }
+
+  if (trackArtifacts.length > 0) {
+    artifacts.tracks = trackArtifacts
+  }
+
+  const savedRecommendation = executedSteps.find(
+    (step) => step.tool === 'history.save_recommendation',
+  )?.result
+
+  if (savedRecommendation?.id) {
+    artifacts.recommendationId = savedRecommendation.id
+    artifacts.recommendationTitle = savedRecommendation.title
+    artifacts.seeds = savedRecommendation.seeds || {}
+  }
+
+  const trackResult =
+    executedSteps.find((step) => step.tool === 'catalog.get_track')?.result ||
+    executedSteps.find((step) => step.tool === 'library.search_local_audio')?.result?.items?.[0]
+
+  if (trackResult) {
+    artifacts.track = createTrackArtifact(trackResult)
+  }
+
+  const artistResult =
+    executedSteps.find((step) => step.tool === 'catalog.get_artist')?.result ||
+    executedSteps.find((step) => step.tool === 'catalog.search')?.result?.results?.artists?.[0]
+
+  if (artistResult) {
+    artifacts.artist = mapArtistArtifact(artistResult)
+  }
+
+  const albumResult =
+    executedSteps.find((step) => step.tool === 'catalog.get_album')?.result ||
+    executedSteps.find((step) => step.tool === 'catalog.search')?.result?.results?.albums?.[0]
+
+  if (albumResult) {
+    artifacts.album = mapAlbumArtifact(albumResult)
+  }
+
+  const playlistResult =
+    executedSteps.find((step) => step.tool === 'catalog.get_playlist')?.result ||
+    executedSteps.find((step) => step.tool === 'provider.spotify.import_playlist')?.result?.playlist ||
+    executedSteps.find((step) => step.tool === 'library.create_playlist')?.result
+
+  if (playlistResult) {
+    artifacts.playlist = normalizePlaylistArtifact(playlistResult)
+  }
+
+  const importResult = executedSteps.find((step) =>
+    step.tool === 'provider.spotify.import_playlists' ||
+    step.tool === 'provider.spotify.import_playlist' ||
+    step.tool === 'provider.spotify.sync_saved_tracks',
+  )?.result
+
+  if (importResult) {
+    artifacts.importResult = importResult
+  }
+
+  if (memoryProfile) {
+    artifacts.memoryProfile = memoryProfile
+  }
+
+  return artifacts
+}
+
+function filterTracksForPlannerAction(actionType, trackArtifacts = []) {
+  if (actionType === 'player.play_local') {
+    return trackArtifacts.filter((track) => track.sourceType === 'local_audio')
+  }
+
+  if (actionType === 'player.play_spotify') {
+    return trackArtifacts.filter((track) => track.sourceType === 'spotify')
+  }
+
+  return trackArtifacts
+}
+
+function mapPlannerPlayerActions(playerActions = [], trackArtifacts = []) {
+  const actions = []
+
+  for (const playerAction of playerActions) {
+    if (
+      playerAction.type === 'player.pause' ||
+      playerAction.type === 'player.next' ||
+      playerAction.type === 'player.previous'
+    ) {
+      actions.push({
+        type: playerAction.type,
+        payload: playerAction.payload || {},
+      })
+      continue
+    }
+
+    if (
+      playerAction.type === 'player.play' ||
+      playerAction.type === 'player.play_local' ||
+      playerAction.type === 'player.play_spotify' ||
+      playerAction.type === 'player.replace_queue'
+    ) {
+      const plannedTracks = filterTracksForPlannerAction(
+        playerAction.type,
+        trackArtifacts,
+      )
+      const startIndex = findFirstPlannerQueueIndex(plannedTracks)
+
+      if (startIndex >= 0) {
+        actions.push({
+          type: 'player.replace_queue',
+          payload: {
+            tracks: plannedTracks,
+            startIndex,
+          },
+        })
+      }
+
+      continue
+    }
+
+    if (playerAction.type === 'player.append_queue') {
+      const appendTracks = filterTracksForPlannerAction(
+        playerAction.type,
+        trackArtifacts,
+      )
+
+      if (appendTracks.length > 0) {
+        actions.push({
+          type: 'player.append_queue',
+          payload: {
+            tracks: appendTracks,
+          },
+        })
+      }
+    }
+  }
+
+  return actions
+}
+
+async function runDeepSeekPlannedAgent({
+  mode,
+  localUserId,
+  providerLinks,
+  localSessionToken,
+  message,
+  context,
+  conversationId,
+  conversation,
+  tools,
+  toolCalls,
+}) {
+  const memoryProfile = await loadPlannerMemoryProfile({
+    mode,
+    localUserId,
+    providerLinks,
+  })
+  const plannerInput = buildPlannerInput({
+    mode,
+    localUserId,
+    providerLinks,
+    message,
+    context,
+    conversation,
+    memoryProfile,
+    tools,
+  })
+  const plannerResponse = await planAgentWithDeepSeek(plannerInput)
+
+  if (!plannerResponse?.plan) {
+    throw new Error('DeepSeek planner returned no plan')
+  }
+
+  toolCalls.push({
+    name: 'planner.deepseek',
+    layer: 'planner',
+    args: {
+      mode,
+      localUserId,
+      isSpotifyConnected: Boolean(providerLinks?.spotify?.accessToken),
+      availableTools: tools.listAvailableTools(),
+    },
+    summary: {
+      ok: true,
+      model: plannerResponse.model || '',
+      intent: plannerResponse.plan.intent,
+      plannedTools: plannerResponse.plan.toolPlan.map((step) => step.tool),
+      plannedPlayerActions: plannerResponse.plan.playerActions.map(
+        (action) => action.type,
+      ),
+    },
+  })
+
+  const executedSteps = []
+
+  for (const step of plannerResponse.plan.toolPlan) {
+    const result = await tools.run(step.tool, step.args)
+    executedSteps.push({
+      tool: step.tool,
+      args: step.args,
+      result,
+    })
+  }
+
+  const trackArtifacts = unique(
+    executedSteps
+      .flatMap((execution) => collectTracksFromToolExecution(execution))
+      .map((track) => createTrackArtifact(track))
+      .filter((track) => track.sourceId || track.id),
+  ).map((sourceId) =>
+    executedSteps
+      .flatMap((execution) => collectTracksFromToolExecution(execution))
+      .map((track) => createTrackArtifact(track))
+      .find((track) => (track.sourceId || track.id) === sourceId),
+  )
+
+  const actions = mapPlannerPlayerActions(
+    plannerResponse.plan.playerActions,
+    trackArtifacts,
+  )
+  const artifacts = buildPlannerArtifacts({
+    plan: plannerResponse.plan,
+    executedSteps,
+    trackArtifacts,
+    memoryProfile,
+  })
+
+  return {
+    reply: plannerResponse.plan.reply,
+    intent: mapPlannerIntentToAssistantIntent(plannerResponse.plan.intent),
+    actions,
+    artifacts,
+    mode,
+    confidence: 0.95,
+    toolCalls,
+    memoryProfile,
+    conversationTitle: buildConversationTitle(message),
+  }
+}
+
+async function runRuleBasedAgent({
   mode = 'guest',
   localUserId = null,
+  localSessionToken = '',
   providerLinks = {},
   message,
   context = {},
   conversationId = '',
+  tools = null,
+  toolCalls = null,
 }) {
-  const toolCalls = []
+  const resolvedToolCalls = toolCalls || []
   const intentResult = classifyIntent(message)
-  const tools = createAgentToolRegistry({
-    mode,
-    localUserId,
-    providerLinks,
-    toolCalls,
-    conversationId,
-  })
+  const resolvedTools =
+    tools ||
+    createAgentToolRegistry({
+      mode,
+      localUserId,
+      localSessionToken,
+      providerLinks,
+      toolCalls: resolvedToolCalls,
+      conversationId,
+    })
   const memoryProfile =
     intentResult.intent === 'control_player'
       ? createEmptyMemoryProfile()
       : mode === 'guest'
         ? createEmptyMemoryProfile()
-        : await tools.run('memory.get_user_profile', {
+        : await resolvedTools.run('memory.get_user_profile', {
             topLimit: 5,
             recommendationLimit: 5,
             feedbackLimit: 5,
@@ -723,13 +1166,13 @@ export async function runAgent({
       result = await handleSearchEntity({
         message,
         context,
-        tools,
+        tools: resolvedTools,
       })
       break
     case 'play_music':
       result = await handlePlayMusic({
         message,
-        tools,
+        tools: resolvedTools,
       })
       break
     case 'generate_recommendation':
@@ -738,7 +1181,7 @@ export async function runAgent({
         mode,
         message,
         memoryProfile,
-        tools,
+        tools: resolvedTools,
       })
       break
   }
@@ -747,10 +1190,78 @@ export async function runAgent({
     ...result,
     mode,
     confidence: intentResult.confidence,
-    toolCalls,
+    toolCalls: resolvedToolCalls,
     memoryProfile,
     conversationTitle: buildConversationTitle(message),
   }
+}
+
+export async function runAgent({
+  mode = 'guest',
+  localUserId = null,
+  localSessionToken = '',
+  providerLinks = {},
+  message,
+  context = {},
+  conversationId = '',
+  conversation = null,
+}) {
+  const toolCalls = []
+  const tools = createAgentToolRegistry({
+    mode,
+    localUserId,
+    localSessionToken,
+    providerLinks,
+    toolCalls,
+    conversationId,
+  })
+
+  if (isDeepSeekConfigured()) {
+    try {
+      return await runDeepSeekPlannedAgent({
+        mode,
+        localUserId,
+        providerLinks,
+        localSessionToken,
+        message,
+        context,
+        conversationId,
+        conversation:
+          conversation ||
+          (localUserId
+            ? getStoredConversation(localUserId, conversationId)
+            : getGuestConversation(conversationId)),
+        tools,
+        toolCalls,
+      })
+    } catch (error) {
+      toolCalls.push({
+        name: 'planner.deepseek',
+        layer: 'planner',
+        args: {
+          mode,
+          localUserId,
+          conversationId,
+        },
+        summary: {
+          ok: false,
+          error: error.message || 'deepseek_planner_failed',
+        },
+      })
+    }
+  }
+
+  return runRuleBasedAgent({
+    mode,
+    localUserId,
+    localSessionToken,
+    providerLinks,
+    message,
+    context,
+    conversationId,
+    tools,
+    toolCalls,
+  })
 }
 
 export default {
