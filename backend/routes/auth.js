@@ -1,5 +1,4 @@
 import { Router } from 'express'
-import axios from 'axios'
 import crypto from 'crypto'
 import env from '../config/env.js'
 import { asyncHandler } from '../middleware/async-handler.js'
@@ -11,31 +10,16 @@ import {
 import { linkProvider } from '../services/provider/provider-link-service.js'
 import {
   buildSpotifyLinkPayload,
+  exchangeSpotifyToken,
   fetchSpotifyProfile,
   SPOTIFY_PROVIDER_NAME,
+  SPOTIFY_SCOPES,
 } from '../services/provider/spotify-provider-service.js'
 
 const router = Router()
 const STATE_TTL_MS = 10 * 60 * 1000
 
-const SCOPES = [
-  'user-read-private',
-  'user-read-email',
-  'playlist-read-private',
-  'playlist-read-collaborative',
-  'user-library-read',
-  'user-top-read',
-  'user-read-playback-state',
-  'user-modify-playback-state',
-].join(' ')
-
 const pendingStates = new Map()
-
-function createClientCredentials() {
-  return Buffer.from(
-    `${env.spotifyClientId}:${env.spotifyClientSecret}`,
-  ).toString('base64')
-}
 
 function generateRandomString(length) {
   return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length)
@@ -71,21 +55,6 @@ function buildFrontendRedirect(pathname, params = {}) {
   return `${env.frontendUri}${normalizedPath}${suffix}`
 }
 
-async function exchangeSpotifyToken(body) {
-  const response = await axios.post(
-    'https://accounts.spotify.com/api/token',
-    body.toString(),
-    {
-      headers: {
-        Authorization: `Basic ${createClientCredentials()}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    },
-  )
-
-  return response.data
-}
-
 router.get('/login', (req, res) => {
   pruneAllSpotifyPendingStates()
 
@@ -95,7 +64,7 @@ router.get('/login', (req, res) => {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: env.spotifyClientId,
-    scope: SCOPES,
+    scope: SPOTIFY_SCOPES,
     redirect_uri: env.spotifyRedirectUri,
     state,
     show_dialog: 'true',

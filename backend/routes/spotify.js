@@ -1,19 +1,17 @@
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/async-handler.js'
+import { requireLocalUser } from '../middleware/require-local-user.js'
 import { requireSpotifyAccessToken } from '../middleware/require-spotify-access-token.js'
 import { assert } from '../utils/assert.js'
 import {
-  getAvailableDevices,
   getCategories,
   getAlbum,
   getArtist,
   getArtistTopTracks,
   getAvailableGenreSeeds,
-  getCurrentPlaybackState,
   getCurrentUserProfile,
   getFeaturedPlaylists,
   getNewReleases,
-  pausePlayback,
   getPlaylist,
   getRecommendations,
   getTrack,
@@ -24,44 +22,133 @@ import {
   parseCsv,
   parseInteger,
   searchSpotify,
-  skipToNextPlayback,
-  skipToPreviousPlayback,
-  startOrResumePlayback,
-  transferPlayback,
 } from '../services/spotify-api.js'
+import {
+  getCurrentPlayback,
+  listDevices,
+  next,
+  pause,
+  playUri,
+  playUris,
+  previous,
+  resume,
+  transferPlayback,
+} from '../services/provider/spotify-player-service.js'
 
 const router = Router()
 
-router.use(requireSpotifyAccessToken)
+router.use('/player', requireLocalUser)
 
 function normalizeDeviceId(value) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-async function selectPlaybackDevice(accessToken, preferredDeviceId = '') {
-  const deviceData = await getAvailableDevices(accessToken)
-  const devices = Array.isArray(deviceData?.devices)
-    ? deviceData.devices.filter((device) => !device?.is_restricted)
-    : []
-
-  if (!devices.length) {
-    return {
-      device: null,
-      devices,
-    }
-  }
-
-  const preferred = preferredDeviceId
-    ? devices.find((device) => device.id === preferredDeviceId)
-    : null
-  const active = devices.find((device) => device.is_active)
-  const fallback = preferred || active || devices[0]
-
-  return {
-    device: fallback || null,
-    devices,
-  }
+function normalizeString(value) {
+  return typeof value === 'string' ? value.trim() : ''
 }
+
+function buildPlaybackOptions(body = {}) {
+  const options = {}
+  const deviceId = normalizeDeviceId(body?.deviceId)
+
+  if (deviceId) {
+    options.deviceId = deviceId
+  }
+
+  if (body?.offset && typeof body.offset === 'object') {
+    options.offset = body.offset
+  }
+
+  if (
+    Number.isFinite(Number(body?.positionMs)) &&
+    Number(body.positionMs) >= 0
+  ) {
+    options.positionMs = Number(body.positionMs)
+  }
+
+  return options
+}
+
+const handleGetCurrentPlayback = asyncHandler(async (req, res) => {
+  const data = await getCurrentPlayback(req.localUserId)
+  res.json(data || {})
+})
+
+router.get(
+  '/player/devices',
+  asyncHandler(async (req, res) => {
+    const data = await listDevices(req.localUserId)
+
+    res.json({
+      total: data.total,
+      items: data.items,
+      devices: data.items,
+    })
+  }),
+)
+
+router.get('/player/current', handleGetCurrentPlayback)
+router.get('/player/state', handleGetCurrentPlayback)
+
+router.put(
+  '/player/transfer',
+  asyncHandler(async (req, res) => {
+    const deviceId = normalizeDeviceId(req.body?.deviceId)
+
+    assert(deviceId, 'deviceId is required', 400)
+
+    const data = await transferPlayback(
+      req.localUserId,
+      deviceId,
+      req.body?.play !== false,
+    )
+
+    res.json(data)
+  }),
+)
+
+router.put(
+  '/player/play',
+  asyncHandler(async (req, res) => {
+    const options = buildPlaybackOptions(req.body)
+    const uris = Array.isArray(req.body?.uris) ? req.body.uris : []
+    const uri = normalizeString(req.body?.uri || req.body?.contextUri)
+
+    const data = uris.length
+      ? await playUris(req.localUserId, uris, options)
+      : uri
+        ? await playUri(req.localUserId, uri, options)
+        : await resume(req.localUserId, options)
+
+    res.json(data)
+  }),
+)
+
+router.put(
+  '/player/pause',
+  asyncHandler(async (req, res) => {
+    const data = await pause(req.localUserId, buildPlaybackOptions(req.body))
+    res.json(data)
+  }),
+)
+
+router.post(
+  '/player/next',
+  asyncHandler(async (req, res) => {
+    const data = await next(req.localUserId, buildPlaybackOptions(req.body))
+    res.json(data)
+  }),
+)
+
+router.post(
+  '/player/previous',
+  asyncHandler(async (req, res) => {
+    const data = await previous(req.localUserId, buildPlaybackOptions(req.body))
+    res.json(data)
+  }),
+)
+
+router.use(requireSpotifyAccessToken)
 
 router.get(
   '/home',
@@ -372,152 +459,4 @@ router.get(
     res.json(data)
   }),
 )
-
-router.get(
-  '/player/devices',
-  asyncHandler(async (req, res) => {
-    const data = await getAvailableDevices(req.accessToken)
-    res.json(data)
-  }),
-)
-
-router.get(
-  '/player/state',
-  asyncHandler(async (req, res) => {
-    const data = await getCurrentPlaybackState(req.accessToken)
-    res.json(data || {})
-  }),
-)
-
-router.put(
-  '/player/transfer',
-  asyncHandler(async (req, res) => {
-    const preferredDeviceId = normalizeDeviceId(req.body?.deviceId)
-    const { device } = await selectPlaybackDevice(req.accessToken, preferredDeviceId)
-
-    assert(
-      device?.id,
-      'No available Spotify playback device found. Open Spotify and try again.',
-      409,
-    )
-
-    await transferPlayback(req.accessToken, {
-      deviceId: device.id,
-      play: req.body?.play !== false,
-    })
-
-    res.json({
-      ok: true,
-      device,
-    })
-  }),
-)
-
-router.put(
-  '/player/play',
-  asyncHandler(async (req, res) => {
-    const preferredDeviceId = normalizeDeviceId(req.body?.deviceId)
-    const { device } = await selectPlaybackDevice(req.accessToken, preferredDeviceId)
-
-    assert(
-      device?.id,
-      'No available Spotify playback device found. Open Spotify and try again.',
-      409,
-    )
-
-    if (!device.is_active) {
-      await transferPlayback(req.accessToken, {
-        deviceId: device.id,
-        play: false,
-      })
-    }
-
-    await startOrResumePlayback(req.accessToken, {
-      deviceId: device.id,
-      uris: Array.isArray(req.body?.uris) ? req.body.uris : null,
-      contextUri:
-        typeof req.body?.contextUri === 'string' ? req.body.contextUri.trim() : '',
-      offset:
-        req.body?.offset && typeof req.body.offset === 'object'
-          ? req.body.offset
-          : null,
-      positionMs: req.body?.positionMs,
-    })
-
-    res.json({
-      ok: true,
-      device,
-    })
-  }),
-)
-
-router.put(
-  '/player/pause',
-  asyncHandler(async (req, res) => {
-    const preferredDeviceId = normalizeDeviceId(req.body?.deviceId)
-    const { device } = await selectPlaybackDevice(req.accessToken, preferredDeviceId)
-
-    assert(
-      device?.id,
-      'No available Spotify playback device found. Open Spotify and try again.',
-      409,
-    )
-
-    await pausePlayback(req.accessToken, {
-      deviceId: device.id,
-    })
-
-    res.json({
-      ok: true,
-      device,
-    })
-  }),
-)
-
-router.post(
-  '/player/next',
-  asyncHandler(async (req, res) => {
-    const preferredDeviceId = normalizeDeviceId(req.body?.deviceId)
-    const { device } = await selectPlaybackDevice(req.accessToken, preferredDeviceId)
-
-    assert(
-      device?.id,
-      'No available Spotify playback device found. Open Spotify and try again.',
-      409,
-    )
-
-    await skipToNextPlayback(req.accessToken, {
-      deviceId: device.id,
-    })
-
-    res.json({
-      ok: true,
-      device,
-    })
-  }),
-)
-
-router.post(
-  '/player/previous',
-  asyncHandler(async (req, res) => {
-    const preferredDeviceId = normalizeDeviceId(req.body?.deviceId)
-    const { device } = await selectPlaybackDevice(req.accessToken, preferredDeviceId)
-
-    assert(
-      device?.id,
-      'No available Spotify playback device found. Open Spotify and try again.',
-      409,
-    )
-
-    await skipToPreviousPlayback(req.accessToken, {
-      deviceId: device.id,
-    })
-
-    res.json({
-      ok: true,
-      device,
-    })
-  }),
-)
-
 export default router

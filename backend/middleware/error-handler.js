@@ -13,6 +13,10 @@ export function errorHandler(error, req, res, next) {
 
   const payload = { error: message }
 
+  if (error.code) {
+    payload.code = error.code
+  }
+
   if (error.details) {
     payload.details = error.details
   }

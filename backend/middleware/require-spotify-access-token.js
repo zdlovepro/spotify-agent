@@ -28,7 +28,10 @@ export const requireSpotifyAccessToken = asyncHandler(async (req, res, next) => 
   const localUser = resolveLocalUserFromRequest(req)
 
   if (!localUser?.id) {
-    return res.status(401).json({ error: 'Missing Spotify access token' })
+    return res.status(401).json({
+      error: 'Local user authentication required',
+      code: 'local_user_required',
+    })
   }
 
   req.localUser = req.localUser || localUser
@@ -40,10 +43,20 @@ export const requireSpotifyAccessToken = asyncHandler(async (req, res, next) => 
   const providerLink = getProviderLink(localUser.id, 'spotify')
 
   if (!providerLink) {
-    return res.status(401).json({ error: 'Spotify provider is not connected' })
+    return res.status(403).json({
+      error: 'Spotify provider is not connected',
+      code: 'spotify_not_connected',
+    })
   }
 
   const activeProviderLink = await refreshProviderToken(providerLink)
+
+  if (!activeProviderLink?.accessToken) {
+    return res.status(403).json({
+      error: 'Spotify provider is not connected',
+      code: 'spotify_not_connected',
+    })
+  }
 
   req.spotifyProviderLink = activeProviderLink
   req.accessToken = activeProviderLink.accessToken
