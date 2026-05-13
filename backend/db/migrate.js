@@ -265,6 +265,7 @@ const schemaStatements = [
       event_type TEXT NOT NULL,
       source_type TEXT NOT NULL,
       source_id TEXT NOT NULL,
+      play_mode TEXT,
       position_ms INTEGER NOT NULL DEFAULT 0,
       duration_ms INTEGER,
       context_type TEXT,
@@ -353,6 +354,7 @@ const runMigrationTransaction = db.transaction(() => {
   addColumnIfMissing('audio_assets', 'user_id', 'TEXT')
   addColumnIfMissing('audio_assets', 'artists_json', "TEXT NOT NULL DEFAULT '[]'")
   addColumnIfMissing('audio_assets', 'size_bytes', 'INTEGER')
+  addColumnIfMissing('listening_events', 'play_mode', 'TEXT')
 
   db.pragma('user_version = 1')
 })

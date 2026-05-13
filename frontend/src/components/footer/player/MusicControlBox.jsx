@@ -53,7 +53,7 @@ function resolvePlayButtonTitle(playback, isConnected, t) {
   return ''
 }
 
-function MusicControlBox() {
+function MusicControlBox({ onSkip }) {
   const dispatch = useDispatch()
   const { t } = useTranslation()
   const { isConnected } = useSpotify()
@@ -91,6 +91,7 @@ function MusicControlBox() {
       return
     }
 
+    onSkip?.('previous')
     dispatch(previousTrack())
   }
 
@@ -99,6 +100,7 @@ function MusicControlBox() {
       return
     }
 
+    onSkip?.('next')
     dispatch(nextTrack())
   }
 

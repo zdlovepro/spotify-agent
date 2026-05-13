@@ -10,6 +10,7 @@ import historyRouter from './routes/history.js'
 import libraryRouter from './routes/library.js'
 import localAuthRouter from './routes/local-auth.js'
 import mediaRouter from './routes/media.js'
+import playerRouter from './routes/player.js'
 import providersRouter from './routes/providers.js'
 import spotifyRouter from './routes/spotify.js'
 
@@ -44,6 +45,7 @@ app.use('/api/history', historyRouter)
 app.use('/api/library', libraryRouter)
 app.use('/api/local-auth', localAuthRouter)
 app.use('/api/media', mediaRouter)
+app.use('/api/player', playerRouter)
 app.use('/api/providers', providersRouter)
 app.use('/api/spotify', spotifyRouter)
 
