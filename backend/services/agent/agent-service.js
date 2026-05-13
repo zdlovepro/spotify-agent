@@ -234,6 +234,282 @@ function allocateRecommendationSeeds({
   }
 }
 
+const SPOTIFY_RECOMMENDATION_SEARCH_TERMS = {
+  ambient: 'ambient calm focus',
+  cantopop: 'cantopop',
+  chill: 'chill relaxing evening',
+  classical: 'classical focus instrumental',
+  edm: 'edm workout energy',
+  electronic: 'electronic focus',
+  happy: 'feel good happy pop',
+  'hip-hop': 'hip hop energy',
+  jazz: 'jazz evening',
+  'j-pop': 'j-pop',
+  'k-pop': 'k-pop',
+  party: 'party dance',
+  pop: 'pop hits',
+  rock: 'rock hits',
+  sad: 'sad mellow',
+  sleep: 'sleep ambient calm',
+  study: 'focus coding instrumental',
+  'work-out': 'workout gym energy',
+}
+
+function wantsLocalRecommendation(message) {
+  return (
+    prefersLocalPlayback(message) ||
+    /\u672c\u5730\u5e93|\u6211\u4e0a\u4f20\u8fc7\u7684|\u6211\u7684\u6b4c|\u6211\u7684\u97f3\u9891|local library/i.test(
+      normalizeMessage(message),
+    )
+  )
+}
+
+function wantsHybridRecommendation(message) {
+  return /\u7ed3\u5408|\u4e00\u8d77|\u6df7\u5408|both|mix|together/i.test(
+    normalizeMessage(message),
+  )
+}
+
+function wantsImmediateRecommendationPlayback(message) {
+  return /\u76f4\u63a5\u64ad\u653e|\u9a6c\u4e0a\u64ad\u653e|\u76f4\u63a5\u64ad|\u64ad\u8d77\u6765|play now|start playing|directly play/i.test(
+    normalizeMessage(message),
+  )
+}
+
+function extractRecommendationQuery(message) {
+  return normalizeMessage(message)
+    .replace(
+      /\u63a8\u8350|\u6765\u70b9|\u7ed9\u6211|\u5e2e\u6211|\u7ed3\u5408|\u4e00\u7ec4|\u5408\u9002|\u9002\u5408|recommend(?:ation)?|suggest|give me|find me/gi,
+      ' ',
+    )
+    .replace(
+      /\u6211\u4e0a\u4f20\u8fc7\u7684|\u6211\u7684\u672c\u5730|\u6211\u7684\u97f3\u9891|\u672c\u5730\u5e93|spotify|\u76f4\u63a5\u64ad\u653e|play now|start playing/gi,
+      ' ',
+    )
+    .replace(/\u91cc|\u7684|\u6b4c|\u542c\u7684|music|songs?/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function hasMeaningfulRecommendationQuery(query) {
+  const normalized = normalizeMessage(query).toLowerCase()
+
+  if (!normalized || normalized.length < 2) {
+    return false
+  }
+
+  return ![
+    '我',
+    '我的',
+    '推荐',
+    '一组',
+    'music',
+    'song',
+    'songs',
+  ].includes(normalized)
+}
+
+function getTrackIdentity(track = {}) {
+  return track.sourceId || track.source_id || track.id || ''
+}
+
+function dedupeTrackArtifacts(tracks = []) {
+  const trackMap = new Map()
+
+  for (const track of tracks) {
+    const artifact = createTrackArtifact(track)
+    const key = getTrackIdentity(artifact)
+
+    if (!key || trackMap.has(key)) {
+      continue
+    }
+
+    trackMap.set(key, artifact)
+  }
+
+  return [...trackMap.values()]
+}
+
+function createTrackScoreSets(memoryProfile = {}) {
+  return {
+    liked: new Set(memoryProfile.likedSourceIds || []),
+    topTracks: new Set(
+      (memoryProfile.topTracks || [])
+        .map((track) => track.sourceId || track.source_id || track.id || '')
+        .filter(Boolean),
+    ),
+  }
+}
+
+function scoreRecommendationTrack(track, scoreSets, { preferLocal = false } = {}) {
+  const key = getTrackIdentity(track)
+  let score = 0
+
+  if (track.playMode === 'local_audio') {
+    score += preferLocal ? 30 : 12
+  }
+
+  if (track.playMode === 'spotify_remote' && track.uri) {
+    score += preferLocal ? 8 : 14
+  }
+
+  if (scoreSets.liked.has(key)) {
+    score += 10
+  }
+
+  if (scoreSets.topTracks.has(key)) {
+    score += 8
+  }
+
+  return score
+}
+
+function sortRecommendationTracks(
+  tracks = [],
+  memoryProfile = {},
+  { preferLocal = false } = {},
+) {
+  const scoreSets = createTrackScoreSets(memoryProfile)
+
+  return [...tracks].sort((left, right) => {
+    const scoreDelta =
+      scoreRecommendationTrack(right, scoreSets, { preferLocal }) -
+      scoreRecommendationTrack(left, scoreSets, { preferLocal })
+
+    if (scoreDelta !== 0) {
+      return scoreDelta
+    }
+
+    return String(left.name || '').localeCompare(String(right.name || ''))
+  })
+}
+
+function interleaveRecommendationTracks(trackGroups = [], maxCount = 10) {
+  const queues = trackGroups.map((group) => [...group])
+  const mixedTracks = []
+  const seen = new Set()
+
+  while (mixedTracks.length < maxCount && queues.some((queue) => queue.length > 0)) {
+    for (const queue of queues) {
+      if (!queue.length || mixedTracks.length >= maxCount) {
+        continue
+      }
+
+      const track = queue.shift()
+      const key = getTrackIdentity(track)
+
+      if (!key || seen.has(key)) {
+        continue
+      }
+
+      seen.add(key)
+      mixedTracks.push(track)
+    }
+  }
+
+  return mixedTracks
+}
+
+function filterAvoidedRecommendationTracks(tracks = [], memoryProfile = {}) {
+  const avoidSourceIds = new Set(memoryProfile.avoidSourceIds || [])
+
+  return tracks.filter((track) => !avoidSourceIds.has(getTrackIdentity(track)))
+}
+
+function buildSpotifyRecommendationQueries({
+  message,
+  explicitGenres,
+  topArtists,
+  memoryProfile,
+}) {
+  const normalizedQuery = extractRecommendationQuery(message)
+  const moodQuery =
+    SPOTIFY_RECOMMENDATION_SEARCH_TERMS[explicitGenres[0]] || explicitGenres[0] || ''
+  const favoriteArtist =
+    topArtists[0]?.name ||
+    memoryProfile.topArtists?.[0]?.name ||
+    ''
+
+  return unique(
+    [
+      hasMeaningfulRecommendationQuery(normalizedQuery) ? normalizedQuery : '',
+      moodQuery && favoriteArtist ? `${moodQuery} ${favoriteArtist}` : '',
+      moodQuery,
+      favoriteArtist,
+      memoryProfile.publicSeeds?.query || '',
+    ].filter(Boolean),
+  ).slice(0, 3)
+}
+
+function buildRecommendationReply({
+  message,
+  tracks,
+  localRequested,
+  spotifyConnected,
+  mixedRequested,
+  startedPlaying,
+}) {
+  const trackCount = tracks.length
+
+  if (!trackCount) {
+    return localizePlaybackReply(
+      message,
+      spotifyConnected
+        ? '我这次还没整理出足够合适的推荐。你可以换个更具体的情绪、场景，或者告诉我想偏向本地音频还是 Spotify。'
+        : '我先在你的本地音频库里找过了，但还没整理出足够合适的推荐。连接 Spotify 后我可以给你更多选择。',
+      spotifyConnected
+        ? 'I could not shape a strong recommendation set yet. Try a more specific mood or tell me whether to lean local audio or Spotify.'
+        : 'I checked your local audio first, but could not shape a strong recommendation set yet. Connect Spotify for more options.',
+    )
+  }
+
+  if (localRequested) {
+    return localizePlaybackReply(
+      message,
+      startedPlaying
+        ? `我先从你的本地音频库里挑了 ${trackCount} 首，并已经开始播放。`
+        : `我先从你的本地音频库里挑了 ${trackCount} 首推荐。`,
+      startedPlaying
+        ? `I picked ${trackCount} local tracks from your library and started playing them.`
+        : `I picked ${trackCount} local tracks from your library.`,
+    )
+  }
+
+  if (!spotifyConnected) {
+    return localizePlaybackReply(
+      message,
+      startedPlaying
+        ? `我先只用你的本地音频库整理了 ${trackCount} 首，并已经开始播放。连接 Spotify 后我可以给你更多推荐。`
+        : `我先只用你的本地音频库整理了 ${trackCount} 首推荐。连接 Spotify 后我可以给你更多推荐。`,
+      startedPlaying
+        ? `I used your local audio library for ${trackCount} picks and started playing them. Connect Spotify for more recommendations.`
+        : `I used your local audio library for ${trackCount} picks. Connect Spotify for more recommendations.`,
+    )
+  }
+
+  if (mixedRequested || tracks.some((track) => track.playMode === 'local_audio') && tracks.some((track) => track.playMode === 'spotify_remote')) {
+    return localizePlaybackReply(
+      message,
+      startedPlaying
+        ? `我结合了你的本地音频和 Spotify，整理了 ${trackCount} 首，并已经开始播放。`
+        : `我结合了你的本地音频和 Spotify，整理了 ${trackCount} 首推荐。`,
+      startedPlaying
+        ? `I combined your local audio and Spotify into ${trackCount} picks and started playback.`
+        : `I combined your local audio and Spotify into ${trackCount} picks.`,
+    )
+  }
+
+  return localizePlaybackReply(
+    message,
+    startedPlaying
+      ? `我整理了 ${trackCount} 首 Spotify 推荐，并已经开始播放。`
+      : `我整理了 ${trackCount} 首 Spotify 推荐。`,
+    startedPlaying
+      ? `I prepared ${trackCount} Spotify recommendations and started playback.`
+      : `I prepared ${trackCount} Spotify recommendations.`,
+  )
+}
+
 async function handleControlPlayer(intentResult) {
   const actionMap = {
     next: {
@@ -688,6 +964,190 @@ async function handleRecommendation({
         tracks: seedTracks,
         genres: seedGenres,
       },
+      memoryProfile,
+    },
+  }
+}
+
+async function handleHybridRecommendation({
+  mode,
+  message,
+  memoryProfile,
+  tools,
+}) {
+  const explicitGenres = detectGenreSeeds(message)
+  const defaultGenres = Array.isArray(memoryProfile.defaultGenres)
+    ? memoryProfile.defaultGenres
+    : Array.isArray(memoryProfile.publicSeeds?.genres)
+      ? memoryProfile.publicSeeds.genres
+      : []
+  const localRequested = wantsLocalRecommendation(message)
+  const mixedRequested = wantsHybridRecommendation(message)
+  const directPlayRequested = wantsImmediateRecommendationPlayback(message)
+  const spotifyConnected = mode === 'spotify_enhanced'
+  const canUseLocal = mode !== 'guest'
+  const recommendationQuery = extractRecommendationQuery(message)
+  let localTracks = []
+  let spotifyTracks = []
+  let spotifyTopArtists = []
+
+  if (canUseLocal) {
+    try {
+      const shouldSearchLocal =
+        localRequested && hasMeaningfulRecommendationQuery(recommendationQuery)
+      const localTool = shouldSearchLocal
+        ? 'library.search_local_audio'
+        : 'library.list_audio_assets'
+      const localArgs = shouldSearchLocal
+        ? {
+            q: recommendationQuery,
+            limit: 12,
+          }
+        : {}
+      let localResult = await tools.run(localTool, localArgs)
+
+      if (shouldSearchLocal && !(localResult.items || []).length) {
+        localResult = await tools.run('library.list_audio_assets', {})
+      }
+
+      localTracks = sortRecommendationTracks(
+        filterAvoidedRecommendationTracks(
+          dedupeTrackArtifacts(localResult.items || []),
+          memoryProfile,
+        ),
+        memoryProfile,
+        { preferLocal: true },
+      )
+    } catch {
+      localTracks = []
+    }
+  }
+
+  if (spotifyConnected && (!localRequested || mixedRequested || localTracks.length === 0)) {
+    let spotifyTopTrackItems = []
+
+    try {
+      const topTrackResult = await tools.run('spotify.get_user_top_tracks', {
+        limit: 6,
+      })
+      spotifyTopTrackItems = topTrackResult.items || []
+    } catch {
+      spotifyTopTrackItems = []
+    }
+
+    try {
+      const topArtistResult = await tools.run('spotify.get_user_top_artists', {
+        limit: 4,
+      })
+      spotifyTopArtists = topArtistResult.items || []
+    } catch {
+      spotifyTopArtists = []
+    }
+
+    const spotifySearchTracks = []
+    const spotifyQueries = buildSpotifyRecommendationQueries({
+      message,
+      explicitGenres: explicitGenres.length ? explicitGenres : defaultGenres,
+      topArtists: spotifyTopArtists,
+      memoryProfile,
+    })
+
+    for (const spotifyQuery of spotifyQueries) {
+      try {
+        const searchResult = await tools.run('spotify.search_tracks', {
+          q: spotifyQuery,
+          limit: 6,
+        })
+
+        spotifySearchTracks.push(...(searchResult.items || []))
+      } catch {
+        continue
+      }
+    }
+
+    spotifyTracks = sortRecommendationTracks(
+      filterAvoidedRecommendationTracks(
+        dedupeTrackArtifacts([...spotifyTopTrackItems, ...spotifySearchTracks]),
+        memoryProfile,
+      ),
+      memoryProfile,
+      { preferLocal: false },
+    )
+  }
+
+  let tracks = []
+
+  if (localRequested && !mixedRequested) {
+    tracks = localTracks.slice(0, 10)
+  } else if (spotifyConnected) {
+    tracks = interleaveRecommendationTracks(
+      [localTracks.slice(0, 4), spotifyTracks.slice(0, 8)],
+      10,
+    )
+  } else {
+    tracks = localTracks.slice(0, 10)
+  }
+
+  if (!tracks.length && spotifyTracks.length) {
+    tracks = spotifyTracks.slice(0, 10)
+  }
+
+  tracks = dedupeTrackArtifacts(tracks)
+
+  const saveToolName =
+    mode === 'guest' ? 'history.save_recommendation' : 'recommendation.save_run'
+  const seedSummary = {
+    query: recommendationQuery || message,
+    genres: explicitGenres.length ? explicitGenres : defaultGenres,
+    localRequested,
+    mixedRequested,
+    spotifyConnected,
+    localTrackCount: localTracks.length,
+    spotifyTrackCount: spotifyTracks.length,
+    topArtistNames: spotifyTopArtists
+      .map((artist) => artist?.name || '')
+      .filter(Boolean)
+      .slice(0, 4),
+  }
+  const historyEntry = await tools.run(saveToolName, {
+    title: buildConversationTitle(message),
+    prompt: message,
+    description: 'Agent-generated recommendation set from local audio and Spotify.',
+    seeds: seedSummary,
+    tracks,
+  })
+  const startIndex = directPlayRequested ? findFirstPlannerQueueIndex(tracks) : -1
+  const actions =
+    startIndex >= 0
+      ? [
+          {
+            type: 'player.replace_queue',
+            payload: {
+              tracks,
+              startIndex,
+              playlistId: historyEntry.id || '',
+              playlistTitle: historyEntry.title || '',
+            },
+          },
+        ]
+      : []
+
+  return {
+    reply: buildRecommendationReply({
+      message,
+      tracks,
+      localRequested,
+      spotifyConnected,
+      mixedRequested,
+      startedPlaying: actions.length > 0,
+    }),
+    intent: 'generate_recommendation',
+    actions,
+    artifacts: {
+      recommendationId: historyEntry.id,
+      recommendationTitle: historyEntry.title,
+      tracks,
+      seeds: historyEntry.seeds || seedSummary,
       memoryProfile,
     },
   }
@@ -1799,6 +2259,60 @@ async function runDeepSeekPlannedAgent({
       .find((track) => (track.sourceId || track.id) === sourceId),
   )
 
+  if (plannerResponse.plan.intent === 'recommend_music' && trackArtifacts.length === 0) {
+    const fallbackResult = await handleHybridRecommendation({
+      mode,
+      message,
+      memoryProfile,
+      tools,
+    })
+
+    return {
+      ...fallbackResult,
+      mode,
+      confidence: 0.93,
+      toolCalls,
+      memoryProfile,
+      conversationTitle: buildConversationTitle(message),
+    }
+  }
+
+  if (plannerResponse.plan.intent === 'recommend_music' && trackArtifacts.length > 0) {
+    const alreadySaved = executedSteps.some(
+      (step) =>
+        step.tool === 'history.save_recommendation' ||
+        step.tool === 'recommendation.save_run',
+    )
+
+    if (!alreadySaved) {
+      const saveToolName =
+        mode === 'guest' ? 'history.save_recommendation' : 'recommendation.save_run'
+      const saveArgs = {
+        title: buildConversationTitle(message),
+        prompt: message,
+        description: 'DeepSeek-generated recommendation set from local audio and Spotify.',
+        seeds: {
+          query: extractRecommendationQuery(message) || message,
+          localRequested: wantsLocalRecommendation(message),
+          mixedRequested: wantsHybridRecommendation(message),
+          spotifyConnected: Boolean(providerLinks?.spotify?.accessToken),
+        },
+        tracks: trackArtifacts,
+      }
+
+      try {
+        const savedRecommendation = await tools.run(saveToolName, saveArgs)
+        executedSteps.push({
+          tool: saveToolName,
+          args: saveArgs,
+          result: savedRecommendation,
+        })
+      } catch {
+        // Keep the recommendation response usable even if persistence fails.
+      }
+    }
+  }
+
   const toolDrivenActions = executedSteps.flatMap((execution) =>
     collectPlayerActionsFromToolExecution(execution),
   )
@@ -1806,7 +2320,7 @@ async function runDeepSeekPlannedAgent({
     plannerResponse.plan.playerActions,
     trackArtifacts,
   )
-  const actions = [...toolDrivenActions, ...plannedActions].filter(
+  let actions = [...toolDrivenActions, ...plannedActions].filter(
     (action, index, collection) =>
       collection.findIndex(
         (candidate) =>
@@ -1815,6 +2329,34 @@ async function runDeepSeekPlannedAgent({
             JSON.stringify(action.payload || {}),
       ) === index,
   )
+
+  if (
+    plannerResponse.plan.intent === 'recommend_music' &&
+    wantsImmediateRecommendationPlayback(message) &&
+    actions.length === 0
+  ) {
+    const startIndex = findFirstPlannerQueueIndex(trackArtifacts)
+    const savedRecommendation = executedSteps.find(
+      (step) =>
+        step.tool === 'history.save_recommendation' ||
+        step.tool === 'recommendation.save_run',
+    )?.result
+
+    if (startIndex >= 0) {
+      actions = [
+        {
+          type: 'player.replace_queue',
+          payload: {
+            tracks: trackArtifacts,
+            startIndex,
+            playlistId: savedRecommendation?.id || '',
+            playlistTitle: savedRecommendation?.title || '',
+          },
+        },
+      ]
+    }
+  }
+
   const artifacts = buildPlannerArtifacts({
     plan: plannerResponse.plan,
     executedSteps,
@@ -1919,7 +2461,7 @@ async function runRuleBasedAgent({
       break
     case 'generate_recommendation':
     default:
-      result = await handleRecommendation({
+      result = await handleHybridRecommendation({
         mode,
         message,
         memoryProfile,
