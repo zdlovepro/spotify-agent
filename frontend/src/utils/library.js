@@ -46,7 +46,12 @@ function mapTrackToPlaylistSong(track, index) {
     audioUrl: playback.audioUrl,
     previewUrl: playback.previewUrl,
     remoteUri: playback.remoteUri,
+    sourceType:
+      track.source_type ||
+      track.sourceType ||
+      (playback.isLocalAudio ? 'local_audio' : playback.isSpotifyRemote ? 'spotify' : ''),
     playMode: playback.playMode,
+    durationMs: track.duration_ms || track.durationMs || 0,
     trackTime: formatDuration(track.duration_ms || track.durationMs || 0),
     playable: playback.playable,
     sourceId: track.source_id || track.sourceId || '',

@@ -4,7 +4,7 @@ import { useSpotify } from '../../context/SpotifyContext.jsx'
 import * as Icons from '../icons/index.jsx'
 import TextRegularM from '../text/TextRegularM'
 import IconButton from '../buttons/IconButton'
-import { getTrackPlaybackStatusKey } from '../../lib/spotify.js'
+import { getTrackPlaybackStatusKey, resolveTrackPlaybackMeta } from '../../lib/spotify.js'
 import styles from './footer-left.module.css'
 
 function getLocalAudioFormatLabel(trackData) {
@@ -25,8 +25,8 @@ function FooterLeft() {
   const { t } = useTranslation()
   const { isConnected } = useSpotify()
   const trackData = useSelector((state) => state.player.trackData)
-  const isLocalAudio =
-    trackData?.source === 'local_audio' || trackData?.sourceType === 'local_audio'
+  const playback = resolveTrackPlaybackMeta(trackData)
+  const isLocalAudio = playback.isLocalAudio
   const badges = isLocalAudio
     ? [
         t('player_source_local_audio'),

@@ -18,8 +18,7 @@ const VALID_INTENTS = new Set([
 const VALID_PLAYER_ACTIONS = new Set([
   'player.play_local',
   'player.play_spotify_uri',
-  'player.play_spotify',
-  'player.play',
+  'player.play_spotify_uris',
   'player.pause',
   'player.resume',
   'player.next',
@@ -27,6 +26,8 @@ const VALID_PLAYER_ACTIONS = new Set([
   'player.append_queue',
   'player.replace_queue',
   'player.unavailable',
+  'player.play_spotify',
+  'player.play',
 ])
 
 const TOOL_DESCRIPTIONS = {
@@ -55,7 +56,8 @@ const TOOL_DESCRIPTIONS = {
   'recommendation.list_recent': 'List recent saved recommendation runs for the logged-in user.',
   'feedback.save': 'Save like or dislike feedback for the logged-in user.',
   'player.play_local': 'Prepare local audio for full playback in the AgentMusic player.',
-  'player.play_spotify_uri': 'Trigger full Spotify playback for a Spotify URI when Spotify is connected.',
+  'player.play_spotify_uri': 'Prepare one Spotify track for full remote playback in the AgentMusic player.',
+  'player.play_spotify_uris': 'Prepare one or more Spotify tracks for full remote playback in the AgentMusic player.',
   'player.replace_queue': 'Replace the current player queue with validated local or Spotify tracks.',
   'player.append_queue': 'Append validated local or Spotify tracks to the current player queue.',
   'player.pause': 'Pause the current AgentMusic player session.',
@@ -233,7 +235,7 @@ function buildPlannerSystemPrompt() {
     'spotify_remote means full playback through Spotify after authorization.',
     'preview is compatibility only and must not be the main playback target.',
     'If the user is not logged in, avoid local library tools.',
-    'If Spotify is not connected, avoid spotify.get_user_* and spotify.play_* tools, and avoid player.play_spotify_uri.',
+    'If Spotify is not connected, avoid spotify.get_user_* and spotify.play_* tools, and avoid player.play_spotify_uri or player.play_spotify_uris.',
     'Reply in the same language as the user when possible.',
   ].join(' ')
 }
@@ -247,7 +249,13 @@ function buildPlannerUserPrompt(input) {
             'chat | search_music | recommend_music | play_music | play_local_audio | play_spotify | control_player | create_playlist | import_spotify_library',
           reply: 'string',
           toolPlan: [{ tool: 'tool.name', args: {} }],
-          playerActions: [{ type: 'player.action', payload: {} }],
+          playerActions: [
+            {
+              type:
+                'player.play_local | player.play_spotify_uri | player.play_spotify_uris | player.pause | player.resume | player.next | player.previous | player.replace_queue | player.append_queue',
+              payload: {},
+            },
+          ],
           memoryWriteback: {
             summary: 'string',
             preferences: ['string'],

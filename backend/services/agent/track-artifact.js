@@ -1,5 +1,5 @@
 /**
- * @typedef {'preview' | 'local' | 'remote' | 'unavailable'} TrackPlayMode
+ * @typedef {'local_audio' | 'spotify_remote' | 'preview' | 'unavailable'} TrackPlayMode
  */
 
 /**
@@ -12,13 +12,20 @@
  * @property {string} album
  * @property {string} image
  * @property {number} durationMs
- * @property {string} previewUrl
  * @property {string} audioUrl
+ * @property {string} uri
  * @property {boolean} playable
  * @property {TrackPlayMode} playMode
  */
 
-const VALID_PLAY_MODES = new Set(['preview', 'local', 'remote', 'unavailable'])
+const PLAY_MODE_ALIASES = new Map([
+  ['local', 'local_audio'],
+  ['local_audio', 'local_audio'],
+  ['remote', 'spotify_remote'],
+  ['spotify_remote', 'spotify_remote'],
+  ['preview', 'preview'],
+  ['unavailable', 'unavailable'],
+])
 
 function normalizeString(value, fallback = '') {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
@@ -92,45 +99,52 @@ function getPreviewUrl(track) {
   return normalizeString(track?.previewUrl || track?.preview_url)
 }
 
-function getAudioUrl(track) {
+function getLocalAudioUrl(track) {
   return normalizeString(track?.audioUrl || track?.audio_url || track?.streamUrl)
 }
 
-function getRemoteUrl(track) {
-  return normalizeString(
-    track?.remoteUrl ||
+function getSpotifyUri(track) {
+  const uri = normalizeString(
+    track?.uri ||
+      track?.remoteUri ||
       track?.remote_url ||
-      track?.external_url ||
-      track?.externalUrl ||
-      track?.uri,
+      track?.remoteUrl ||
+      track?.sourceId ||
+      track?.source_id,
   )
+
+  return uri.startsWith('spotify:') ? uri : ''
 }
 
-function derivePlayMode(track, audioUrl, previewUrl, remoteUrl) {
-  const explicitPlayMode = normalizeString(track?.playMode || track?.play_mode)
+function normalizeTrackPlayMode(playMode) {
+  return PLAY_MODE_ALIASES.get(normalizeString(playMode)) || ''
+}
 
-  if (VALID_PLAY_MODES.has(explicitPlayMode)) {
+function derivePlayMode(track, localAudioUrl, previewUrl, uri) {
+  const explicitPlayMode = normalizeTrackPlayMode(track?.playMode || track?.play_mode)
+
+  if (explicitPlayMode) {
     return explicitPlayMode
   }
 
-  if (audioUrl) {
-    return 'local'
+  if (localAudioUrl) {
+    return 'local_audio'
+  }
+
+  if (uri) {
+    return 'spotify_remote'
   }
 
   if (previewUrl) {
     return 'preview'
   }
 
-  if (remoteUrl) {
-    return 'remote'
-  }
-
   return 'unavailable'
 }
 
-function derivePlayable(track, playMode, audioUrl, previewUrl) {
+function derivePlayable(track, playMode, localAudioUrl, previewUrl) {
   const directlyPlayable =
-    (playMode === 'local' && Boolean(audioUrl)) ||
+    (playMode === 'local_audio' && Boolean(localAudioUrl)) ||
     (playMode === 'preview' && Boolean(previewUrl))
 
   if (typeof track?.playable === 'boolean') {
@@ -144,9 +158,15 @@ export function createTrackArtifact(track = {}) {
   const sourceType = getSourceType(track)
   const sourceId = getSourceId(track, sourceType)
   const previewUrl = getPreviewUrl(track)
-  const audioUrl = getAudioUrl(track)
-  const remoteUrl = getRemoteUrl(track)
-  const playMode = derivePlayMode(track, audioUrl, previewUrl, remoteUrl)
+  const localAudioUrl = getLocalAudioUrl(track)
+  const uri = getSpotifyUri(track)
+  const playMode = derivePlayMode(track, localAudioUrl, previewUrl, uri)
+  const audioUrl =
+    playMode === 'local_audio'
+      ? localAudioUrl
+      : playMode === 'preview'
+        ? previewUrl
+        : ''
 
   return {
     id: normalizeString(track?.id, sourceId),
@@ -162,12 +182,10 @@ export function createTrackArtifact(track = {}) {
         : Number.isFinite(Number(track?.duration_ms)) && Number(track.duration_ms) >= 0
           ? Number(track.duration_ms)
           : 0,
-    previewUrl,
     audioUrl,
-    playable: derivePlayable(track, playMode, audioUrl, previewUrl),
+    uri: uri || normalizeString(track?.uri),
+    playable: derivePlayable(track, playMode, localAudioUrl, previewUrl),
     playMode,
-    uri: normalizeString(track?.uri),
-    remoteUrl,
   }
 }
 

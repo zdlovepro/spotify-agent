@@ -6,7 +6,11 @@ import { useTranslation } from 'react-i18next'
 import { changePlay, changeTrack } from '../store/index.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSpotify } from '../context/SpotifyContext.jsx'
-import { canStartTrackPlayback, createPlaybackQueue } from '../lib/spotify.js'
+import {
+  canStartTrackPlayback,
+  createPlaybackQueue,
+  getTrackPlaybackStatusKey,
+} from '../lib/spotify.js'
 import {
   mapCatalogPlaylistDetails,
   mapLocalPlaylistDetails,
@@ -259,7 +263,7 @@ function PlaylistPage() {
               disabled={!canStartTrackPlayback(song, { allowRemote: isConnected })}
               title={
                 !canStartTrackPlayback(song, { allowRemote: isConnected })
-                  ? t('preview_unavailable')
+                  ? t(getTrackPlaybackStatusKey(song, { allowRemote: isConnected }))
                   : song.songName
               }
               onClick={() => startPlaylist(song.id || song.link)}

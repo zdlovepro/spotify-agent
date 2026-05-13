@@ -7,7 +7,11 @@ import SearchPageCard from '../components/cards/SearchPageCard'
 import { SEARCHCARDS } from '../data/index.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSpotify } from '../context/SpotifyContext.jsx'
-import { canStartTrackPlayback } from '../lib/spotify.js'
+import {
+  canStartTrackPlayback,
+  resolveTrackPlaybackMeta,
+  TRACK_PLAY_MODES,
+} from '../lib/spotify.js'
 import { startAgentPlayback } from '../store/index.js'
 import styles from './search.module.css'
 
@@ -38,12 +42,23 @@ function getSubtitle(item, type, t) {
   }
 }
 
-function getMeta(item, type, t) {
+function getMeta(item, type, t, allowRemotePlayback = false) {
   switch (type) {
-    case 'track':
-      return item.preview_url
-        ? t('search_listenable_meta')
-        : t('search_not_listenable_meta')
+    case 'track': {
+      const playback = resolveTrackPlaybackMeta(item)
+
+      if (playback.playMode === TRACK_PLAY_MODES.SPOTIFY_REMOTE) {
+        return allowRemotePlayback
+          ? t('search_play_on_spotify')
+          : t('spotify_playback_status_connect')
+      }
+
+      if (playback.playMode === TRACK_PLAY_MODES.PREVIEW) {
+        return t('search_listenable_meta')
+      }
+
+      return t('search_not_listenable_meta')
+    }
     case 'artist':
       return item.followers
         ? t('search_followers', {
@@ -122,7 +137,8 @@ function ResultCard({
   t,
 }) {
   const subtitle = getSubtitle(item, type, t)
-  const meta = getMeta(item, type, t)
+  const playback = type === 'track' ? resolveTrackPlaybackMeta(item) : null
+  const meta = getMeta(item, type, t, allowRemotePlayback)
   const canPlayTrack =
     type === 'track'
       ? canStartTrackPlayback(item, { allowRemote: allowRemotePlayback })
@@ -159,10 +175,12 @@ function ResultCard({
                 onClick={() => onPlayTrack(item)}
               >
                 {canPlayTrack
-                  ? allowRemotePlayback && !item.preview_url
+                  ? playback?.playMode === TRACK_PLAY_MODES.SPOTIFY_REMOTE
                     ? t('search_play_on_spotify')
                     : t('search_play_preview')
-                  : t('search_preview_missing')}
+                  : playback?.playMode === TRACK_PLAY_MODES.SPOTIFY_REMOTE
+                    ? t('spotify_playback_status_connect')
+                    : t('search_preview_missing')}
               </button>
               {!canPlayTrack && (
                 <div className={styles.UnavailableBox}>

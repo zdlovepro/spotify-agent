@@ -31,13 +31,12 @@ function Footer() {
   const audioRef = useRef(null)
   const previousRemoteKeyRef = useRef('')
   const previousRemotePlayingRef = useRef(false)
+  const previousPlaybackChannelRef = useRef('')
 
   const playback = resolveTrackPlaybackMeta(trackData)
-  const shouldUseRemotePlayback =
-    isConnected &&
-    Boolean(playback.remoteUri) &&
-    trackData.source !== 'local_audio' &&
-    trackData.playMode !== 'local'
+  const isSpotifyTrack = playback.isSpotifyRemote && Boolean(playback.remoteUri)
+  const isHtmlAudioTrack = playback.isLocalAudio || playback.isPreview
+  const shouldUseRemotePlayback = isSpotifyTrack
 
   const handleTrackClick = (position) => {
     if (audioRef.current) {
@@ -50,11 +49,15 @@ function Footer() {
       return
     }
 
-    if (shouldUseRemotePlayback) {
+    if (shouldUseRemotePlayback || !playback.audioUrl) {
       audioRef.current.pause()
-      audioRef.current.currentTime = 0
-      setCurrentTime(0)
-      setDuration(0)
+
+      if (shouldUseRemotePlayback) {
+        audioRef.current.currentTime = 0
+        setCurrentTime(0)
+        setDuration(0)
+      }
+
       return
     }
 
@@ -63,7 +66,32 @@ function Footer() {
     } else {
       audioRef.current.pause()
     }
-  }, [isPlaying, shouldUseRemotePlayback, trackData.track])
+  }, [isPlaying, playback.audioUrl, shouldUseRemotePlayback])
+
+  useEffect(() => {
+    const nextPlaybackChannel = shouldUseRemotePlayback
+      ? 'spotify_remote'
+      : isHtmlAudioTrack
+        ? 'html_audio'
+        : 'idle'
+
+    if (
+      previousPlaybackChannelRef.current === 'spotify_remote' &&
+      nextPlaybackChannel !== 'spotify_remote'
+    ) {
+      pauseRemotePlayback({
+        deviceId: deviceId || undefined,
+      }).catch(() => {})
+    }
+
+    previousPlaybackChannelRef.current = nextPlaybackChannel
+  }, [
+    deviceId,
+    isHtmlAudioTrack,
+    pauseRemotePlayback,
+    shouldUseRemotePlayback,
+    trackData.id,
+  ])
 
   useEffect(() => {
     if (!shouldUseRemotePlayback) {
@@ -77,9 +105,19 @@ function Footer() {
     const playingChanged = previousRemotePlayingRef.current !== isPlaying
 
     async function syncRemotePlayback() {
+      if (!isConnected) {
+        dispatch(changePlay(false))
+        return
+      }
+
       try {
         if (remoteChanged && isPlaying) {
-          await activatePlayer()
+          const activated = await activatePlayer()
+
+          if (!activated) {
+            dispatch(changePlay(false))
+            return
+          }
 
           if (!deviceId && !isReady) {
             return
@@ -89,7 +127,12 @@ function Footer() {
             deviceId: deviceId || undefined,
           })
         } else if (playingChanged && isPlaying) {
-          await activatePlayer()
+          const activated = await activatePlayer()
+
+          if (!activated) {
+            dispatch(changePlay(false))
+            return
+          }
 
           if (!deviceId && !isReady) {
             return
@@ -117,6 +160,7 @@ function Footer() {
     currentQueue,
     deviceId,
     dispatch,
+    isConnected,
     isPlaying,
     isReady,
     activatePlayer,
@@ -137,7 +181,7 @@ function Footer() {
   useEffect(() => {
     const audio = audioRef.current
 
-    if (!audio || shouldUseRemotePlayback) {
+    if (!audio || shouldUseRemotePlayback || !playback.audioUrl) {
       return
     }
 
@@ -145,7 +189,7 @@ function Footer() {
 
     audio.addEventListener('ended', handleEnded)
     return () => audio.removeEventListener('ended', handleEnded)
-  }, [dispatch, shouldUseRemotePlayback])
+  }, [dispatch, playback.audioUrl, shouldUseRemotePlayback])
 
   return (
     <footer className={styles.footer}>

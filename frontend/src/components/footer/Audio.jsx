@@ -9,7 +9,7 @@ const Audio = forwardRef(function Audio(
       ref={ref}
       onLoadedMetadata={(e) => handleDuration(e.target.duration)}
       onTimeUpdate={(e) => handleCurrentTime(e.target.currentTime)}
-      src={isRemotePlayback ? '' : trackData.track}
+      src={isRemotePlayback ? '' : trackData.audioUrl || trackData.track || ''}
       autoPlay={isPlaying}
     />
   )

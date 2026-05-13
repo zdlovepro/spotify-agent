@@ -107,6 +107,7 @@ function summarizeResult(name, result) {
     case 'spotify.previous':
     case 'player.play_local':
     case 'player.play_spotify_uri':
+    case 'player.play_spotify_uris':
     case 'player.replace_queue':
     case 'player.append_queue':
     case 'player.pause':
@@ -292,7 +293,7 @@ function mapLocalAudioAssetToTrack(asset = {}, localSessionToken = '') {
     durationMs: asset.durationMs ?? null,
     streamPath: asset.streamPath || '',
     audioUrl: createLocalAudioStreamUrl(asset, localSessionToken),
-    playMode: 'local',
+    playMode: 'local_audio',
     playable: true,
   }
 }
@@ -596,7 +597,7 @@ export function createAgentToolRegistry({
     return mapLocalAudioAssetToTrack(asset, localSessionToken)
   }
 
-  function createSpotifyRemoteTrack(input = {}) {
+function createSpotifyRemoteTrack(input = {}) {
     const inputSourceId = normalizeString(input.sourceId || input.source_id)
     const inputUri = normalizeString(input.uri)
     const derivedUri = inputUri || inputSourceId
@@ -634,7 +635,7 @@ export function createAgentToolRegistry({
             : 0,
       previewUrl: '',
       audioUrl: '',
-      playMode: 'remote',
+      playMode: 'spotify_remote',
       playable: false,
     })
   }
@@ -674,6 +675,45 @@ export function createAgentToolRegistry({
   function resolveQueueTracks(inputTracks = []) {
     const tracks = Array.isArray(inputTracks) ? inputTracks : []
     return tracks.map((track) => normalizeQueueTrack(track))
+  }
+
+  function createSpotifyActionTracks(args = {}) {
+    const inputTracks = Array.isArray(args.tracks) ? args.tracks : []
+
+    if (inputTracks.length > 0) {
+      const tracks = resolveQueueTracks(inputTracks)
+
+      assert(
+        tracks.every((track) => track.playMode === 'spotify_remote' && track.uri),
+        'Only Spotify track URIs are supported',
+        400,
+      )
+
+      return tracks
+    }
+
+    const uris = Array.isArray(args.uris)
+      ? args.uris.map((uri) => ensureSpotifyUri(uri, { allowContext: false }))
+      : []
+
+    if (uris.length > 0) {
+      return uris.map((uri, index) =>
+        createSpotifyRemoteTrack({
+          ...args,
+          id: `${normalizeString(args.id || args.trackId || 'spotify-track')}-${index}`,
+          uri,
+        }),
+      )
+    }
+
+    const uri = ensureSpotifyUri(args.uri, { allowContext: false })
+
+    return [
+      createSpotifyRemoteTrack({
+        ...args,
+        uri,
+      }),
+    ]
   }
 
   function resolveStartIndex(value, tracks = []) {
@@ -1097,21 +1137,46 @@ export function createAgentToolRegistry({
 
   register(
     'player.play_spotify_uri',
-    async (args = {}) => {
+    (args = {}) => {
       ensureSpotifyEnhanced(mode, providerLinks)
-      const uri = ensureSpotifyUri(args.uri, { allowContext: true })
-      await executeTool('spotify.play_uri', {
-        uri,
-        deviceId: args.deviceId,
-        offset: args.offset,
-      })
+      const tracks = createSpotifyActionTracks(args)
 
       return buildPlayerActionResult('player.play_spotify_uri', {
-        uri,
-        deviceId: normalizeString(args.deviceId),
+        tracks: tracks.slice(0, 1),
+        startIndex: 0,
       })
     },
     { exposed: mode === 'spotify_enhanced' },
+  )
+
+  register(
+    'player.play_spotify_uris',
+    (args = {}) => {
+      ensureSpotifyEnhanced(mode, providerLinks)
+      const tracks = createSpotifyActionTracks(args)
+
+      assert(tracks.length > 0, 'Spotify tracks are required', 400)
+
+      return buildPlayerActionResult('player.play_spotify_uris', {
+        tracks,
+        startIndex: resolveStartIndex(args.startIndex, tracks),
+      })
+    },
+    { exposed: mode === 'spotify_enhanced' },
+  )
+
+  register(
+    'player.play_spotify',
+    (args = {}) => {
+      ensureSpotifyEnhanced(mode, providerLinks)
+      const tracks = createSpotifyActionTracks(args)
+
+      return buildPlayerActionResult('player.play_spotify_uris', {
+        tracks,
+        startIndex: resolveStartIndex(args.startIndex, tracks),
+      })
+    },
+    { exposed: false },
   )
 
   register('player.replace_queue', (args = {}) => {

@@ -4,13 +4,168 @@ import {
   createAgentPlaybackQueue,
   createPlaybackQueue,
   resolveTrackPlaybackMeta,
+  TRACK_PLAY_MODES,
 } from '../lib/spotify.js'
 
 const initialQueue = createPlaybackQueue(PLAYLIST[0])
 
+function normalizeArtistNames(artists = []) {
+  if (Array.isArray(artists)) {
+    return artists
+      .map((artist) => {
+        if (typeof artist === 'string') {
+          return artist.trim()
+        }
+
+        if (artist?.name) {
+          return String(artist.name).trim()
+        }
+
+        return ''
+      })
+      .filter(Boolean)
+  }
+
+  if (typeof artists === 'string' && artists.trim()) {
+    return artists
+      .split(',')
+      .map((artist) => artist.trim())
+      .filter(Boolean)
+  }
+
+  return []
+}
+
+function getTrackDurationMs(track = {}) {
+  const durationMs = track.durationMs ?? track.duration_ms ?? 0
+
+  return Number.isFinite(Number(durationMs)) && Number(durationMs) >= 0
+    ? Number(durationMs)
+    : 0
+}
+
+function normalizeQueueTrackEntry(track = {}, index = 0) {
+  const playback = resolveTrackPlaybackMeta(track)
+  const artists = normalizeArtistNames(
+    track.artists || track.artist || track.trackArtist || track.songArtist,
+  )
+  const sourceType =
+    track.sourceType ||
+    track.source_type ||
+    (playback.isLocalAudio
+      ? 'local_audio'
+      : playback.isSpotifyRemote
+        ? 'spotify'
+        : track.source || 'agent')
+  const sourceId =
+    track.sourceId ||
+    track.source_id ||
+    playback.remoteUri ||
+    `${sourceType}:track:${track.id || index}`
+  const name =
+    track.name ||
+    track.title ||
+    track.trackName ||
+    track.songName ||
+    'Unknown track'
+  const image =
+    track.image ||
+    track.image_url ||
+    track.trackImg ||
+    track.songimg ||
+    track.album?.images?.[0]?.url ||
+    ''
+  const artistLabel =
+    track.trackArtist ||
+    track.songArtist ||
+    artists.join(', ') ||
+    'Unknown artist'
+
+  return {
+    ...track,
+    id: track.id || `${sourceId || 'queue-track'}-${index}`,
+    source: track.source || sourceType,
+    sourceType,
+    sourceId,
+    name,
+    artists,
+    album:
+      typeof track.album === 'string'
+        ? track.album
+        : track.album?.name || track.albumName || '',
+    image,
+    durationMs: getTrackDurationMs(track),
+    track: playback.audioUrl,
+    audioUrl: playback.audioUrl,
+    previewUrl: playback.previewUrl,
+    remoteUri: playback.remoteUri,
+    uri: track.uri || playback.remoteUri,
+    playMode: playback.playMode,
+    playable: playback.playable,
+    trackName: track.trackName || track.songName || name,
+    trackImg: image,
+    trackArtist: artistLabel,
+    trackTime: track.trackTime || '',
+    queueIndex: Number.isFinite(Number(track.queueIndex))
+      ? Number(track.queueIndex)
+      : index,
+  }
+}
+
+function normalizeQueue(queue = []) {
+  return (Array.isArray(queue) ? queue : []).map((track, index) =>
+    normalizeQueueTrackEntry(track, index),
+  )
+}
+
+function createSpotifyActionTrack(uri = '', index = 0) {
+  return {
+    id: `spotify-action-${index}`,
+    source: 'spotify',
+    sourceType: 'spotify',
+    sourceId: uri,
+    name: 'Spotify track',
+    artists: [],
+    album: '',
+    image: '',
+    durationMs: 0,
+    audioUrl: '',
+    uri,
+    playMode: TRACK_PLAY_MODES.SPOTIFY_REMOTE,
+    playable: false,
+  }
+}
+
+function extractActionTracks(payload = {}) {
+  if (Array.isArray(payload.tracks) && payload.tracks.length) {
+    return payload.tracks
+  }
+
+  if (payload.track && typeof payload.track === 'object') {
+    return [payload.track]
+  }
+
+  if (Array.isArray(payload.uris) && payload.uris.length) {
+    return payload.uris
+      .filter((uri) => typeof uri === 'string' && uri.trim())
+      .map((uri, index) => createSpotifyActionTrack(uri.trim(), index))
+  }
+
+  if (typeof payload.uri === 'string' && payload.uri.trim()) {
+    return [createSpotifyActionTrack(payload.uri.trim(), 0)]
+  }
+
+  return []
+}
+
 function canQueueTrackStart(track) {
   const playback = resolveTrackPlaybackMeta(track)
-  return playback.playable || Boolean(playback.remoteUri)
+
+  return (
+    playback.playable ||
+    (playback.playMode === TRACK_PLAY_MODES.SPOTIFY_REMOTE &&
+      Boolean(playback.remoteUri))
+  )
 }
 
 function findPlayableIndex(queue, preferredIndex = 0) {
@@ -57,7 +212,7 @@ const playerSlice = createSlice({
   initialState: {
     currentQueue: initialQueue,
     currentIndex: 0,
-    trackData: initialQueue[0],
+    trackData: initialQueue[0] || {},
     isPlaying: false,
   },
   reducers: {
@@ -89,19 +244,7 @@ const playerSlice = createSlice({
       }
 
       if (action.payload?.queue) {
-        const queue = action.payload.queue.map((track) => {
-          const playback = resolveTrackPlaybackMeta(track)
-
-          return {
-            ...track,
-            track: playback.streamUrl,
-            audioUrl: playback.audioUrl,
-            previewUrl: playback.previewUrl,
-            remoteUri: playback.remoteUri,
-            playMode: playback.playMode,
-            playable: playback.playable,
-          }
-        })
+        const queue = normalizeQueue(action.payload.queue)
 
         if (!queue.length) {
           return
@@ -124,7 +267,7 @@ const playerSlice = createSlice({
       }
 
       if (action.payload?.track) {
-        state.trackData = action.payload.track
+        state.trackData = normalizeQueueTrackEntry(action.payload.track, state.currentIndex)
       }
     },
     nextTrack(state) {
@@ -183,9 +326,7 @@ export function startAgentPlayback({
       playlistTitle,
     })
 
-    if (
-      !queue.some((track) => canQueueTrackStart(track))
-    ) {
+    if (!queue.some((track) => canQueueTrackStart(track))) {
       return
     }
 
@@ -197,6 +338,25 @@ export function startAgentPlayback({
     )
     dispatch(changePlay(true))
   }
+}
+
+function dispatchPlayerQueueAction(dispatch, payload = {}) {
+  const tracks = extractActionTracks(payload)
+
+  if (!tracks.length) {
+    return false
+  }
+
+  dispatch(
+    startAgentPlayback({
+      tracks,
+      startIndex: payload.startIndex || 0,
+      playlistId: payload.playlistId || `agent-${Date.now()}`,
+      playlistTitle: payload.playlistTitle || 'Agent Queue',
+    }),
+  )
+
+  return true
 }
 
 export function executePlayerActions(actions = []) {
@@ -235,8 +395,19 @@ export function executePlayerActions(actions = []) {
           )
           break
         }
+        case 'player.play_local':
+        case 'player.play_spotify_uri':
+        case 'player.play_spotify_uris':
+          if (dispatchPlayerQueueAction(dispatch, action.payload || {})) {
+            break
+          }
+          dispatch(changePlay(true))
+          break
         case 'player.play':
-          if (Array.isArray(action.payload?.tracks) && action.payload.tracks.length) {
+          if (
+            Array.isArray(action.payload?.tracks) &&
+            action.payload.tracks.length
+          ) {
             dispatch(
               startAgentPlayback({
                 tracks: action.payload.tracks,

@@ -101,6 +101,12 @@ function normalizeTrack(track = {}) {
         : track.id
           ? `${sourceType}:track:${track.id}`
           : `${sourceType}:track:${crypto.randomUUID()}`
+  const uri =
+    typeof track.uri === 'string'
+      ? track.uri.trim()
+      : sourceId.startsWith('spotify:')
+        ? sourceId
+        : ''
 
   return {
     sourceType,
@@ -119,8 +125,10 @@ function normalizeTrack(track = {}) {
         : typeof track.play_mode === 'string'
           ? track.play_mode
           : audioUrl
-            ? 'local'
-            : previewUrl
+            ? 'local_audio'
+            : uri
+              ? 'spotify_remote'
+              : previewUrl
               ? 'preview'
               : 'unavailable',
     playable:
@@ -128,7 +136,12 @@ function normalizeTrack(track = {}) {
         ? track.playable
         : Boolean(audioUrl || previewUrl),
     metadata:
-      track && typeof track === 'object' && !Array.isArray(track) ? track : {},
+      track && typeof track === 'object' && !Array.isArray(track)
+        ? {
+            ...track,
+            uri: track.uri || uri,
+          }
+        : {},
   }
 }
 

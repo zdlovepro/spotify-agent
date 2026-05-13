@@ -696,8 +696,8 @@ async function handleRecommendation({
 function canQueuePlannerTrack(track = {}) {
   return Boolean(
     track?.playable ||
+      track?.playMode === 'spotify_remote' ||
       track?.playMode === 'remote' ||
-      track?.remoteUrl ||
       track?.uri ||
       track?.sourceId?.startsWith?.('spotify:track:') ||
       track?.source_id?.startsWith?.('spotify:track:'),
@@ -874,6 +874,8 @@ function collectTracksFromToolExecution(execution) {
     case 'provider.spotify.get_top_tracks':
       return result.items || []
     case 'player.play_local':
+    case 'player.play_spotify_uri':
+    case 'player.play_spotify_uris':
     case 'player.replace_queue':
     case 'player.append_queue':
       return result.payload?.tracks || []
@@ -894,12 +896,8 @@ function collectPlayerActionsFromToolExecution(execution) {
 
   switch (tool) {
     case 'player.play_local':
-      return [
-        {
-          type: 'player.replace_queue',
-          payload: result.payload || {},
-        },
-      ]
+    case 'player.play_spotify_uri':
+    case 'player.play_spotify_uris':
     case 'player.replace_queue':
     case 'player.append_queue':
     case 'player.pause':
@@ -1005,14 +1003,26 @@ function buildPlannerArtifacts({
 
 function filterTracksForPlannerAction(actionType, trackArtifacts = []) {
   if (actionType === 'player.play_local') {
-    return trackArtifacts.filter((track) => track.sourceType === 'local_audio')
+    return trackArtifacts.filter(
+      (track) =>
+        track.sourceType === 'local_audio' ||
+        track.playMode === 'local_audio' ||
+        track.playMode === 'local',
+    )
   }
 
   if (
     actionType === 'player.play_spotify' ||
-    actionType === 'player.play_spotify_uri'
+    actionType === 'player.play_spotify_uri' ||
+    actionType === 'player.play_spotify_uris'
   ) {
-    return trackArtifacts.filter((track) => track.sourceType === 'spotify')
+    return trackArtifacts.filter(
+      (track) =>
+        track.sourceType === 'spotify' ||
+        track.playMode === 'spotify_remote' ||
+        track.playMode === 'remote' ||
+        track.uri?.startsWith?.('spotify:track:'),
+    )
   }
 
   return trackArtifacts
@@ -1020,6 +1030,36 @@ function filterTracksForPlannerAction(actionType, trackArtifacts = []) {
 
 function mapPlannerPlayerActions(playerActions = [], trackArtifacts = []) {
   const actions = []
+
+  function buildTrackAction(type, tracks = []) {
+    if (!tracks.length) {
+      return null
+    }
+
+    const startIndex = findFirstPlannerQueueIndex(tracks)
+
+    if (startIndex < 0) {
+      return null
+    }
+
+    if (type === 'player.play_local' || type === 'player.play_spotify_uri') {
+      return {
+        type,
+        payload: {
+          tracks: [tracks[startIndex]],
+          startIndex: 0,
+        },
+      }
+    }
+
+    return {
+      type,
+      payload: {
+        tracks,
+        startIndex,
+      },
+    }
+  }
 
   for (const playerAction of playerActions) {
     if (
@@ -1039,6 +1079,7 @@ function mapPlannerPlayerActions(playerActions = [], trackArtifacts = []) {
       playerAction.type === 'player.play' ||
       playerAction.type === 'player.play_local' ||
       playerAction.type === 'player.play_spotify' ||
+      playerAction.type === 'player.play_spotify_uris' ||
       playerAction.type === 'player.play_spotify_uri' ||
       playerAction.type === 'player.replace_queue'
     ) {
@@ -1046,16 +1087,16 @@ function mapPlannerPlayerActions(playerActions = [], trackArtifacts = []) {
         playerAction.type,
         trackArtifacts,
       )
-      const startIndex = findFirstPlannerQueueIndex(plannedTracks)
+      const nextType =
+        playerAction.type === 'player.play_spotify'
+          ? 'player.play_spotify_uris'
+          : playerAction.type === 'player.play'
+            ? 'player.replace_queue'
+            : playerAction.type
+      const nextAction = buildTrackAction(nextType, plannedTracks)
 
-      if (startIndex >= 0) {
-        actions.push({
-          type: 'player.replace_queue',
-          payload: {
-            tracks: plannedTracks,
-            startIndex,
-          },
-        })
+      if (nextAction) {
+        actions.push(nextAction)
       }
 
       continue

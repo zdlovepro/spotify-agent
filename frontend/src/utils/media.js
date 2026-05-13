@@ -63,7 +63,7 @@ export function createLocalAudioTrack(asset, sessionToken = '') {
     streamPath: asset.streamPath || '',
     duration_ms: asset.durationMs || 0,
     audio_url: audioUrl,
-    playMode: 'local',
+    playMode: 'local_audio',
     playable: true,
     image: fallbackArtwork,
   }

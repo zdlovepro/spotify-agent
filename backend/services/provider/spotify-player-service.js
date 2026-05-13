@@ -83,7 +83,7 @@ function mapSpotifyPlaybackTrack(track = {}) {
         : normalizeString(track.album?.name),
     image: track.album?.images?.[0]?.url || '',
     durationMs: track.duration_ms ?? null,
-    playMode: 'remote',
+    playMode: 'spotify_remote',
     playable: false,
   }
 }
