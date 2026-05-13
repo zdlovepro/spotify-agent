@@ -211,9 +211,7 @@ function PlaylistPage() {
         <PlaylistDetails data={playlist} />
 
         <div className={styles.PlaylistIcons}>
-          <button onClick={togglePlaylistPlayback}>
-            <PlayButton isthisplay={isthisplay} onClick={togglePlaylistPlayback} />
-          </button>
+          <PlayButton isthisplay={isthisplay} onClick={togglePlaylistPlayback} />
           <IconButton icon={<Icons.Like />} activeicon={<Icons.LikeActive />} />
           <Icons.More className={styles.moreIcon} />
         </div>

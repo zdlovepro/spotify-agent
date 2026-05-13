@@ -1,24 +1,24 @@
 import { useSelector } from 'react-redux'
 import * as Icons from '../icons/index.jsx'
-import IconButton from './IconButton'
 import styles from './play-button.module.css'
 
-function PlayButton({ isthisplay, onClick }) {
+function PlayButton({ isthisplay, onClick, disabled = false, title = '' }) {
   const isPlaying = useSelector((state) => state.player.isPlaying)
 
   return (
-    <div
+    <button
+      type="button"
       className={styles.playBtn}
-      tabIndex="0"
-      role="button"
       onClick={onClick}
+      disabled={disabled}
+      title={title}
     >
       {isPlaying && isthisplay ? (
-        <IconButton icon={<Icons.Pause />} activeicon={<Icons.Pause />} />
+        <Icons.Pause />
       ) : (
-        <IconButton icon={<Icons.Play />} activeicon={<Icons.Play />} />
+        <Icons.Play />
       )}
-    </div>
+    </button>
   )
 }
 

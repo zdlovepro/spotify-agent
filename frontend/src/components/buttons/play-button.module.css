@@ -14,3 +14,8 @@
 .playBtn svg{
     fill: #000 !important;
 }
+.playBtn:disabled{
+    opacity: 0.48;
+    cursor: not-allowed;
+    transform: none;
+}
