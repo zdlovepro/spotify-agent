@@ -32,6 +32,7 @@ function readProviderCallback(search) {
 export function SpotifyProvider({ children }) {
   const {
     isAuthenticated: isLocalAuthenticated,
+    openAuthDialog,
     request: authRequest,
     user,
   } = useAuth()
@@ -50,6 +51,18 @@ export function SpotifyProvider({ children }) {
     setPlaylists([])
     setPlaylistCache({})
     setDevices([])
+  }, [])
+
+  const buildCurrentReturnTo = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return '/'
+    }
+
+    const pathname = window.location.pathname || '/'
+    const search = window.location.search || ''
+    const hash = window.location.hash || ''
+
+    return `${pathname}${search}${hash}` || '/'
   }, [])
 
   const refreshConnectionState = useCallback(async () => {
@@ -76,15 +89,22 @@ export function SpotifyProvider({ children }) {
   }, [authRequest, clearSpotifyState, isLocalAuthenticated])
 
   const connect = useCallback(
-    async (returnTo = window.location.pathname) => {
+    async (returnTo = '') => {
+      const resolvedReturnTo =
+        typeof returnTo === 'string' && returnTo.trim().startsWith('/')
+          ? returnTo.trim()
+          : buildCurrentReturnTo()
+
       if (!isLocalAuthenticated) {
-        setError('Sign in to AgentMusic first')
-        return
+        setNotice('')
+        setError('Please sign in to your AgentMusic account first.')
+        openAuthDialog('login')
+        return null
       }
 
       try {
         const params = new URLSearchParams({
-          return_to: returnTo || '/',
+          return_to: resolvedReturnTo,
           format: 'json',
         })
         const data = await authRequest(
@@ -98,12 +118,24 @@ export function SpotifyProvider({ children }) {
         setError('')
         setNotice('')
         window.location.href = data.authorizeUrl
+        return data.authorizeUrl
       } catch (requestError) {
-        setError(requestError.message)
+        const isLocalAuthError =
+          requestError?.status === 401 ||
+          requestError?.payload?.code === 'local_user_required'
+
+        if (isLocalAuthError) {
+          setNotice('')
+          setError('Please sign in to your AgentMusic account first.')
+          openAuthDialog('login')
+        } else {
+          setError(requestError.message)
+        }
+
         throw requestError
       }
     },
-    [authRequest, isLocalAuthenticated],
+    [authRequest, buildCurrentReturnTo, isLocalAuthenticated, openAuthDialog],
   )
 
   const disconnect = useCallback(async () => {
@@ -249,6 +281,7 @@ export function SpotifyProvider({ children }) {
       refreshConnectionState()
         .then((spotifyLink) => {
           if (spotifyLink?.connected || spotifyLink?.provider === 'spotify') {
+            setError('')
             setNotice('spotify_connect_success')
           }
         })

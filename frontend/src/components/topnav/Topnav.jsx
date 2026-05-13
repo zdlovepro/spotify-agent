@@ -60,6 +60,8 @@ function Topnav() {
   }, [isAuthenticated, isConnected])
 
   function handleConnectSpotify() {
+    const returnTo = `${location.pathname}${location.search}${location.hash}` || '/'
+
     if (!isAuthenticated) {
       setConnectHint(t('spotify_requires_local_account'))
       openAuthDialog('login')
@@ -67,7 +69,7 @@ function Topnav() {
     }
 
     setConnectHint('')
-    connect(location.pathname)
+    connect(returnTo).catch(() => {})
   }
 
   function handleDisconnectSpotify() {

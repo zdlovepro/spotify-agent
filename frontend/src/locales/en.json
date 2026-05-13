@@ -179,6 +179,8 @@
     "spotify_disconnect": "Disconnect Spotify",
     "spotify_connected": "Spotify connected",
     "spotify_not_connected": "Spotify not connected",
-    "spotify_requires_local_account": "Sign in to AgentMusic first, then connect Spotify as an enhancement."
+    "spotify_requires_local_account": "Sign in to AgentMusic first, then connect Spotify as an enhancement.",
+    "spotify_connect_success": "Spotify connected successfully.",
+    "spotify_disconnect_success": "Spotify disconnected."
   }
 }

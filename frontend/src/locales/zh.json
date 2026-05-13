@@ -1,4 +1,4 @@
-{
+﻿{
   "translation": {
     "appName": "AgentMusic",
     "welcome": "今晚想听点什么？",
@@ -179,6 +179,8 @@
     "spotify_disconnect": "断开 Spotify",
     "spotify_connected": "Spotify 已连接",
     "spotify_not_connected": "Spotify 未连接",
-    "spotify_requires_local_account": "请先登录 AgentMusic 账号，再把 Spotify 作为增强能力连接进来。"
+    "spotify_requires_local_account": "请先登录 AgentMusic 账号，再把 Spotify 作为增强能力连接进来。",
+    "spotify_connect_success": "Spotify 已成功连接。",
+    "spotify_disconnect_success": "Spotify 已断开连接。"
   }
 }
