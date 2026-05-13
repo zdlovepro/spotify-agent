@@ -6,7 +6,11 @@ import {
   listStoredConversations,
 } from './agent-conversation-service.js'
 import { planAgentWithDeepSeek } from './deepseek-agent-planner.js'
-import { buildUserTasteProfile, createEmptyMemoryProfile } from './memory-service.js'
+import {
+  buildAgentMemoryContext,
+  buildUserTasteProfile,
+  createEmptyMemoryProfile,
+} from './memory-service.js'
 import {
   buildConversationTitle,
   classifyIntent,
@@ -1723,9 +1727,9 @@ function findFirstPlannerQueueIndex(tracks = []) {
 }
 
 function summarizeConversationMessages(conversation) {
-  return (conversation?.messages || []).slice(-6).map((message) => ({
+  return (conversation?.messages || []).slice(-4).map((message) => ({
     role: message.role,
-    content: String(message.content || '').slice(0, 240),
+    content: String(message.content || '').slice(0, 140),
     intent: message.intent || null,
     createdAt: message.createdAt || '',
   }))
@@ -1794,6 +1798,7 @@ function buildPlannerInput({
   tools,
 }) {
   const localAudioSummary = summarizeLocalAudioAssets(localUserId)
+  const memoryContext = buildAgentMemoryContext(localUserId)
   const spotifyConnected = Boolean(providerLinks?.spotify?.accessToken)
 
   return {
@@ -1821,6 +1826,7 @@ function buildPlannerInput({
       currentDeviceId: context.currentDeviceId || '',
     },
     localAudioSummary,
+    memoryContext,
     recentConversationSummary: summarizeConversationMessages(conversation),
     recentConversationThreads: summarizeRecentConversationThreads(localUserId),
     recentRecommendationHistory: memoryProfile.recentRecommendations || [],
