@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { useTranslation } from 'react-i18next'
 import { useAgent } from '../../context/AgentContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
+import { useSpotifyPlayback } from '../../context/SpotifyPlaybackContext.jsx'
 import { useSpotify } from '../../context/SpotifyContext.jsx'
 import {
   getTrackPlaybackStatusKey,
@@ -198,6 +199,8 @@ function AgentWorkbench({
   const { t } = useTranslation()
   const { isAuthenticated, openAuthDialog, user } = useAuth()
   const { connect, isConnected, profile } = useSpotify()
+  const { deviceId: spotifyDeviceId, isReady: isSpotifyPlaybackReady } =
+    useSpotifyPlayback()
   const {
     conversations,
     currentConversation,
@@ -261,6 +264,8 @@ function AgentWorkbench({
             : '',
         currentPlaylistId: trackData.playlistId || '',
         playerState: isPlaying ? 'playing' : 'paused',
+        spotifyPlaybackReady: isSpotifyPlaybackReady,
+        currentDeviceId: spotifyDeviceId || '',
       },
     })
 

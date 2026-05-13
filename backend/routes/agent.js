@@ -33,6 +33,9 @@ function sanitizeContext(context) {
     currentPlaylistId:
       typeof context.currentPlaylistId === 'string' ? context.currentPlaylistId : '',
     playerState: typeof context.playerState === 'string' ? context.playerState : '',
+    spotifyPlaybackReady: context.spotifyPlaybackReady === true,
+    currentDeviceId:
+      typeof context.currentDeviceId === 'string' ? context.currentDeviceId : '',
   }
 }
 

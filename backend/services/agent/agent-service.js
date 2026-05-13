@@ -693,6 +693,300 @@ async function handleRecommendation({
   }
 }
 
+function extractSourceAwarePlaybackQuery(message) {
+  return normalizeMessage(message)
+    .replace(/播放|来点|来一首|放一首|听一首|帮我|给我|我想听|play/gi, ' ')
+    .replace(/本地|上传|我上传的|我的音频|m4a|mp3|spotify/gi, ' ')
+    .replace(/第\s*[0-9一二两三四五六七八九十]+\s*首/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function parseRequestedTrackIndex(message) {
+  const normalized = normalizeMessage(message).toLowerCase()
+
+  if (/第一首|first/.test(normalized)) {
+    return 0
+  }
+
+  if (/第二首|second/.test(normalized)) {
+    return 1
+  }
+
+  if (/第三首|third/.test(normalized)) {
+    return 2
+  }
+
+  const directMatch = normalized.match(/第\s*(\d+)\s*首/)
+
+  if (directMatch) {
+    return Math.max(Number(directMatch[1]) - 1, 0)
+  }
+
+  return 0
+}
+
+function wantsPlaybackQueue(message) {
+  return /来点|一些|几首|队列|shuffle|mix|queue/i.test(normalizeMessage(message))
+}
+
+function extractRequestedLocalFormat(message) {
+  const normalized = normalizeMessage(message).toLowerCase()
+
+  if (normalized.includes('mp3')) {
+    return 'mp3'
+  }
+
+  if (normalized.includes('m4a')) {
+    return 'm4a'
+  }
+
+  return ''
+}
+
+function hasMeaningfulPlaybackQuery(query) {
+  const normalized = normalizeMessage(query).toLowerCase()
+
+  if (!normalized || normalized.length < 2) {
+    return false
+  }
+
+  return ![
+    '我',
+    '我的',
+    '歌',
+    '的歌',
+    '我的歌',
+    'audio',
+    'song',
+    'songs',
+  ].includes(normalized)
+}
+
+function buildFallbackCapabilities({
+  localUserId,
+  providerLinks,
+  context,
+}) {
+  return {
+    localAudioAvailable: Boolean(localUserId && listAudioAssets(localUserId).length > 0),
+    spotifyConnected: Boolean(providerLinks?.spotify?.accessToken),
+    spotifyPlaybackReady: context?.spotifyPlaybackReady === true,
+    currentDeviceId: context?.currentDeviceId || '',
+  }
+}
+
+function buildPlayerToolActions(result) {
+  if (!result?.ok || !result?.type) {
+    return []
+  }
+
+  return [
+    {
+      type: result.type,
+      payload: result.payload || {},
+    },
+  ]
+}
+
+async function handleSourceAwarePlayback({
+  message,
+  localUserId,
+  providerLinks,
+  context,
+  tools,
+}) {
+  const spotifyConnected = Boolean(providerLinks?.spotify?.accessToken)
+  const capabilities = buildFallbackCapabilities({
+    localUserId,
+    providerLinks,
+    context,
+  })
+  const plannerLikeInput = {
+    isAuthenticated: Boolean(localUserId),
+    capabilities,
+  }
+  const normalizedMessage = normalizeMessage(message)
+  const playbackQuery = extractSourceAwarePlaybackQuery(message) || normalizedMessage
+  const preferredTrackIndex = parseRequestedTrackIndex(message)
+  const localFirst = prefersLocalPlayback(message)
+  const queueRequested = wantsPlaybackQueue(message)
+  const requestedLocalFormat = extractRequestedLocalFormat(message)
+
+  if (localFirst) {
+    if (!localUserId) {
+      return {
+        reply: buildPlaybackFailureReply({
+          message,
+          plannerInput: plannerLikeInput,
+        }),
+        intent: 'play_music',
+        actions: [],
+        artifacts: {},
+      }
+    }
+
+    const localSearchResult =
+      hasMeaningfulPlaybackQuery(playbackQuery) && !queueRequested
+        ? await tools.run('library.search_local_audio', {
+            q: playbackQuery,
+            limit: 10,
+          })
+        : await tools.run('library.list_audio_assets', {})
+    const localTracks = (localSearchResult.items || []).filter((track) => {
+      if (!requestedLocalFormat) {
+        return true
+      }
+
+      return String(track.fileExtension || '')
+        .toLowerCase()
+        .includes(requestedLocalFormat)
+    })
+
+    if (!localTracks.length) {
+      return {
+        reply: buildPlaybackFailureReply({
+          message,
+          plannerInput: plannerLikeInput,
+          noPlayableResult: true,
+        }),
+        intent: 'play_music',
+        actions: [],
+        artifacts: {},
+      }
+    }
+
+    if (queueRequested) {
+      const queueResult = await tools.run('player.replace_queue', {
+        tracks: localTracks,
+        startIndex: Math.min(preferredTrackIndex, localTracks.length - 1),
+      })
+
+      return {
+        reply: localizePlaybackReply(
+          message,
+          '我已经把你的本地音频整理成队列并开始播放。',
+          'I queued your local audio selection and started playback.',
+        ),
+        intent: 'play_music',
+        actions: buildPlayerToolActions(queueResult),
+        artifacts: {
+          tracks: localTracks.map((track) => createTrackArtifact(track)),
+        },
+      }
+    }
+
+    const selectedTrack = localTracks[Math.min(preferredTrackIndex, localTracks.length - 1)]
+    const localPlayResult = await tools.run('player.play_local', {
+      assetId: selectedTrack.id,
+    })
+
+    return {
+      reply: localizePlaybackReply(
+        message,
+        `正在播放你上传的《${selectedTrack.name}》。`,
+        `Playing your uploaded track "${selectedTrack.name}".`,
+      ),
+      intent: 'play_music',
+      actions: buildPlayerToolActions(localPlayResult),
+      artifacts: {
+        track: createTrackArtifact(selectedTrack),
+        tracks: [createTrackArtifact(selectedTrack)],
+      },
+    }
+  }
+
+  if (spotifyConnected) {
+    const spotifySearchResult = await tools.run('spotify.search_tracks', {
+      q: playbackQuery,
+      limit: 5,
+    })
+    const spotifyTracks = spotifySearchResult.items || []
+
+    if (spotifyTracks.length > 0) {
+      const selectedTrack = spotifyTracks[0]
+
+      try {
+        await tools.run('spotify.play_uri', {
+          uri: selectedTrack.uri,
+          deviceId: context?.currentDeviceId || undefined,
+        })
+
+        return {
+          reply: localizePlaybackReply(
+            message,
+            `正在通过 Spotify 播放《${selectedTrack.name}》。`,
+            `Playing "${selectedTrack.name}" through Spotify.`,
+          ),
+          intent: 'play_music',
+          actions: [],
+          artifacts: {
+            track: createTrackArtifact(selectedTrack),
+            tracks: [createTrackArtifact(selectedTrack)],
+          },
+        }
+      } catch (error) {
+        return {
+          reply: buildPlaybackFailureReply({
+            message,
+            error,
+            plannerInput: plannerLikeInput,
+          }),
+          intent: 'play_music',
+          actions: [],
+          artifacts: {
+            track: createTrackArtifact(selectedTrack),
+            error: {
+              message: error.message || 'playback_failed',
+              tool: 'spotify.play_uri',
+            },
+          },
+        }
+      }
+    }
+  }
+
+  if (localUserId) {
+    const localSearchResult = await tools.run('library.search_local_audio', {
+      q: playbackQuery,
+      limit: 10,
+    })
+    const localTracks = localSearchResult.items || []
+
+    if (localTracks.length > 0) {
+      const selectedTrack = localTracks[Math.min(preferredTrackIndex, localTracks.length - 1)]
+      const localPlayResult = await tools.run('player.play_local', {
+        assetId: selectedTrack.id,
+      })
+
+      return {
+        reply: localizePlaybackReply(
+          message,
+          `我在你的本地音频库里找到了《${selectedTrack.name}》，现在开始播放。`,
+          `I found "${selectedTrack.name}" in your local audio library and started playback.`,
+        ),
+        intent: 'play_music',
+        actions: buildPlayerToolActions(localPlayResult),
+        artifacts: {
+          track: createTrackArtifact(selectedTrack),
+          tracks: [createTrackArtifact(selectedTrack)],
+        },
+      }
+    }
+  }
+
+  return {
+    reply: buildPlaybackFailureReply({
+      message,
+      plannerInput: plannerLikeInput,
+      noPlayableResult: true,
+    }),
+    intent: 'play_music',
+    actions: [],
+    artifacts: {},
+  }
+}
+
 function canQueuePlannerTrack(track = {}) {
   return Boolean(
     track?.playable ||
@@ -779,21 +1073,33 @@ function buildPlannerInput({
   memoryProfile,
   tools,
 }) {
+  const localAudioSummary = summarizeLocalAudioAssets(localUserId)
+  const spotifyConnected = Boolean(providerLinks?.spotify?.accessToken)
+
   return {
     userMessage: message,
     currentUserId: localUserId || '',
     isAuthenticated: Boolean(localUserId),
-    isSpotifyConnected: Boolean(providerLinks?.spotify?.accessToken),
+    isSpotifyConnected: spotifyConnected,
     spotifyConnectionStatus: {
-      connected: Boolean(providerLinks?.spotify?.accessToken),
+      connected: spotifyConnected,
       providerName: providerLinks?.spotify?.providerName || 'spotify',
     },
     currentPlaybackState: {
       playerState: context.playerState || '',
       currentTrackId: context.currentTrackId || '',
       currentPlaylistId: context.currentPlaylistId || '',
+      spotifyPlaybackReady: context.spotifyPlaybackReady === true,
+      currentDeviceId: context.currentDeviceId || '',
     },
-    localAudioSummary: summarizeLocalAudioAssets(localUserId),
+    capabilities: {
+      localAudioAvailable: localAudioSummary.length > 0,
+      localAudioCount: localAudioSummary.length,
+      spotifyConnected,
+      spotifyPlaybackReady: context.spotifyPlaybackReady === true,
+      currentDeviceId: context.currentDeviceId || '',
+    },
+    localAudioSummary,
     recentConversationSummary: summarizeConversationMessages(conversation),
     recentConversationThreads: summarizeRecentConversationThreads(localUserId),
     recentRecommendationHistory: memoryProfile.recentRecommendations || [],
@@ -812,6 +1118,253 @@ function buildPlannerInput({
     },
     availableTools: tools.listAvailableTools(),
   }
+}
+
+function prefersLocalPlayback(message) {
+  return /本地|上传|我上传的|我的音频|m4a|mp3|\blocal\b|\bupload(?:ed)?\b|\bmy audio\b/i.test(
+    normalizeMessage(message),
+  )
+}
+
+function shouldReplyInChinese(message) {
+  return /[\u3400-\u9fff]/.test(normalizeMessage(message))
+}
+
+function localizePlaybackReply(message, zhText, enText) {
+  return shouldReplyInChinese(message) ? zhText : enText
+}
+
+function extractPlannerReference(value) {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  const trimmed = value.trim()
+
+  if (!trimmed) {
+    return ''
+  }
+
+  if (trimmed.startsWith('{{') && trimmed.endsWith('}}')) {
+    return trimmed.slice(2, -2).trim()
+  }
+
+  if (trimmed.startsWith('$')) {
+    return trimmed.slice(1).trim()
+  }
+
+  return ''
+}
+
+function splitPlannerReferencePath(reference) {
+  return String(reference || '')
+    .replace(/\[(\d+)\]/g, '.$1')
+    .split('.')
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+}
+
+function readPlannerReferenceValue(source, pathSegments = []) {
+  let currentValue = source
+
+  for (const segment of pathSegments) {
+    if (currentValue == null) {
+      return undefined
+    }
+
+    if (Array.isArray(currentValue) && /^\d+$/.test(segment)) {
+      currentValue = currentValue[Number(segment)]
+      continue
+    }
+
+    if (typeof currentValue === 'object' && segment in currentValue) {
+      currentValue = currentValue[segment]
+      continue
+    }
+
+    return undefined
+  }
+
+  return currentValue
+}
+
+function resolvePlannerReference(reference, plannerInput, executedSteps) {
+  const extractedReference = extractPlannerReference(reference)
+
+  if (!extractedReference) {
+    return undefined
+  }
+
+  const pathSegments = splitPlannerReferencePath(extractedReference)
+
+  if (!pathSegments.length) {
+    return undefined
+  }
+
+  const [rootSegment, ...restSegments] = pathSegments
+
+  if (/^step\d+$/.test(rootSegment)) {
+    const stepIndex = Number(rootSegment.slice(4))
+    return readPlannerReferenceValue(executedSteps[stepIndex]?.result, restSegments)
+  }
+
+  if (rootSegment === 'steps') {
+    const [stepIndexSegment, ...nextSegments] = restSegments
+    const stepIndex = Number(stepIndexSegment)
+
+    if (!Number.isFinite(stepIndex)) {
+      return undefined
+    }
+
+    return readPlannerReferenceValue(executedSteps[stepIndex]?.result, nextSegments)
+  }
+
+  if (rootSegment === 'plannerInput' || rootSegment === 'context') {
+    return readPlannerReferenceValue(plannerInput, restSegments)
+  }
+
+  return readPlannerReferenceValue(plannerInput?.[rootSegment], restSegments)
+}
+
+function resolvePlannerArgumentValue(value, plannerInput, executedSteps) {
+  if (Array.isArray(value)) {
+    return value.map((item) =>
+      resolvePlannerArgumentValue(item, plannerInput, executedSteps),
+    )
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [
+        key,
+        resolvePlannerArgumentValue(nestedValue, plannerInput, executedSteps),
+      ]),
+    )
+  }
+
+  const resolvedReference = resolvePlannerReference(value, plannerInput, executedSteps)
+
+  return typeof resolvedReference === 'undefined' ? value : resolvedReference
+}
+
+function plannerRequestsPlayback(plan = {}) {
+  if (
+    plan.intent === 'play_music' ||
+    plan.intent === 'play_local_audio' ||
+    plan.intent === 'play_spotify'
+  ) {
+    return true
+  }
+
+  const plannedTools = Array.isArray(plan.toolPlan) ? plan.toolPlan : []
+  const plannedActions = Array.isArray(plan.playerActions) ? plan.playerActions : []
+
+  return (
+    plannedTools.some(
+      (step) =>
+        typeof step?.tool === 'string' &&
+        (step.tool.startsWith('player.play_') ||
+          step.tool === 'player.replace_queue' ||
+          step.tool === 'player.append_queue' ||
+          step.tool.startsWith('spotify.play_')),
+    ) ||
+    plannedActions.some(
+      (action) =>
+        typeof action?.type === 'string' &&
+        (action.type.startsWith('player.play_') ||
+          action.type === 'player.replace_queue' ||
+          action.type === 'player.append_queue'),
+    )
+  )
+}
+
+function hasSuccessfulDirectPlayback(executedSteps = []) {
+  return executedSteps.some(
+    (step) =>
+      (step.tool === 'spotify.play_uri' || step.tool === 'spotify.play_uris') &&
+      step.result?.ok,
+  )
+}
+
+function buildPlaybackFailureReply({
+  message,
+  error = null,
+  plannerInput,
+  noPlayableResult = false,
+}) {
+  const normalizedError = normalizeMessage(error?.message).toLowerCase()
+  const capabilities = plannerInput?.capabilities || {}
+  const localPreferred = prefersLocalPlayback(message)
+
+  if (!plannerInput?.isAuthenticated && localPreferred) {
+    return localizePlaybackReply(
+      message,
+      '需要先登录 AgentMusic，才能访问你的本地音频库。',
+      'Sign in to AgentMusic first to access your local audio library.',
+    )
+  }
+
+  if (
+    normalizedError.includes('spotify provider is not connected') ||
+    (!capabilities.spotifyConnected && !capabilities.localAudioAvailable)
+  ) {
+    return localizePlaybackReply(
+      message,
+      '需要先连接 Spotify，或者你可以上传本地音频。',
+      'Connect Spotify first, or upload a local audio file.',
+    )
+  }
+
+  if (
+    normalizedError.includes('no available spotify playback device') ||
+    (capabilities.spotifyConnected &&
+      !capabilities.spotifyPlaybackReady &&
+      !capabilities.currentDeviceId)
+  ) {
+    return localizePlaybackReply(
+      message,
+      'Spotify 已连接，但播放器还没准备好。请先激活网页播放器或打开其他可用设备。',
+      'Spotify is connected, but the playback device is not ready yet. Activate the web player or open another available Spotify device first.',
+    )
+  }
+
+  if (normalizedError.includes('audio asset not found')) {
+    return localizePlaybackReply(
+      message,
+      '我没有在你的本地音频库里找到匹配歌曲。你可以换个关键词，或者上传新的本地音频。',
+      'I could not find a matching track in your local audio library. Try another keyword, or upload a new local audio file.',
+    )
+  }
+
+  if (noPlayableResult) {
+    if (localPreferred) {
+      return localizePlaybackReply(
+        message,
+        capabilities.spotifyConnected
+          ? '我没有在你的本地音频库里找到匹配歌曲。你可以换个关键词，或者改用 Spotify 搜索。'
+          : '我没有在你的本地音频库里找到匹配歌曲。需要先连接 Spotify，或者你可以上传本地音频。',
+        capabilities.spotifyConnected
+          ? 'I could not find a matching track in your local audio library. Try another keyword, or switch to Spotify search.'
+          : 'I could not find a matching track in your local audio library. Connect Spotify first, or upload a local audio file.',
+      )
+    }
+
+    return localizePlaybackReply(
+      message,
+      capabilities.spotifyConnected
+        ? '我暂时没有找到合适的可播放结果。你可以换个更具体的歌名、歌手或专辑名。'
+        : '我暂时没有找到本地可播放结果。需要先连接 Spotify，或者你可以上传本地音频。',
+      capabilities.spotifyConnected
+        ? 'I could not find a playable result yet. Try a more specific song, artist, or album name.'
+        : 'I could not find a playable local result yet. Connect Spotify first, or upload a local audio file.',
+    )
+  }
+
+  return localizePlaybackReply(
+    message,
+    `播放失败：${normalizeMessage(error?.message) || '暂时无法开始播放。'}`,
+    `Playback failed: ${normalizeMessage(error?.message) || 'Unable to start playback right now.'}`,
+  )
 }
 
 function mapPlannerIntentToAssistantIntent(intent) {
@@ -1162,6 +1715,7 @@ async function runDeepSeekPlannedAgent({
       mode,
       localUserId,
       isSpotifyConnected: Boolean(providerLinks?.spotify?.accessToken),
+      capabilities: plannerInput.capabilities,
       availableTools: tools.listAvailableTools(),
     },
     summary: {
@@ -1178,12 +1732,59 @@ async function runDeepSeekPlannedAgent({
   const executedSteps = []
 
   for (const step of plannerResponse.plan.toolPlan) {
-    const result = await tools.run(step.tool, step.args)
-    executedSteps.push({
-      tool: step.tool,
-      args: step.args,
-      result,
-    })
+    const resolvedArgs = resolvePlannerArgumentValue(
+      step.args,
+      plannerInput,
+      executedSteps,
+    )
+
+    try {
+      const result = await tools.run(step.tool, resolvedArgs)
+      executedSteps.push({
+        tool: step.tool,
+        args: resolvedArgs,
+        result,
+      })
+    } catch (error) {
+      const trackArtifacts = unique(
+        executedSteps
+          .flatMap((execution) => collectTracksFromToolExecution(execution))
+          .map((track) => createTrackArtifact(track))
+          .filter((track) => track.sourceId || track.id),
+      ).map((sourceId) =>
+        executedSteps
+          .flatMap((execution) => collectTracksFromToolExecution(execution))
+          .map((track) => createTrackArtifact(track))
+          .find((track) => (track.sourceId || track.id) === sourceId),
+      )
+      const artifacts = buildPlannerArtifacts({
+        plan: plannerResponse.plan,
+        executedSteps,
+        trackArtifacts,
+        memoryProfile,
+      })
+
+      artifacts.error = {
+        message: error.message || 'playback_failed',
+        tool: step.tool,
+      }
+
+      return {
+        reply: buildPlaybackFailureReply({
+          message,
+          error,
+          plannerInput,
+        }),
+        intent: mapPlannerIntentToAssistantIntent(plannerResponse.plan.intent),
+        actions: [],
+        artifacts,
+        mode,
+        confidence: 0.95,
+        toolCalls,
+        memoryProfile,
+        conversationTitle: buildConversationTitle(message),
+      }
+    }
   }
 
   const trackArtifacts = unique(
@@ -1220,6 +1821,32 @@ async function runDeepSeekPlannedAgent({
     trackArtifacts,
     memoryProfile,
   })
+
+  if (
+    plannerRequestsPlayback(plannerResponse.plan) &&
+    actions.length === 0 &&
+    !hasSuccessfulDirectPlayback(executedSteps)
+  ) {
+    artifacts.error = {
+      message: 'no_playable_result',
+    }
+
+    return {
+      reply: buildPlaybackFailureReply({
+        message,
+        plannerInput,
+        noPlayableResult: true,
+      }),
+      intent: mapPlannerIntentToAssistantIntent(plannerResponse.plan.intent),
+      actions: [],
+      artifacts,
+      mode,
+      confidence: 0.95,
+      toolCalls,
+      memoryProfile,
+      conversationTitle: buildConversationTitle(message),
+    }
+  }
 
   return {
     reply: plannerResponse.plan.reply,
@@ -1282,8 +1909,11 @@ async function runRuleBasedAgent({
       })
       break
     case 'play_music':
-      result = await handlePlayMusic({
+      result = await handleSourceAwarePlayback({
         message,
+        localUserId,
+        providerLinks,
+        context,
         tools: resolvedTools,
       })
       break
