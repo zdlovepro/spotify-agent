@@ -13,8 +13,23 @@
     margin: 0;
 }
 
+.LibrarySections {
+    display: grid;
+    gap: 40px;
+}
+
 .HiddenInput {
     display: none;
+}
+
+.SectionBlock {
+    display: grid;
+    gap: 20px;
+}
+
+.SectionLead {
+    display: grid;
+    gap: 10px;
 }
 
 .SectionHeader {
@@ -56,6 +71,7 @@
 .EmptyState {
     display: grid;
     gap: 14px;
+    grid-column: 1 / -1;
     padding: 22px;
     border-radius: 20px;
     background: rgba(255, 255, 255, 0.04);
@@ -96,12 +112,26 @@
 }
 
 .AssetSection {
-    margin-top: 40px;
+    display: grid;
+    gap: 20px;
 }
 
 .SectionHint {
     margin: 0;
     color: rgba(255, 255, 255, 0.62);
+    line-height: 1.6;
+}
+
+.NoticeCard {
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: rgba(30, 215, 96, 0.08);
+    border: 1px solid rgba(30, 215, 96, 0.18);
+}
+
+.NoticeText {
+    margin: 0;
+    color: rgba(220, 255, 229, 0.92);
     line-height: 1.6;
 }
 

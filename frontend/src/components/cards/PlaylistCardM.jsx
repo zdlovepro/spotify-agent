@@ -10,7 +10,11 @@ import TextRegularM from '../text/TextRegularM'
 import PlayButton from '../buttons/PlayButton'
 import styles from './playlist-card-m.module.css'
 
-function PlaylistCardM({ data }) {
+function PlaylistCardM({
+  data,
+  showDisabledPlayButton = false,
+  disabledPlayTitle = '',
+}) {
   const { t } = useTranslation()
   const dispatch = useDispatch()
   const { isConnected } = useSpotify()
@@ -20,6 +24,7 @@ function PlaylistCardM({ data }) {
   const canPlay = (data.playlistData || []).some((song) =>
     canStartTrackPlayback(song, { allowRemote: isConnected }),
   )
+  const shouldRenderPlayButton = canPlay || showDisabledPlayButton
 
   function handlePlay(event) {
     event.preventDefault()
@@ -58,12 +63,19 @@ function PlaylistCardM({ data }) {
           </div>
         </div>
       </Link>
-      {canPlay && (
+      {shouldRenderPlayButton && (
         <div
-          onClick={handlePlay}
-          className={`${styles.IconBox} ${isthisplay && isPlaying ? styles.ActiveIconBox : ''}`}
+          onClick={canPlay ? handlePlay : undefined}
+          className={`${styles.IconBox} ${
+            isthisplay && isPlaying ? styles.ActiveIconBox : ''
+          } ${!canPlay ? styles.DisabledIconBox : ''}`}
         >
-          <PlayButton isthisplay={isthisplay} onClick={handlePlay} />
+          <PlayButton
+            isthisplay={isthisplay}
+            onClick={handlePlay}
+            disabled={!canPlay}
+            title={!canPlay ? disabledPlayTitle : ''}
+          />
         </div>
       )}
     </div>

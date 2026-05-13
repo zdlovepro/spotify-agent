@@ -6,6 +6,7 @@ import TitleM from '../components/text/TitleM'
 import PlaylistCardM from '../components/cards/PlaylistCardM'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSpotify } from '../context/SpotifyContext.jsx'
+import { useSpotifyPlayback } from '../context/SpotifyPlaybackContext.jsx'
 import { startAgentPlayback } from '../store/index.js'
 import { mapLocalPlaylistSummary } from '../utils/library.js'
 import {
@@ -218,6 +219,7 @@ function Library() {
       const data = await request('/api/providers/spotify/sync/saved-tracks', {
         method: 'POST',
       })
+      await reloadPlaylistsOnly()
       setError('')
       setNotice(
         t('library_spotify_saved_tracks_success', {
@@ -319,9 +321,38 @@ function PlaylistTab({
   onUploadClick,
 }) {
   const { t } = useTranslation()
+  const {
+    activatePlayer,
+    error: spotifyPlaybackError,
+    errorCode: spotifyPlaybackErrorCode,
+    isConnecting: isSpotifyPlayerConnecting,
+    isReady: isSpotifyPlayerReady,
+  } = useSpotifyPlayback()
+  const localPlaylists = playlists.filter(
+    (playlist) => playlist.sourceLabel !== 'spotify_import',
+  )
+  const spotifyImportedPlaylists = playlists.filter(
+    (playlist) => playlist.sourceLabel === 'spotify_import',
+  )
+
+  async function handleActivatePlayer() {
+    await activatePlayer().catch(() => {})
+  }
+
+  const spotifySectionHint = !isConnected
+    ? t('library_spotify_playlists_connect_hint')
+    : spotifyPlaybackErrorCode === 'spotify_premium_required'
+      ? t('spotify_playback_status_premium')
+      : spotifyPlaybackErrorCode === 'spotify_no_active_device'
+        ? t('spotify_playback_status_no_device')
+        : isSpotifyPlayerConnecting
+          ? t('spotify_playback_status_connecting')
+          : isSpotifyPlayerReady
+            ? t('library_spotify_playlists_ready_hint')
+            : t('library_spotify_playlists_activate_hint')
 
   return (
-    <div>
+    <div className={styles.LibrarySections}>
       <div className={styles.SectionHeader}>
         <TitleM>{t('playlists')}</TitleM>
         <div className={styles.SectionActions}>
@@ -337,42 +368,106 @@ function PlaylistTab({
         </div>
       </div>
 
-      <div className={styles.ImportBar}>
-        <button
-          type="button"
-          className={styles.SecondaryBtn}
-          onClick={onImportSpotifyPlaylists}
-          disabled={isImportingSpotify}
-        >
-          {isConnected
-            ? isImportingSpotify
-              ? t('library_spotify_importing')
-              : t('library_spotify_import_playlists')
-            : t('library_spotify_connect_to_import')}
-        </button>
-        <button
-          type="button"
-          className={styles.SecondaryBtn}
-          onClick={onSyncSavedTracks}
-          disabled={isSyncingSavedTracks}
-        >
-          {isConnected
-            ? isSyncingSavedTracks
-              ? t('library_spotify_syncing_saved_tracks')
-              : t('library_spotify_sync_saved_tracks')
-            : t('library_spotify_connect_to_sync')}
-        </button>
-      </div>
+      <section className={styles.SectionBlock}>
+        <div className={styles.SectionHeader}>
+          <TitleM>{t('library_local_playlists_section')}</TitleM>
+          <p className={styles.SectionHint}>{t('library_local_playlists_hint')}</p>
+        </div>
 
-      {notice && <p className={styles.SectionHint}>{notice}</p>}
+        <div className={styles.Grid}>
+          {localPlaylists.length ? (
+            localPlaylists.map((item) => (
+              <PlaylistCardM key={item.link} data={item} />
+            ))
+          ) : (
+            <div className={styles.EmptyState}>
+              <p className={styles.EmptyText}>{t('library_empty')}</p>
+              <p className={styles.SectionHint}>{t('library_empty_hint')}</p>
+            </div>
+          )}
+        </div>
+      </section>
 
-      <div className={styles.Grid}>
-        {playlists.length ? (
-          playlists.map((item) => <PlaylistCardM key={item.link} data={item} />)
-        ) : (
-          <p className={styles.EmptyText}>{t('library_empty')}</p>
+      <section className={styles.SectionBlock}>
+        <div className={styles.SectionLead}>
+          <div className={styles.SectionHeader}>
+            <TitleM>{t('library_spotify_playlists_section')}</TitleM>
+            {isConnected &&
+              !isSpotifyPlayerReady &&
+              !isSpotifyPlayerConnecting &&
+              spotifyPlaybackErrorCode !== 'spotify_premium_required' && (
+                <button
+                  type="button"
+                  className={styles.SecondaryBtn}
+                  onClick={handleActivatePlayer}
+                >
+                  {t('spotify_playback_activate')}
+                </button>
+              )}
+          </div>
+          <p className={styles.SectionHint}>{spotifySectionHint}</p>
+          {spotifyPlaybackError && (
+            <div className={styles.NoticeCard}>
+              <p className={styles.NoticeText}>{spotifyPlaybackError}</p>
+            </div>
+          )}
+        </div>
+
+        <div className={styles.ImportBar}>
+          <button
+            type="button"
+            className={styles.SecondaryBtn}
+            onClick={onImportSpotifyPlaylists}
+            disabled={isImportingSpotify}
+          >
+            {isConnected
+              ? isImportingSpotify
+                ? t('library_spotify_importing')
+                : t('library_spotify_import_playlists')
+              : t('library_spotify_connect_to_import')}
+          </button>
+          <button
+            type="button"
+            className={styles.SecondaryBtn}
+            onClick={onSyncSavedTracks}
+            disabled={isSyncingSavedTracks}
+          >
+            {isConnected
+              ? isSyncingSavedTracks
+                ? t('library_spotify_syncing_saved_tracks')
+                : t('library_spotify_sync_saved_tracks')
+              : t('library_spotify_connect_to_sync')}
+          </button>
+        </div>
+
+        {notice && (
+          <div className={styles.NoticeCard}>
+            <p className={styles.NoticeText}>{notice}</p>
+          </div>
         )}
-      </div>
+
+        <div className={styles.Grid}>
+          {spotifyImportedPlaylists.length ? (
+            spotifyImportedPlaylists.map((item) => (
+              <PlaylistCardM
+                key={item.link}
+                data={item}
+                showDisabledPlayButton={!isConnected}
+                disabledPlayTitle={t('spotify_playback_status_connect')}
+              />
+            ))
+          ) : (
+            <div className={styles.EmptyState}>
+              <p className={styles.EmptyText}>
+                {t('library_spotify_playlists_empty')}
+              </p>
+              <p className={styles.SectionHint}>
+                {t('library_spotify_playlists_empty_hint')}
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className={styles.AssetSection}>
         <div className={styles.SectionHeader}>
@@ -399,9 +494,11 @@ function PlaylistTab({
                         {card.formatLabel}
                       </span>
                     </div>
-                    <p className={styles.AssetMeta}>{card.artistText}</p>
                     <p className={styles.AssetMeta}>
-                      {card.durationText} • {card.sizeText}
+                      {card.filenameText || card.artistText}
+                    </p>
+                    <p className={styles.AssetMeta}>
+                      {card.durationText} | {card.sizeText}
                     </p>
                   </div>
                   <div className={styles.AssetActions}>

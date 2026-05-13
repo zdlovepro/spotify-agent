@@ -86,6 +86,11 @@ export function mapLocalAudioCard(asset) {
   return {
     id: asset.id,
     title: asset.title || asset.originalFilename || 'Local audio',
+    filenameText:
+      asset.originalFilename &&
+      asset.originalFilename !== asset.title
+        ? asset.originalFilename
+        : '',
     albumText: asset.album || '',
     artistText:
       Array.isArray(asset.artists) && asset.artists.length

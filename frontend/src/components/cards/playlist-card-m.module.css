@@ -49,6 +49,10 @@
     bottom: 106px;
     opacity: 1;
 }
+.DisabledIconBox{
+    opacity: 1;
+    bottom: 106px;
+}
 .IconBox button svg{
     fill: #fff !important;
 }
@@ -102,4 +106,7 @@
 .PlaylistCardSBox:hover .PlaylistCardS {
     background: rgba(255, 255, 255, 0.08);
     transform: translateY(-3px);
+}
+.DisabledIconBox button{
+    cursor: not-allowed;
 }
