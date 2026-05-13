@@ -7,8 +7,8 @@ import SearchPageCard from '../components/cards/SearchPageCard'
 import { SEARCHCARDS } from '../data/index.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSpotify } from '../context/SpotifyContext.jsx'
+import { useSpotifyPlayback } from '../context/SpotifyPlaybackContext.jsx'
 import {
-  canStartTrackPlayback,
   resolveTrackPlaybackMeta,
   TRACK_PLAY_MODES,
 } from '../lib/spotify.js'
@@ -78,6 +78,30 @@ function getMeta(item, type, t, allowRemotePlayback = false) {
   }
 }
 
+function getAlbumName(item, type) {
+  if (type === 'track') {
+    return item.album?.name || ''
+  }
+
+  if (type === 'album') {
+    return item.name || ''
+  }
+
+  return ''
+}
+
+function getTrackUri(item) {
+  if (typeof item?.uri === 'string' && item.uri.trim().startsWith('spotify:')) {
+    return item.uri.trim()
+  }
+
+  if (item?.id) {
+    return `spotify:track:${item.id}`
+  }
+
+  return ''
+}
+
 function getSpotlightType(results) {
   if (results.tracks[0]) {
     return 'track'
@@ -98,10 +122,20 @@ function getSpotlightType(results) {
   return ''
 }
 
-function buildAgentPrompt(item, type) {
+function buildAgentPrompt(item, type, { query = '' } = {}) {
   switch (type) {
     case 'track':
-      return `Tell me about the song "${item.name}" and recommend a few tracks with a similar vibe.`
+      return [
+        `I found a Spotify track in search and want to use it as recommendation context.`,
+        `Track: "${item.name}".`,
+        `Artists: ${getArtistNames(item.artists) || 'Unknown artist'}.`,
+        `Album: ${getAlbumName(item, type) || 'Unknown album'}.`,
+        `Spotify URI: ${getTrackUri(item) || 'unavailable'}.`,
+        query ? `Search query context: "${query}".` : '',
+        'Please introduce this track and recommend a few songs with a similar vibe.',
+      ]
+        .filter(Boolean)
+        .join(' ')
     case 'artist':
       return `Introduce the artist ${item.name} and recommend a few essential starting tracks.`
     case 'album':
@@ -125,6 +159,78 @@ function buildBrowsePrompt() {
   return 'Recommend a set of songs that would be good to start with today.'
 }
 
+function resolveTrackActionState({
+  item,
+  isConnected,
+  isReady,
+  isConnecting,
+  errorCode,
+  t,
+}) {
+  const playback = resolveTrackPlaybackMeta(item)
+
+  if (playback.playMode !== TRACK_PLAY_MODES.SPOTIFY_REMOTE) {
+    if (playback.playMode === TRACK_PLAY_MODES.PREVIEW) {
+      return {
+        mode: 'info',
+        label: t('search_play_preview'),
+        hint: t('search_preview_secondary_hint'),
+        disabled: true,
+      }
+    }
+
+    return {
+      mode: 'disabled',
+      label: t('agent_playback_unavailable'),
+      hint: t('player_unavailable_hint'),
+      disabled: true,
+    }
+  }
+
+  if (!isConnected) {
+    return {
+      mode: 'connect',
+      label: t('spotify_connect'),
+      hint: t('player_spotify_connect_hint'),
+      disabled: false,
+    }
+  }
+
+  if (errorCode === 'spotify_premium_required') {
+    return {
+      mode: 'disabled',
+      label: t('spotify_playback_status_premium'),
+      hint: t('search_spotify_premium_hint'),
+      disabled: true,
+    }
+  }
+
+  if (isConnecting) {
+    return {
+      mode: 'waiting',
+      label: t('spotify_playback_status_connecting'),
+      hint: t('player_spotify_activate_hint'),
+      disabled: true,
+    }
+  }
+
+  if (!isReady) {
+    return {
+      mode: 'activate',
+      label: t('spotify_playback_activate'),
+      hint: t('player_spotify_activate_hint'),
+      disabled: false,
+    }
+  }
+
+  return {
+    mode: 'play',
+    label: t('search_play_on_spotify'),
+    hint: t('search_spotify_full_playback_hint'),
+    disabled: false,
+  }
+}
+
 function ResultCard({
   item,
   type,
@@ -132,17 +238,50 @@ function ResultCard({
   onOpenPlaylist,
   onPlayTrack,
   onConnectSpotify,
+  onActivatePlayer,
   onOpenLocalAudio,
-  allowRemotePlayback,
+  isSpotifyConnected,
+  isSpotifyPlayerReady,
+  isSpotifyPlayerConnecting,
+  spotifyPlaybackErrorCode,
   t,
+  searchQuery,
 }) {
   const subtitle = getSubtitle(item, type, t)
   const playback = type === 'track' ? resolveTrackPlaybackMeta(item) : null
-  const meta = getMeta(item, type, t, allowRemotePlayback)
-  const canPlayTrack =
+  const meta = getMeta(item, type, t, isSpotifyConnected)
+  const albumName = getAlbumName(item, type)
+  const trackAction =
     type === 'track'
-      ? canStartTrackPlayback(item, { allowRemote: allowRemotePlayback })
-      : false
+      ? resolveTrackActionState({
+          item,
+          isConnected: isSpotifyConnected,
+          isReady: isSpotifyPlayerReady,
+          isConnecting: isSpotifyPlayerConnecting,
+          errorCode: spotifyPlaybackErrorCode,
+          t,
+        })
+      : null
+
+  const handleTrackAction = () => {
+    if (!trackAction || trackAction.disabled) {
+      return
+    }
+
+    if (trackAction.mode === 'connect') {
+      onConnectSpotify()
+      return
+    }
+
+    if (trackAction.mode === 'activate') {
+      onActivatePlayer()
+      return
+    }
+
+    if (trackAction.mode === 'play') {
+      onPlayTrack(item)
+    }
+  }
 
   return (
     <article className={styles.ResultCard}>
@@ -158,12 +297,26 @@ function ResultCard({
 
       <div className={styles.ResultBody}>
         <div className={styles.ResultHeader}>
-          <span className={styles.ResultType}>{t(`search_result_${type}`)}</span>
+          <div className={styles.ResultTagRow}>
+            <span className={styles.ResultType}>{t(`search_result_${type}`)}</span>
+            {type === 'track' && (
+              <span className={styles.ResultSourceBadge}>
+                {t('search_source_spotify')}
+              </span>
+            )}
+          </div>
           {meta && <span className={styles.ResultMeta}>{meta}</span>}
         </div>
 
         <h3 className={styles.ResultTitle}>{item.name}</h3>
         <p className={styles.ResultSubtitle}>{subtitle}</p>
+        {type === 'track' && albumName && (
+          <p className={styles.ResultDetail}>
+            {t('search_result_album_label', {
+              album: albumName,
+            })}
+          </p>
+        )}
 
         <div className={styles.ResultActions}>
           {type === 'track' && (
@@ -171,38 +324,27 @@ function ResultCard({
               <button
                 type="button"
                 className={styles.PrimaryBtn}
-                disabled={!canPlayTrack}
-                onClick={() => onPlayTrack(item)}
+                disabled={trackAction?.disabled}
+                onClick={handleTrackAction}
               >
-                {canPlayTrack
-                  ? playback?.playMode === TRACK_PLAY_MODES.SPOTIFY_REMOTE
-                    ? t('search_play_on_spotify')
-                    : t('search_play_preview')
-                  : playback?.playMode === TRACK_PLAY_MODES.SPOTIFY_REMOTE
-                    ? t('spotify_playback_status_connect')
-                    : t('search_preview_missing')}
+                {trackAction?.label || t('agent_playback_unavailable')}
               </button>
-              {!canPlayTrack && (
+              {trackAction?.hint && (
                 <div className={styles.UnavailableBox}>
-                  <p className={styles.UnavailableText}>
-                    {t('search_unavailable_hint')}
-                  </p>
-                  <div className={styles.UnavailableActions}>
-                    <button
-                      type="button"
-                      className={styles.SecondaryBtn}
-                      onClick={onConnectSpotify}
-                    >
-                      {t('spotify_connect')}
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.SecondaryBtn}
-                      onClick={onOpenLocalAudio}
-                    >
-                      {t('library_upload_audio')}
-                    </button>
-                  </div>
+                  <p className={styles.UnavailableText}>{trackAction.hint}</p>
+                  {(trackAction.mode === 'connect' ||
+                    trackAction.mode === 'disabled' ||
+                    trackAction.mode === 'info') && (
+                    <div className={styles.UnavailableActions}>
+                      <button
+                        type="button"
+                        className={styles.SecondaryBtn}
+                        onClick={onOpenLocalAudio}
+                      >
+                        {t('library_upload_audio')}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -234,7 +376,9 @@ function ResultCard({
             <button
               type="button"
               className={styles.SecondaryBtn}
-              onClick={() => onAgentAction(buildAgentPrompt(item, type))}
+              onClick={() =>
+                onAgentAction(buildAgentPrompt(item, type, { query: searchQuery }))
+              }
             >
               {t('search_send_track_to_agent')}
             </button>
@@ -263,9 +407,14 @@ function SearchSection({
   onOpenPlaylist,
   onPlayTrack,
   onConnectSpotify,
+  onActivatePlayer,
   onOpenLocalAudio,
-  allowRemotePlayback,
+  isSpotifyConnected,
+  isSpotifyPlayerReady,
+  isSpotifyPlayerConnecting,
+  spotifyPlaybackErrorCode,
   t,
+  searchQuery,
 }) {
   if (!items.length) {
     return null
@@ -288,9 +437,14 @@ function SearchSection({
             onOpenPlaylist={onOpenPlaylist}
             onPlayTrack={onPlayTrack}
             onConnectSpotify={onConnectSpotify}
+            onActivatePlayer={onActivatePlayer}
             onOpenLocalAudio={onOpenLocalAudio}
-            allowRemotePlayback={allowRemotePlayback}
+            isSpotifyConnected={isSpotifyConnected}
+            isSpotifyPlayerReady={isSpotifyPlayerReady}
+            isSpotifyPlayerConnecting={isSpotifyPlayerConnecting}
+            spotifyPlaybackErrorCode={spotifyPlaybackErrorCode}
             t={t}
+            searchQuery={searchQuery}
           />
         ))}
       </div>
@@ -305,6 +459,12 @@ function Search() {
   const [searchParams] = useSearchParams()
   const { isAuthenticated, openAuthDialog, request } = useAuth()
   const { connect, isConnected } = useSpotify()
+  const {
+    activatePlayer,
+    errorCode: spotifyPlaybackErrorCode,
+    isConnecting: isSpotifyPlayerConnecting,
+    isReady: isSpotifyPlayerReady,
+  } = useSpotifyPlayback()
   const query = searchParams.get('q')?.trim() || ''
   const [results, setResults] = useState({
     tracks: [],
@@ -403,7 +563,16 @@ function Search() {
   function handlePlayTrack(track) {
     dispatch(
       startAgentPlayback({
-        tracks: [track],
+        tracks: [
+          {
+            ...track,
+            sourceType: 'spotify',
+            sourceId: track.sourceId || (track.id ? `spotify:track:${track.id}` : ''),
+            uri: getTrackUri(track),
+            playMode: TRACK_PLAY_MODES.SPOTIFY_REMOTE,
+            playable: false,
+          },
+        ],
         playlistId: `search-track-${track.id}`,
         playlistTitle: track.name,
       }),
@@ -421,6 +590,10 @@ function Search() {
     }
 
     connect(`/search?q=${encodeURIComponent(query)}`).catch(() => {})
+  }
+
+  function handleActivatePlayer() {
+    activatePlayer().catch(() => {})
   }
 
   function handleOpenLocalAudio() {
@@ -528,9 +701,14 @@ function Search() {
                   onOpenPlaylist={handleOpenPlaylist}
                   onPlayTrack={handlePlayTrack}
                   onConnectSpotify={handleConnectSpotify}
+                  onActivatePlayer={handleActivatePlayer}
                   onOpenLocalAudio={handleOpenLocalAudio}
-                  allowRemotePlayback={isConnected}
+                  isSpotifyConnected={isConnected}
+                  isSpotifyPlayerReady={isSpotifyPlayerReady}
+                  isSpotifyPlayerConnecting={isSpotifyPlayerConnecting}
+                  spotifyPlaybackErrorCode={spotifyPlaybackErrorCode}
                   t={t}
+                  searchQuery={query}
                 />
                 <SearchSection
                   title={t('search_section_artists')}
@@ -540,9 +718,14 @@ function Search() {
                   onOpenPlaylist={handleOpenPlaylist}
                   onPlayTrack={handlePlayTrack}
                   onConnectSpotify={handleConnectSpotify}
+                  onActivatePlayer={handleActivatePlayer}
                   onOpenLocalAudio={handleOpenLocalAudio}
-                  allowRemotePlayback={isConnected}
+                  isSpotifyConnected={isConnected}
+                  isSpotifyPlayerReady={isSpotifyPlayerReady}
+                  isSpotifyPlayerConnecting={isSpotifyPlayerConnecting}
+                  spotifyPlaybackErrorCode={spotifyPlaybackErrorCode}
                   t={t}
+                  searchQuery={query}
                 />
                 <SearchSection
                   title={t('search_section_albums')}
@@ -552,9 +735,14 @@ function Search() {
                   onOpenPlaylist={handleOpenPlaylist}
                   onPlayTrack={handlePlayTrack}
                   onConnectSpotify={handleConnectSpotify}
+                  onActivatePlayer={handleActivatePlayer}
                   onOpenLocalAudio={handleOpenLocalAudio}
-                  allowRemotePlayback={isConnected}
+                  isSpotifyConnected={isConnected}
+                  isSpotifyPlayerReady={isSpotifyPlayerReady}
+                  isSpotifyPlayerConnecting={isSpotifyPlayerConnecting}
+                  spotifyPlaybackErrorCode={spotifyPlaybackErrorCode}
                   t={t}
+                  searchQuery={query}
                 />
                 <SearchSection
                   title={t('search_section_playlists')}
@@ -564,9 +752,14 @@ function Search() {
                   onOpenPlaylist={handleOpenPlaylist}
                   onPlayTrack={handlePlayTrack}
                   onConnectSpotify={handleConnectSpotify}
+                  onActivatePlayer={handleActivatePlayer}
                   onOpenLocalAudio={handleOpenLocalAudio}
-                  allowRemotePlayback={isConnected}
+                  isSpotifyConnected={isConnected}
+                  isSpotifyPlayerReady={isSpotifyPlayerReady}
+                  isSpotifyPlayerConnecting={isSpotifyPlayerConnecting}
+                  spotifyPlaybackErrorCode={spotifyPlaybackErrorCode}
                   t={t}
+                  searchQuery={query}
                 />
               </>
             )}

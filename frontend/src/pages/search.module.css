@@ -212,6 +212,13 @@
   margin-bottom: 8px;
 }
 
+.ResultTagRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .ResultType {
   display: inline-flex;
   align-items: center;
@@ -222,6 +229,17 @@
   color: rgba(255, 255, 255, 0.74);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.ResultSourceBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(30, 215, 96, 0.14);
+  color: rgba(184, 255, 205, 0.9);
+  font-size: 11px;
+  letter-spacing: 0.04em;
 }
 
 .ResultMeta {
@@ -241,6 +259,13 @@
   font-size: 13px;
   line-height: 1.6;
   color: rgba(255, 255, 255, 0.66);
+}
+
+.ResultDetail {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .ResultActions {
