@@ -40,20 +40,37 @@ function createImportedPlaylistSourceId(spotifyPlaylistId) {
 function getSpotifyTrackReference(track = {}) {
   assert(track?.id, 'Spotify track id is required', 400)
 
+  const uri = track.uri || `spotify:track:${track.id}`
+  const album = {
+    id: track.album?.id || '',
+    name: track.album?.name || '',
+  }
+
   return {
+    sourceType: 'spotify',
     source_type: 'spotify',
-    source_id: `spotify:track:${track.id}`,
+    sourceId: uri,
+    source_id: uri,
+    uri,
     title: track.name || 'Unknown track',
     artists: normalizeSpotifyArtists(track.artists),
-    album: {
-      id: track.album?.id || '',
-      name: track.album?.name || '',
-    },
+    album,
+    imageUrl: track.album?.images?.[0]?.url || '',
     image_url: track.album?.images?.[0]?.url || '',
     preview_url: track.preview_url || '',
+    durationMs: track.duration_ms ?? null,
     duration_ms: track.duration_ms ?? null,
+    playMode: 'spotify_remote',
+    play_mode: 'spotify_remote',
+    playable: false,
     provider: 'spotify',
     entity_type: 'track',
+    metadata: {
+      provider: 'spotify',
+      entityType: 'track',
+      playMode: 'spotify_remote',
+      uri,
+    },
   }
 }
 

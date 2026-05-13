@@ -57,6 +57,10 @@ router.get(
   '/playlists',
   asyncHandler(async (req, res) => {
     const playlists = listPlaylists(req.localUserId)
+      .map((playlist) => getPlaylist(req.localUserId, playlist.id))
+      .filter(Boolean)
+      .map((playlist) => enrichPlaylistForResponse(req, playlist))
+
     res.json({
       userId: req.localUserId,
       items: playlists,
