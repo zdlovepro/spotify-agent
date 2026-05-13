@@ -178,7 +178,11 @@ export function SpotifyProvider({ children }) {
 
     try {
       const data = await authRequest('/api/spotify/player/devices')
-      const nextDevices = Array.isArray(data?.devices) ? data.devices : []
+      const nextDevices = Array.isArray(data?.devices)
+        ? data.devices
+        : Array.isArray(data?.items)
+          ? data.items
+          : []
       setDevices(nextDevices)
       setError('')
       return nextDevices
@@ -189,20 +193,28 @@ export function SpotifyProvider({ children }) {
     }
   }, [authRequest, connection?.connected, isLocalAuthenticated])
 
-  const resumeRemotePlayback = useCallback(async () => {
+  const resumeRemotePlayback = useCallback(async (options = {}) => {
     const data = await request('/api/spotify/player/play', {
       method: 'PUT',
-      body: {},
+      body:
+        options.deviceId || options.positionMs !== undefined
+          ? {
+              ...(options.deviceId ? { deviceId: options.deviceId } : {}),
+              ...(options.positionMs !== undefined
+                ? { positionMs: options.positionMs }
+                : {}),
+            }
+          : {},
     })
 
     await refreshDevices()
     return data
   }, [refreshDevices, request])
 
-  const pauseRemotePlayback = useCallback(async () => {
+  const pauseRemotePlayback = useCallback(async (options = {}) => {
     const data = await request('/api/spotify/player/pause', {
       method: 'PUT',
-      body: {},
+      body: options.deviceId ? { deviceId: options.deviceId } : {},
     })
 
     await refreshDevices()
@@ -210,7 +222,7 @@ export function SpotifyProvider({ children }) {
   }, [refreshDevices, request])
 
   const playRemoteQueue = useCallback(
-    async (queue = [], startIndex = 0) => {
+    async (queue = [], startIndex = 0, options = {}) => {
       const remoteQueue = (Array.isArray(queue) ? queue : [])
         .map((track, index) => ({
           index,
@@ -230,6 +242,7 @@ export function SpotifyProvider({ children }) {
       const data = await request('/api/spotify/player/play', {
         method: 'PUT',
         body: {
+          ...(options.deviceId ? { deviceId: options.deviceId } : {}),
           uris: remoteQueue.map((track) => track.remoteUri),
           offset: {
             position: offsetPosition,

@@ -37,6 +37,34 @@ import {
 
 const router = Router()
 
+router.get(
+  '/sdk-token',
+  requireLocalUser,
+  requireSpotifyAccessToken,
+  asyncHandler(async (req, res) => {
+    const scopes = Array.isArray(req.spotifyProviderLink?.scopes)
+      ? req.spotifyProviderLink.scopes
+      : []
+    const missingScopes = ['streaming'].filter((scope) => !scopes.includes(scope))
+
+    if (missingScopes.length > 0) {
+      const error = new Error(
+        `Reconnect Spotify to grant playback permissions: ${missingScopes.join(', ')}`,
+      )
+      error.status = 403
+      error.code = 'spotify_forbidden'
+      error.details = { missingScopes }
+      throw error
+    }
+
+    res.json({
+      accessToken: req.accessToken,
+      expiresAt: req.spotifyProviderLink?.tokenExpiresAt || null,
+      scopes,
+    })
+  }),
+)
+
 router.use('/player', requireLocalUser)
 
 function normalizeDeviceId(value) {

@@ -3,12 +3,14 @@ import { useSelector, useDispatch } from 'react-redux'
 import { changePlay, nextTrack } from '../../store/index.js'
 import useWindowSize from '../../hooks/useWindowSize'
 import { useSpotify } from '../../context/SpotifyContext.jsx'
+import { useSpotifyPlayback } from '../../context/SpotifyPlaybackContext.jsx'
 import { resolveTrackPlaybackMeta } from '../../lib/spotify.js'
 import FooterLeft from './FooterLeft'
 import MusicControlBox from './player/MusicControlBox'
 import MusicProgressBar from './player/MusicProgressBar'
 import FooterRight from './FooterRight'
 import Audio from './Audio'
+import SpotifyPlaybackStatus from './SpotifyPlaybackStatus.jsx'
 import CONST from '../../constants/index.jsx'
 import styles from './footer.module.css'
 
@@ -16,6 +18,7 @@ function Footer() {
   const dispatch = useDispatch()
   const { isConnected, pauseRemotePlayback, playRemoteQueue, resumeRemotePlayback } =
     useSpotify()
+  const { activatePlayer, deviceId, isReady } = useSpotifyPlayback()
   const trackData = useSelector((state) => state.player.trackData)
   const currentQueue = useSelector((state) => state.player.currentQueue)
   const currentIndex = useSelector((state) => state.player.currentIndex)
@@ -76,11 +79,29 @@ function Footer() {
     async function syncRemotePlayback() {
       try {
         if (remoteChanged && isPlaying) {
-          await playRemoteQueue(currentQueue, currentIndex)
+          await activatePlayer()
+
+          if (!deviceId && !isReady) {
+            return
+          }
+
+          await playRemoteQueue(currentQueue, currentIndex, {
+            deviceId: deviceId || undefined,
+          })
         } else if (playingChanged && isPlaying) {
-          await resumeRemotePlayback()
+          await activatePlayer()
+
+          if (!deviceId && !isReady) {
+            return
+          }
+
+          await resumeRemotePlayback({
+            deviceId: deviceId || undefined,
+          })
         } else if (playingChanged && !isPlaying) {
-          await pauseRemotePlayback()
+          await pauseRemotePlayback({
+            deviceId: deviceId || undefined,
+          })
         }
 
         previousRemoteKeyRef.current = remoteKey
@@ -94,8 +115,11 @@ function Footer() {
   }, [
     currentIndex,
     currentQueue,
+    deviceId,
     dispatch,
     isPlaying,
+    isReady,
+    activatePlayer,
     pauseRemotePlayback,
     playRemoteQueue,
     resumeRemotePlayback,
@@ -134,6 +158,7 @@ function Footer() {
             duration={duration}
             handleTrackClick={handleTrackClick}
           />
+          <SpotifyPlaybackStatus />
           <Audio
             ref={audioRef}
             handleDuration={setDuration}

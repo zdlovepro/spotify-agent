@@ -179,6 +179,13 @@
     "spotify_disconnect": "断开 Spotify",
     "spotify_connected": "Spotify 已连接",
     "spotify_not_connected": "Spotify 未连接",
+    "spotify_playback_status_ready": "Spotify 播放器已就绪",
+    "spotify_playback_status_connecting": "正在连接 Spotify 播放器",
+    "spotify_playback_status_connect": "需要连接 Spotify",
+    "spotify_playback_status_premium": "需要 Premium",
+    "spotify_playback_status_no_device": "没有可用播放设备",
+    "spotify_playback_activate": "激活网页播放器",
+    "spotify_playback_device_id": "设备 {{deviceId}}",
     "spotify_requires_local_account": "请先登录 AgentMusic 账号，再把 Spotify 作为增强能力连接进来。",
     "spotify_connect_success": "Spotify 已成功连接。",
     "spotify_disconnect_success": "Spotify 已断开连接。"

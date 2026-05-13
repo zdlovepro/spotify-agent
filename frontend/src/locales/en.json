@@ -179,6 +179,13 @@
     "spotify_disconnect": "Disconnect Spotify",
     "spotify_connected": "Spotify connected",
     "spotify_not_connected": "Spotify not connected",
+    "spotify_playback_status_ready": "Spotify player is ready",
+    "spotify_playback_status_connecting": "Connecting Spotify player",
+    "spotify_playback_status_connect": "Spotify connection required",
+    "spotify_playback_status_premium": "Spotify Premium required",
+    "spotify_playback_status_no_device": "No available playback device",
+    "spotify_playback_activate": "Activate web player",
+    "spotify_playback_device_id": "Device {{deviceId}}",
     "spotify_requires_local_account": "Sign in to AgentMusic first, then connect Spotify as an enhancement.",
     "spotify_connect_success": "Spotify connected successfully.",
     "spotify_disconnect_success": "Spotify disconnected."
