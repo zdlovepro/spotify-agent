@@ -23,6 +23,8 @@ function formatIntentLabel(intent, t) {
       return t('agent_intent_play')
     case 'search_entity':
       return t('agent_intent_search')
+    case 'create_playlist':
+      return t('agent_intent_playlist')
     case 'generate_recommendation':
     default:
       return t('agent_intent_recommend')
@@ -56,36 +58,62 @@ function AgentArtifact({
   const artifacts = message.artifacts || {}
   const tracks = artifacts.tracks || artifacts.topTracks || []
   const feedbackKey = getFeedbackKey(message)
+  const playlist = artifacts.playlist || null
+  const canPlayArtifactTracks = tracks.length > 0 && canPlayTracks(tracks, isConnected)
 
   return (
     <>
-      {(artifacts.track || artifacts.artist || artifacts.album || tracks.length > 0) && (
+      {(artifacts.track ||
+        artifacts.artist ||
+        artifacts.album ||
+        playlist ||
+        tracks.length > 0) && (
         <div className={styles.ArtifactBox}>
           <div className={styles.ArtifactHeader}>
             <p className={styles.ArtifactTitle}>
               {artifacts.recommendationTitle ||
+                playlist?.name ||
                 artifacts.track?.name ||
                 artifacts.artist?.name ||
                 artifacts.album?.name ||
                 t('agent_tracks')}
             </p>
-            {tracks.length > 0 && canPlayTracks(tracks, isConnected) && (
+            {canPlayArtifactTracks && (
               <button
                 type="button"
                 className={styles.ActionBtn}
                 onClick={() =>
                   onPlayTracks(tracks, {
                     playlistId:
-                      artifacts.recommendationId || `agent-message-${message.id}`,
+                      playlist?.id ||
+                      artifacts.recommendationId ||
+                      `agent-message-${message.id}`,
                     playlistTitle:
-                      artifacts.recommendationTitle || t('agent_queue_title'),
+                      playlist?.name ||
+                      artifacts.recommendationTitle ||
+                      t('agent_queue_title'),
                   })
                 }
               >
-                {t('agent_play_recommendation')}
+                {playlist ? t('agent_play_playlist') : t('agent_play_recommendation')}
               </button>
             )}
           </div>
+
+          {playlist && (
+            <div className={styles.TrackRow}>
+              <div>
+                <span className={styles.TrackName}>{playlist.name}</span>
+                <span className={styles.TrackArtist}>
+                  {playlist.description ||
+                    t('agent_playlist_items_count', {
+                      count: playlist.itemCount || tracks.length || 0,
+                    })}
+                </span>
+              </div>
+              <span className={styles.TrackTag}>{t('agent_playlist_source_local')}</span>
+            </div>
+          )}
 
           {artifacts.track && (
             <div className={styles.TrackRow}>
@@ -266,6 +294,22 @@ function AgentWorkbench({
         playerState: isPlaying ? 'playing' : 'paused',
         spotifyPlaybackReady: isSpotifyPlaybackReady,
         currentDeviceId: spotifyDeviceId || '',
+        currentTrack: trackData?.id
+          ? {
+              id: trackData.id || '',
+              sourceType: trackData.sourceType || trackData.source_type || '',
+              sourceId: trackData.sourceId || trackData.source_id || '',
+              name: trackData.name || trackData.trackName || '',
+              artists: Array.isArray(trackData.artists) ? trackData.artists : [],
+              album: trackData.album || '',
+              image: trackData.image || trackData.trackImg || '',
+              durationMs: trackData.durationMs || trackData.duration_ms || 0,
+              audioUrl: trackData.audioUrl || '',
+              uri: trackData.uri || trackData.remoteUri || '',
+              playMode: trackData.playMode || '',
+              playable: trackData.playable === true,
+            }
+          : null,
       },
     })
 

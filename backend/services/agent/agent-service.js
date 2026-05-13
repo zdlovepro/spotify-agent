@@ -510,6 +510,113 @@ function buildRecommendationReply({
   )
 }
 
+function isPlaylistManagementRequest(message) {
+  return /歌单|playlist|收藏|favorite/i.test(normalizeMessage(message))
+}
+
+function wantsFavoriteSave(message) {
+  return /收藏|favorite|save.*favorite|加入我的收藏/i.test(normalizeMessage(message))
+}
+
+function extractPlaylistTitle(message) {
+  const quotedMatch = normalizeMessage(message).match(/["“](.+?)["”]/)
+
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1].trim()
+  }
+
+  const normalized = normalizeMessage(message)
+    .replace(/请|帮我|给我/gi, ' ')
+    .replace(/新建|创建|建一个|建个|做一个|做个|create|make/gi, ' ')
+    .replace(/把.+$/gi, ' ')
+    .replace(/加.+$/gi, ' ')
+    .replace(/spotify/gi, ' Spotify ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const playlistMatch = normalized.match(/(.+?(?:歌单|playlist))/i)
+
+  if (playlistMatch?.[1]) {
+    return playlistMatch[1].trim()
+  }
+
+  return shouldReplyInChinese(message) ? '新建歌单' : 'New Playlist'
+}
+
+function extractPlaylistTrackQuery(message, playlistTitle = '') {
+  const normalized = normalizeMessage(message)
+    .replace(/请|帮我|给我/gi, ' ')
+    .replace(/新建|创建|建一个|建个|做一个|做个|create|make/gi, ' ')
+    .replace(/歌单|playlist/gi, ' ')
+    .replace(/把|加入|加进|放进|收藏|favorite|当前播放的歌|当前播放|热门歌|热门|几首|我上传的|上传的|本地|我的音频/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (normalized) {
+    return normalized
+  }
+
+  return normalizeMessage(playlistTitle)
+    .replace(/歌单|playlist/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function getCurrentTrackFromContext(context = {}) {
+  if (context.currentTrack && typeof context.currentTrack === 'object') {
+    return createTrackArtifact(context.currentTrack)
+  }
+
+  return null
+}
+
+function buildPlaylistOperationReply({
+  message,
+  playlistName,
+  addedCount,
+  loginRequired = false,
+  favoriteSaved = false,
+  localRequested = false,
+  spotifyUsed = false,
+}) {
+  if (loginRequired) {
+    return localizePlaybackReply(
+      message,
+      '需要先登录 AgentMusic，才能保存歌单或收藏。',
+      'Sign in to AgentMusic first to save playlists or favorites.',
+    )
+  }
+
+  if (favoriteSaved) {
+    return localizePlaybackReply(
+      message,
+      '已经把当前歌曲加入你的收藏。',
+      'I saved the current track to your favorites.',
+    )
+  }
+
+  if (addedCount > 0) {
+    return localizePlaybackReply(
+      message,
+      localRequested
+        ? `已经创建歌单《${playlistName}》，并加入 ${addedCount} 首本地音频。`
+        : spotifyUsed
+          ? `已经创建歌单《${playlistName}》，并加入 ${addedCount} 首 Spotify 曲目引用。`
+          : `已经创建歌单《${playlistName}》，并加入 ${addedCount} 首歌曲。`,
+      localRequested
+        ? `I created "${playlistName}" and added ${addedCount} local tracks.`
+        : spotifyUsed
+          ? `I created "${playlistName}" and added ${addedCount} Spotify track references.`
+          : `I created "${playlistName}" and added ${addedCount} tracks.`,
+    )
+  }
+
+  return localizePlaybackReply(
+    message,
+    `已经创建空歌单《${playlistName}》。你可以继续告诉我要加本地音频还是 Spotify 曲目。`,
+    `I created an empty playlist called "${playlistName}". Tell me whether to add local audio or Spotify tracks next.`,
+  )
+}
+
 async function handleControlPlayer(intentResult) {
   const actionMap = {
     next: {
@@ -1153,6 +1260,159 @@ async function handleHybridRecommendation({
   }
 }
 
+async function handleCreatePlaylist({
+  mode,
+  localUserId,
+  message,
+  context,
+  providerLinks,
+  tools,
+}) {
+  if (!localUserId) {
+    return {
+      reply: buildPlaylistOperationReply({
+        message,
+        playlistName: '',
+        addedCount: 0,
+        loginRequired: true,
+      }),
+      intent: 'create_playlist',
+      actions: [],
+      artifacts: {
+        error: {
+          message: 'local_user_required',
+        },
+      },
+    }
+  }
+
+  if (wantsFavoriteSave(message)) {
+    const currentTrack = getCurrentTrackFromContext(context)
+
+    if (!currentTrack?.sourceId && !currentTrack?.id) {
+      return {
+        reply: localizePlaybackReply(
+          message,
+          '我还没拿到当前播放歌曲的信息。先播放一首歌，再让我帮你加入收藏。',
+          'I do not have the current track yet. Start a song first, then I can save it to favorites.',
+        ),
+        intent: 'create_playlist',
+        actions: [],
+        artifacts: {
+          error: {
+            message: 'current_track_unavailable',
+          },
+        },
+      }
+    }
+
+    const favorite = await tools.run('library.favorite_track', {
+      track: currentTrack,
+      favoriteType: 'track',
+    })
+
+    return {
+      reply: buildPlaylistOperationReply({
+        message,
+        favoriteSaved: true,
+      }),
+      intent: 'create_playlist',
+      actions: [],
+      artifacts: {
+        track: favorite.track,
+        favorite: {
+          id: favorite.id,
+          favoriteType: favorite.favoriteType,
+        },
+      },
+    }
+  }
+
+  const playlistTitle = extractPlaylistTitle(message)
+  const playlist = await tools.run('library.create_playlist', {
+    title: playlistTitle,
+    metadata: {
+      createdBy: 'agent',
+      source: 'deepseek-agent',
+    },
+  })
+  const localRequested = prefersLocalPlayback(message)
+  const currentTrack = getCurrentTrackFromContext(context)
+  const tracksToAdd = []
+
+  if (/当前播放|现在这首|这首歌|current song|currently playing/i.test(normalizeMessage(message)) && currentTrack) {
+    tracksToAdd.push(currentTrack)
+  }
+
+  if (!tracksToAdd.length && localRequested) {
+    const localQuery = extractPlaylistTrackQuery(message, playlistTitle)
+    let localResult = hasMeaningfulRecommendationQuery(localQuery)
+      ? await tools.run('library.search_local_audio', {
+          q: localQuery,
+          limit: 5,
+        })
+      : await tools.run('library.list_audio_assets', {})
+
+    if (hasMeaningfulRecommendationQuery(localQuery) && !(localResult.items || []).length) {
+      localResult = await tools.run('library.list_audio_assets', {})
+    }
+
+    tracksToAdd.push(...((localResult.items || []).slice(0, 5)))
+  }
+
+  if (!tracksToAdd.length) {
+    const spotifyQuery = extractPlaylistTrackQuery(message, playlistTitle)
+    const spotifyResult = await tools.run('spotify.search_tracks', {
+      q: spotifyQuery || playlistTitle,
+      limit: 5,
+    })
+
+    tracksToAdd.push(...(spotifyResult.items || []).slice(0, 5))
+  }
+
+  const addedItems = []
+
+  for (const track of tracksToAdd) {
+    try {
+      const item = await tools.run('library.add_track_to_playlist', {
+        playlistId: playlist.id,
+        track,
+      })
+
+      if (item?.track) {
+        addedItems.push(item)
+      }
+    } catch {
+      continue
+    }
+  }
+
+  const playlistArtifact = {
+    ...normalizePlaylistArtifact(playlist),
+    itemCount: addedItems.length,
+    sourceType: playlist.sourceType || 'agentmusic',
+    sourceId: playlist.sourceId || '',
+    description: playlist.description || '',
+  }
+  const addedTracks = addedItems.map((item) => item.track).filter(Boolean)
+
+  return {
+    reply: buildPlaylistOperationReply({
+      message,
+      playlistName: playlistArtifact.name,
+      addedCount: addedTracks.length,
+      localRequested,
+      spotifyUsed: addedTracks.some((track) => track.playMode === 'spotify_remote'),
+    }),
+    intent: 'create_playlist',
+    actions: [],
+    artifacts: {
+      playlist: playlistArtifact,
+      tracks: addedTracks,
+    },
+  }
+}
+
 function extractSourceAwarePlaybackQuery(message) {
   return normalizeMessage(message)
     .replace(/播放|来点|来一首|放一首|听一首|帮我|给我|我想听|play/gi, ' ')
@@ -1551,6 +1811,7 @@ function buildPlannerInput({
       currentPlaylistId: context.currentPlaylistId || '',
       spotifyPlaybackReady: context.spotifyPlaybackReady === true,
       currentDeviceId: context.currentDeviceId || '',
+      currentTrack: getCurrentTrackFromContext(context) || null,
     },
     capabilities: {
       localAudioAvailable: localAudioSummary.length > 0,
@@ -1827,10 +2088,52 @@ function buildPlaybackFailureReply({
   )
 }
 
+function buildPlannerOperationFailureReply({
+  message,
+  error = null,
+  plannerInput,
+  planIntent = '',
+}) {
+  if (planIntent === 'create_playlist') {
+    const normalizedError = normalizeMessage(error?.message).toLowerCase()
+
+    if (normalizedError.includes('local user authentication required') || normalizedError.includes('local_user_required')) {
+      return buildPlaylistOperationReply({
+        message,
+        playlistName: '',
+        addedCount: 0,
+        loginRequired: true,
+      })
+    }
+
+    if (normalizedError.includes('playlist not found')) {
+      return localizePlaybackReply(
+        message,
+        '我没找到要操作的站内歌单。你可以先让我新建一个歌单。',
+        'I could not find that AgentMusic playlist. Ask me to create one first.',
+      )
+    }
+
+    return localizePlaybackReply(
+      message,
+      `这次保存歌单失败了：${normalizeMessage(error?.message) || '暂时无法保存。'}`,
+      `The playlist save failed: ${normalizeMessage(error?.message) || 'Unable to save right now.'}`,
+    )
+  }
+
+  return buildPlaybackFailureReply({
+    message,
+    error,
+    plannerInput,
+  })
+}
+
 function mapPlannerIntentToAssistantIntent(intent) {
   switch (intent) {
     case 'control_player':
       return 'control_player'
+    case 'create_playlist':
+      return 'create_playlist'
     case 'play_music':
     case 'play_local_audio':
     case 'play_spotify':
@@ -1838,7 +2141,6 @@ function mapPlannerIntentToAssistantIntent(intent) {
     case 'search_music':
     case 'chat':
       return 'search_entity'
-    case 'create_playlist':
     case 'import_spotify_library':
     case 'recommend_music':
     default:
@@ -1849,8 +2151,20 @@ function mapPlannerIntentToAssistantIntent(intent) {
 function normalizePlaylistArtifact(playlist = {}) {
   return {
     id: playlist.id || '',
+    sourceType: playlist.sourceType || playlist.source_type || 'agentmusic',
+    sourceId:
+      playlist.sourceId ||
+      playlist.source_id ||
+      (playlist.id ? `agentmusic:playlist:${playlist.id}` : ''),
     name: playlist.name || playlist.title || 'Playlist',
     image: getPrimaryImage(playlist),
+    description: playlist.description || '',
+    itemCount:
+      playlist.itemCount ??
+      playlist.trackCount ??
+      playlist.tracks?.total ??
+      playlist.items?.length ??
+      0,
     owner:
       playlist.owner?.display_name ||
       playlist.owner?.id ||
@@ -1880,6 +2194,9 @@ function collectTracksFromToolExecution(execution) {
     case 'library.list_audio_assets':
     case 'library.search_local_audio':
       return result.items || []
+    case 'library.add_track_to_playlist':
+    case 'library.favorite_track':
+      return result.track ? [result.track] : []
     case 'library.list_favorites':
       return Array.isArray(result) ? result : []
     case 'spotify.get_artist_top_tracks':
@@ -1962,6 +2279,8 @@ function buildPlannerArtifacts({
     executedSteps.find((step) => step.tool === 'spotify.get_track')?.result ||
     executedSteps.find((step) => step.tool === 'catalog.get_track')?.result ||
     executedSteps.find((step) => step.tool === 'library.get_audio_asset')?.result ||
+    executedSteps.find((step) => step.tool === 'library.favorite_track')?.result?.track ||
+    executedSteps.find((step) => step.tool === 'library.add_track_to_playlist')?.result?.track ||
     executedSteps.find((step) => step.tool === 'library.search_local_audio')?.result?.items?.[0] ||
     executedSteps.find((step) => step.tool === 'library.list_audio_assets')?.result?.items?.[0]
 
@@ -1994,7 +2313,17 @@ function buildPlannerArtifacts({
     executedSteps.find((step) => step.tool === 'library.create_playlist')?.result
 
   if (playlistResult) {
-    artifacts.playlist = normalizePlaylistArtifact(playlistResult)
+    const addedTrackCount = executedSteps.filter(
+      (step) => step.tool === 'library.add_track_to_playlist' && step.result?.track,
+    ).length
+
+    artifacts.playlist = {
+      ...normalizePlaylistArtifact(playlistResult),
+      itemCount: Math.max(
+        normalizePlaylistArtifact(playlistResult).itemCount || 0,
+        addedTrackCount,
+      ),
+    }
   }
 
   const importResult = executedSteps.find((step) =>
@@ -2009,6 +2338,16 @@ function buildPlannerArtifacts({
 
   if (memoryProfile) {
     artifacts.memoryProfile = memoryProfile
+  }
+
+  const favoriteResult = executedSteps.find((step) => step.tool === 'library.favorite_track')
+    ?.result
+
+  if (favoriteResult?.id) {
+    artifacts.favorite = {
+      id: favoriteResult.id,
+      favoriteType: favoriteResult.favoriteType || 'track',
+    }
   }
 
   return artifacts
@@ -2230,10 +2569,11 @@ async function runDeepSeekPlannedAgent({
       }
 
       return {
-        reply: buildPlaybackFailureReply({
+        reply: buildPlannerOperationFailureReply({
           message,
           error,
           plannerInput,
+          planIntent: plannerResponse.plan.intent,
         }),
         intent: mapPlannerIntentToAssistantIntent(plannerResponse.plan.intent),
         actions: [],
@@ -2456,6 +2796,16 @@ async function runRuleBasedAgent({
         localUserId,
         providerLinks,
         context,
+        tools: resolvedTools,
+      })
+      break
+    case 'create_playlist':
+      result = await handleCreatePlaylist({
+        mode,
+        localUserId,
+        message,
+        context,
+        providerLinks,
         tools: resolvedTools,
       })
       break

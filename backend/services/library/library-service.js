@@ -37,40 +37,264 @@ function normalizePlaylistSourceType(value) {
   return value.trim()
 }
 
+function normalizeArtists(input) {
+  if (Array.isArray(input)) {
+    return input
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item.trim()
+        }
+
+        if (item?.name) {
+          return String(item.name).trim()
+        }
+
+        return ''
+      })
+      .filter(Boolean)
+  }
+
+  if (typeof input !== 'string' || !input.trim()) {
+    return []
+  }
+
+  return input
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function normalizeAlbum(input) {
+  if (typeof input === 'string') {
+    return input.trim()
+  }
+
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    return input
+  }
+
+  return ''
+}
+
+function normalizeTrackString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : ''
+}
+
+function normalizeTrackNumber(value) {
+  return Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null
+}
+
+function deriveLocalAudioAssetId(input, sourceType, sourceId) {
+  const explicitAssetId =
+    normalizeTrackString(input.audio_asset_id) ||
+    normalizeTrackString(input.audioAssetId) ||
+    normalizeTrackString(input.metadata?.audioAssetId)
+
+  if (explicitAssetId) {
+    return explicitAssetId
+  }
+
+  if (sourceType === 'local_audio') {
+    const rawId = normalizeTrackString(input.id)
+
+    if (rawId) {
+      return rawId
+    }
+
+    if (sourceId.startsWith('local_audio:')) {
+      return sourceId.slice('local_audio:'.length)
+    }
+  }
+
+  return ''
+}
+
+function deriveTrackUri(input, sourceId) {
+  const explicitUri =
+    normalizeTrackString(input.uri) || normalizeTrackString(input.metadata?.uri)
+
+  if (explicitUri.startsWith('spotify:')) {
+    return explicitUri
+  }
+
+  return sourceId.startsWith('spotify:') ? sourceId : ''
+}
+
+function deriveTrackPlayMode(input, sourceType, audioAssetId, uri, previewUrl) {
+  const explicitPlayMode =
+    normalizeTrackString(input.play_mode) ||
+    normalizeTrackString(input.playMode) ||
+    normalizeTrackString(input.metadata?.playMode)
+
+  if (explicitPlayMode) {
+    return explicitPlayMode
+  }
+
+  if (sourceType === 'local_audio' || audioAssetId) {
+    return 'local_audio'
+  }
+
+  if (uri) {
+    return 'spotify_remote'
+  }
+
+  if (previewUrl) {
+    return 'preview'
+  }
+
+  return 'unavailable'
+}
+
 function sanitizeTrackReference(input) {
   assert(input && typeof input === 'object' && !Array.isArray(input), 'track is required')
 
   const sourceType =
-    typeof input.source_type === 'string' ? input.source_type.trim() : ''
-  const sourceId = typeof input.source_id === 'string' ? input.source_id.trim() : ''
+    normalizeTrackString(input.source_type) ||
+    normalizeTrackString(input.sourceType) ||
+    (normalizeTrackString(input.play_mode) === 'local_audio' ||
+    normalizeTrackString(input.playMode) === 'local_audio'
+      ? 'local_audio'
+      : '')
+  const sourceId =
+    normalizeTrackString(input.source_id) ||
+    normalizeTrackString(input.sourceId) ||
+    normalizeTrackString(input.uri) ||
+    (sourceType === 'local_audio' && normalizeTrackString(input.id)
+      ? `local_audio:${normalizeTrackString(input.id)}`
+      : '')
 
   assert(sourceType, 'source_type is required')
   assert(sourceId, 'source_id is required')
 
-  const artists = Array.isArray(input.artists) ? input.artists : []
-  const album =
-    input.album && typeof input.album === 'object' && !Array.isArray(input.album)
-      ? input.album
+  const artists = normalizeArtists(input.artists || input.artist)
+  const album = normalizeAlbum(input.album || input.albumName)
+  const imageUrl =
+    normalizeTrackString(input.image_url) ||
+    normalizeTrackString(input.imageUrl) ||
+    normalizeTrackString(input.image)
+  const previewUrl =
+    normalizeTrackString(input.preview_url) ||
+    normalizeTrackString(input.previewUrl)
+  const audioAssetId = deriveLocalAudioAssetId(input, sourceType, sourceId)
+  const uri = deriveTrackUri(input, sourceId)
+  const playMode = deriveTrackPlayMode(input, sourceType, audioAssetId, uri, previewUrl)
+  const metadata =
+    input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata)
+      ? { ...input.metadata }
       : {}
 
   return {
     sourceType,
     sourceId,
-    title: typeof input.title === 'string' ? input.title.trim() : '',
+    title:
+      normalizeTrackString(input.title) ||
+      normalizeTrackString(input.name) ||
+      normalizeTrackString(input.trackName),
     artists,
     album,
-    imageUrl: typeof input.image_url === 'string' ? input.image_url.trim() : '',
-    previewUrl:
-      typeof input.preview_url === 'string' ? input.preview_url.trim() : '',
-    durationMs:
-      Number.isFinite(Number(input.duration_ms)) && Number(input.duration_ms) >= 0
-        ? Number(input.duration_ms)
-        : null,
+    imageUrl,
+    previewUrl,
+    durationMs: normalizeTrackNumber(input.duration_ms ?? input.durationMs),
     metadata: {
-      provider: input.provider || null,
-      entityType: input.entity_type || null,
+      ...metadata,
+      provider: input.provider || metadata.provider || null,
+      entityType: input.entity_type || input.entityType || metadata.entityType || null,
+      playMode,
+      uri: uri || null,
+      audioAssetId: audioAssetId || null,
     },
   }
+}
+
+function resolveStoredTrackField(track = {}, key) {
+  if (key in track) {
+    return track[key]
+  }
+
+  const metadata =
+    track.metadata && typeof track.metadata === 'object' && !Array.isArray(track.metadata)
+      ? track.metadata
+      : {}
+
+  return metadata[key]
+}
+
+export function enrichStoredTrackReference(track = {}, options = {}) {
+  const sourceType =
+    normalizeTrackString(track.sourceType) || normalizeTrackString(track.source_type)
+  const sourceId =
+    normalizeTrackString(track.sourceId) || normalizeTrackString(track.source_id)
+  const audioAssetId =
+    normalizeTrackString(track.audioAssetId) ||
+    normalizeTrackString(track.audio_asset_id) ||
+    normalizeTrackString(resolveStoredTrackField(track, 'audioAssetId')) ||
+    deriveLocalAudioAssetId(track, sourceType, sourceId)
+  const uri =
+    normalizeTrackString(track.uri) ||
+    normalizeTrackString(resolveStoredTrackField(track, 'uri')) ||
+    (sourceId.startsWith('spotify:') ? sourceId : '')
+  const previewUrl =
+    normalizeTrackString(track.previewUrl) ||
+    normalizeTrackString(track.preview_url)
+  const playMode = deriveTrackPlayMode(track, sourceType, audioAssetId, uri, previewUrl)
+  const resolveAudioUrl =
+    typeof options.resolveAudioUrl === 'function' ? options.resolveAudioUrl : null
+  const audioUrl =
+    playMode === 'local_audio' && audioAssetId && resolveAudioUrl
+      ? normalizeTrackString(resolveAudioUrl(audioAssetId, track))
+      : ''
+
+  return {
+    ...track,
+    sourceType,
+    source_type: sourceType,
+    sourceId,
+    source_id: sourceId,
+    name: normalizeTrackString(track.name) || normalizeTrackString(track.title),
+    title: normalizeTrackString(track.title) || normalizeTrackString(track.name),
+    artists: normalizeArtists(track.artists),
+    album: normalizeAlbum(track.album),
+    imageUrl:
+      normalizeTrackString(track.imageUrl) ||
+      normalizeTrackString(track.image_url) ||
+      normalizeTrackString(track.image),
+    image_url:
+      normalizeTrackString(track.image_url) ||
+      normalizeTrackString(track.imageUrl) ||
+      normalizeTrackString(track.image),
+    durationMs: normalizeTrackNumber(track.durationMs ?? track.duration_ms) ?? 0,
+    duration_ms: normalizeTrackNumber(track.duration_ms ?? track.durationMs),
+    previewUrl,
+    preview_url: previewUrl,
+    playMode,
+    play_mode: playMode,
+    uri,
+    audioAssetId,
+    audio_asset_id: audioAssetId,
+    audioUrl,
+    audio_url: audioUrl,
+    metadata: {
+      ...(track.metadata && typeof track.metadata === 'object' && !Array.isArray(track.metadata)
+        ? track.metadata
+        : {}),
+      playMode,
+      uri: uri || null,
+      audioAssetId: audioAssetId || null,
+    },
+  }
+}
+
+export function enrichStoredPlaylist(playlist = {}, options = {}) {
+  return {
+    ...playlist,
+    items: Array.isArray(playlist.items)
+      ? playlist.items.map((item) => enrichStoredTrackReference(item, options))
+      : [],
+  }
+}
+
+export function enrichStoredFavorite(favorite = {}, options = {}) {
+  return enrichStoredTrackReference(favorite, options)
 }
 
 function mapPlaylistRow(row) {
@@ -98,20 +322,51 @@ function mapPlaylistItemRow(row) {
     return null
   }
 
+  const metadata = parseJson(row.metadata_json, {})
+  const uri =
+    typeof metadata.uri === 'string' && metadata.uri.trim()
+      ? metadata.uri.trim()
+      : row.source_id?.startsWith('spotify:')
+        ? row.source_id
+        : ''
+  const audioAssetId =
+    typeof metadata.audioAssetId === 'string' ? metadata.audioAssetId.trim() : ''
+  const playMode =
+    typeof metadata.playMode === 'string' && metadata.playMode.trim()
+      ? metadata.playMode.trim()
+      : row.source_type === 'local_audio' || audioAssetId
+        ? 'local_audio'
+        : uri
+          ? 'spotify_remote'
+          : row.preview_url
+            ? 'preview'
+            : 'unavailable'
+
   return {
     id: row.id,
     playlistId: row.playlist_id,
     position: row.position,
     itemType: row.item_type,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
     source_type: row.source_type,
     source_id: row.source_id,
+    name: row.title || '',
     title: row.title || '',
     artists: parseJson(row.artists_json, []),
-    album: parseJson(row.album_json, {}),
+    album: parseJson(row.album_json, ''),
+    imageUrl: row.image_url || '',
     image_url: row.image_url || '',
+    previewUrl: row.preview_url || '',
     preview_url: row.preview_url || '',
+    durationMs: row.duration_ms ?? null,
     duration_ms: row.duration_ms ?? null,
-    metadata: parseJson(row.metadata_json, {}),
+    playMode,
+    play_mode: playMode,
+    uri,
+    audioAssetId,
+    audio_asset_id: audioAssetId,
+    metadata,
     createdAt: row.created_at,
   }
 }
@@ -121,19 +376,50 @@ function mapFavoriteRow(row) {
     return null
   }
 
+  const metadata = parseJson(row.metadata_json, {})
+  const uri =
+    typeof metadata.uri === 'string' && metadata.uri.trim()
+      ? metadata.uri.trim()
+      : row.source_id?.startsWith('spotify:')
+        ? row.source_id
+        : ''
+  const audioAssetId =
+    typeof metadata.audioAssetId === 'string' ? metadata.audioAssetId.trim() : ''
+  const playMode =
+    typeof metadata.playMode === 'string' && metadata.playMode.trim()
+      ? metadata.playMode.trim()
+      : row.source_type === 'local_audio' || audioAssetId
+        ? 'local_audio'
+        : uri
+          ? 'spotify_remote'
+          : row.preview_url
+            ? 'preview'
+            : 'unavailable'
+
   return {
     id: row.id,
     ownerUserId: row.owner_user_id,
     favoriteType: row.favorite_type,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
     source_type: row.source_type,
     source_id: row.source_id,
+    name: row.title || '',
     title: row.title || '',
     artists: parseJson(row.artists_json, []),
-    album: parseJson(row.album_json, {}),
+    album: parseJson(row.album_json, ''),
+    imageUrl: row.image_url || '',
     image_url: row.image_url || '',
+    previewUrl: row.preview_url || '',
     preview_url: row.preview_url || '',
+    durationMs: row.duration_ms ?? null,
     duration_ms: row.duration_ms ?? null,
-    metadata: parseJson(row.metadata_json, {}),
+    playMode,
+    play_mode: playMode,
+    uri,
+    audioAssetId,
+    audio_asset_id: audioAssetId,
+    metadata,
     createdAt: row.created_at,
   }
 }
@@ -566,4 +852,7 @@ export default {
   listFavorites,
   createFavorite,
   deleteFavorite,
+  enrichStoredTrackReference,
+  enrichStoredPlaylist,
+  enrichStoredFavorite,
 }

@@ -9,6 +9,9 @@ import {
   deleteFavorite,
   deletePlaylist,
   deletePlaylistItem,
+  enrichStoredFavorite,
+  enrichStoredPlaylist,
+  enrichStoredTrackReference,
   getPlaylist,
   listFavorites,
   listPlaylists,
@@ -16,6 +19,37 @@ import {
 } from '../services/library/library-service.js'
 
 const router = Router()
+
+function createLocalAudioStreamUrl(req, assetId) {
+  if (typeof assetId !== 'string' || !assetId.trim()) {
+    return ''
+  }
+
+  const origin = `${req.protocol}://${req.get('host')}`
+  const baseUrl = `${origin}/api/media/assets/${encodeURIComponent(assetId)}/stream`
+
+  if (!req.localSessionToken) {
+    return baseUrl
+  }
+
+  return `${baseUrl}?session_token=${encodeURIComponent(req.localSessionToken)}`
+}
+
+function enrichPlaylistForResponse(req, playlist) {
+  return enrichStoredPlaylist(playlist, {
+    resolveAudioUrl(audioAssetId) {
+      return createLocalAudioStreamUrl(req, audioAssetId)
+    },
+  })
+}
+
+function enrichFavoriteForResponse(req, favorite) {
+  return enrichStoredFavorite(favorite, {
+    resolveAudioUrl(audioAssetId) {
+      return createLocalAudioStreamUrl(req, audioAssetId)
+    },
+  })
+}
 
 router.use(requireLocalUser)
 
@@ -50,7 +84,7 @@ router.get(
     }
 
     res.json({
-      playlist,
+      playlist: enrichPlaylistForResponse(req, playlist),
     })
   }),
 )
@@ -65,7 +99,7 @@ router.patch(
     }
 
     res.json({
-      playlist,
+      playlist: enrichPlaylistForResponse(req, playlist),
     })
   }),
 )
@@ -95,7 +129,14 @@ router.post(
     }
 
     res.status(201).json({
-      item,
+      item: enrichStoredTrackReference(
+        item,
+        {
+          resolveAudioUrl(audioAssetId) {
+            return createLocalAudioStreamUrl(req, audioAssetId)
+          },
+        },
+      ),
     })
   }),
 )
@@ -126,7 +167,7 @@ router.get(
 
     res.json({
       userId: req.localUserId,
-      items: favorites,
+      items: favorites.map((favorite) => enrichFavoriteForResponse(req, favorite)),
     })
   }),
 )
@@ -138,7 +179,7 @@ router.post(
     const favorite = createFavorite(req.localUserId, req.body)
 
     res.status(201).json({
-      favorite,
+      favorite: enrichFavoriteForResponse(req, favorite),
     })
   }),
 )

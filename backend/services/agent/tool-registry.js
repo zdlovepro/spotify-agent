@@ -5,6 +5,8 @@ import {
   addPlaylistItem,
   createFavorite,
   createPlaylist,
+  enrichStoredFavorite,
+  enrichStoredTrackReference,
   getPlaylist,
   listFavorites,
   listPlaylists,
@@ -278,6 +280,19 @@ function createLocalAudioStreamUrl(asset = {}, localSessionToken = '') {
   return `${baseUrl}${separator}session_token=${encodeURIComponent(localSessionToken)}`
 }
 
+function createStoredLocalAudioStreamUrl(audioAssetId = '', localSessionToken = '') {
+  if (typeof audioAssetId !== 'string' || !audioAssetId.trim()) {
+    return ''
+  }
+
+  return createLocalAudioStreamUrl(
+    {
+      streamPath: `/api/media/assets/${audioAssetId}/stream`,
+    },
+    localSessionToken,
+  )
+}
+
 function mapLocalAudioAssetToTrack(asset = {}, localSessionToken = '') {
   return {
     id: asset.id,
@@ -373,22 +388,34 @@ function mapLibraryPlaylistResult(playlist = {}) {
   }
 }
 
-function mapLibraryPlaylistItemResult(item = {}) {
+function mapLibraryPlaylistItemResult(item = {}, localSessionToken = '') {
+  const hydratedTrack = enrichStoredTrackReference(item, {
+    resolveAudioUrl(audioAssetId) {
+      return createStoredLocalAudioStreamUrl(audioAssetId, localSessionToken)
+    },
+  })
+
   return {
     id: item.id || '',
     playlistId: item.playlistId || item.playlist_id || '',
     position: Number.isFinite(Number(item.position)) ? Number(item.position) : 0,
     createdAt: item.createdAt || item.created_at || '',
-    track: createTrackArtifact(item),
+    track: createTrackArtifact(hydratedTrack),
   }
 }
 
-function mapFavoriteTrackResult(favorite = {}) {
+function mapFavoriteTrackResult(favorite = {}, localSessionToken = '') {
+  const hydratedTrack = enrichStoredFavorite(favorite, {
+    resolveAudioUrl(audioAssetId) {
+      return createStoredLocalAudioStreamUrl(audioAssetId, localSessionToken)
+    },
+  })
+
   return {
     id: favorite.id || '',
     favoriteType: favorite.favoriteType || favorite.favorite_type || 'track',
     createdAt: favorite.createdAt || favorite.created_at || '',
-    track: createTrackArtifact(favorite),
+    track: createTrackArtifact(hydratedTrack),
   }
 }
 
@@ -1025,7 +1052,7 @@ function createSpotifyRemoteTrack(input = {}) {
 
       assert(item, 'Playlist not found', 404)
 
-      return mapLibraryPlaylistItemResult(item)
+      return mapLibraryPlaylistItemResult(item, localSessionToken)
     })
 
     register(
@@ -1053,6 +1080,7 @@ function createSpotifyRemoteTrack(input = {}) {
           ...(args.track || {}),
           favorite_type: args.favoriteType || 'track',
         }),
+        localSessionToken,
       )
     })
 
