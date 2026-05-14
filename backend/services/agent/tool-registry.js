@@ -45,6 +45,10 @@ import {
   buildUserTasteProfile,
   mergeSpotifyEnhancement,
 } from './memory-service.js'
+import {
+  buildSpotifySearchQueries,
+  selectDiverseSpotifyTracks,
+} from './spotify-query-planner.js'
 import { createTrackArtifact, createTrackArtifacts } from './track-artifact.js'
 
 function getToolLayer(name) {
@@ -79,6 +83,10 @@ function summarizeResult(name, result) {
         layer: getToolLayer(name),
         tracks: result.items?.length || 0,
         query: result.query || '',
+        mood: result.mood || 'generic',
+        queries: Array.isArray(result.queries) ? result.queries : [],
+        queryCounts: Array.isArray(result.queryCounts) ? result.queryCounts : [],
+        specificSearch: Boolean(result.specificSearch),
       }
     case 'spotify.search_artists':
       return {
@@ -317,6 +325,254 @@ function normalizeString(value, fallback = '') {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
 }
 
+const SPOTIFY_SEARCH_QUERY_FALLBACKS = [
+  {
+    pattern: /睡觉|睡前|助眠|\bsleep\b/i,
+    query: 'sleep calm ambient',
+  },
+  {
+    pattern: /学习|写代码|coding|code|focus|专注|study/i,
+    query: 'focus coding instrumental',
+  },
+  {
+    pattern: /健身|运动|workout|gym/i,
+    query: 'workout energy',
+  },
+  {
+    pattern: /放松|chill|relax|relaxing|轻松/i,
+    query: 'chill relaxing',
+  },
+]
+
+function normalizeTrackArtists(artists) {
+  if (!Array.isArray(artists)) {
+    if (typeof artists === 'string' && artists.trim()) {
+      return artists
+        .split(',')
+        .map((artist) => artist.trim())
+        .filter(Boolean)
+    }
+
+    return []
+  }
+
+  return artists
+    .map((artist) => {
+      if (typeof artist === 'string') {
+        return artist.trim()
+      }
+
+      return normalizeString(artist?.name)
+    })
+    .filter(Boolean)
+}
+
+function normalizeTrackDuration(track = {}) {
+  if (
+    Number.isFinite(Number(track.durationMs)) &&
+    Number(track.durationMs) >= 0
+  ) {
+    return Number(track.durationMs)
+  }
+
+  if (
+    Number.isFinite(Number(track.duration_ms)) &&
+    Number(track.duration_ms) >= 0
+  ) {
+    return Number(track.duration_ms)
+  }
+
+  return 0
+}
+
+function sanitizeSpotifySearchQuery(rawQuery = '') {
+  let query = normalizeString(rawQuery)
+
+  if (!query) {
+    return ''
+  }
+
+  query = query
+    .replace(/[“”"']/g, ' ')
+    .replace(/[，。！？、,.!?]/g, ' ')
+    .replace(
+      /\b(?:please|play|recommend|find|search|listen to|i want to hear|i want to listen to|can you|could you|help me)\b/gi,
+      ' ',
+    )
+    .replace(
+      /帮我|给我|推荐|播放|来点|来一首|听一首|听点|我想听|想听|可以吗|行吗|好吗|请|适合的|适合|歌曲|歌单|音乐|歌/g,
+      ' ',
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (/^[\u3400-\u9fff]{5,8}$/.test(query)) {
+    query = `${query.slice(0, -2)} ${query.slice(-2)}`
+  }
+
+  return query.trim()
+}
+
+function inferSpotifySearchFallbackQuery(input = '') {
+  const normalizedInput = normalizeString(input)
+
+  for (const fallback of SPOTIFY_SEARCH_QUERY_FALLBACKS) {
+    if (fallback.pattern.test(normalizedInput)) {
+      return fallback.query
+    }
+  }
+
+  return ''
+}
+
+function buildSpotifySearchQuery(args = {}, fallbackMessage = '') {
+  const rawQuery = sanitizeSpotifySearchQuery(
+    args.q || args.query || args.message || args.userMessage || '',
+  )
+
+  if (rawQuery) {
+    const fallbackQuery = inferSpotifySearchFallbackQuery(rawQuery)
+    return fallbackQuery || rawQuery
+  }
+
+  return inferSpotifySearchFallbackQuery(
+    [
+      args.intent,
+      args.message,
+      args.userMessage,
+      fallbackMessage,
+    ]
+      .map((value) => normalizeString(value))
+      .filter(Boolean)
+      .join(' '),
+  )
+}
+
+function mapSpotifySearchTrack(track = {}, metadata = {}) {
+  const sourceId = normalizeString(
+    track.sourceId ||
+      track.source_id ||
+      (track.id ? `spotify:track:${track.id}` : ''),
+  )
+  const uri = normalizeString(track.uri || sourceId)
+  const name = normalizeString(track.name || track.title)
+
+  if (!name || !uri.startsWith('spotify:track:')) {
+    return null
+  }
+
+  return {
+    id: normalizeString(track.id, sourceId),
+    sourceType: 'spotify',
+    sourceId: sourceId || uri,
+    name,
+    artists: normalizeTrackArtists(track.artists || track.artist),
+    album:
+      typeof track.album === 'string'
+        ? track.album
+        : normalizeString(track.album?.name),
+    image: normalizeString(
+      track.image ||
+        track.image_url ||
+        track.images?.[0]?.url ||
+        track.album?.images?.[0]?.url,
+    ),
+    durationMs: normalizeTrackDuration(track),
+    audioUrl: '',
+    uri,
+    playMode: 'spotify_remote',
+    playable: true,
+    popularity:
+      Number.isFinite(Number(track.popularity)) && Number(track.popularity) >= 0
+        ? Number(track.popularity)
+        : 0,
+    matchedQuery: normalizeString(metadata.matchedQuery),
+    queryIndex:
+      Number.isFinite(Number(metadata.queryIndex)) && Number(metadata.queryIndex) >= 0
+        ? Number(metadata.queryIndex)
+        : 0,
+    resultIndex:
+      Number.isFinite(Number(metadata.resultIndex)) && Number(metadata.resultIndex) >= 0
+        ? Number(metadata.resultIndex)
+        : 0,
+  }
+}
+
+async function performSpotifyTrackSearches(args = {}, fallbackMessage = '') {
+  const rawMessage = normalizeString(
+    args.message || args.userMessage || fallbackMessage,
+  )
+  const rawQuery = normalizeString(args.q || args.query)
+  const queryPlan = buildSpotifySearchQueries(rawMessage || rawQuery, {
+    intent: args.intent || '',
+    memoryProfile: args.memoryProfile || null,
+    preferredLanguage: args.preferredLanguage || '',
+    rawQuery,
+  })
+  const perQueryLimit = parseInteger(args.limit, 5, { min: 1, max: 50 })
+  const finalLimit = parseInteger(
+    args.finalLimit,
+    queryPlan.isSpecificTrackSearch ? perQueryLimit : Math.max(6, perQueryLimit),
+    { min: 1, max: 50 },
+  )
+  const queryList = args.disableQueryExpansion
+    ? [normalizeString(rawQuery)]
+    : queryPlan.queries
+  const actualQueries = queryList.filter(Boolean)
+
+  assert(actualQueries.length > 0, 'Spotify search query is required', 400)
+
+  const searchRuns = []
+
+  for (const [queryIndex, query] of actualQueries.entries()) {
+    const data = await spotifyPublicProvider.search({
+      q: query,
+      type: 'track',
+      limit: perQueryLimit,
+      offset: parseInteger(args.offset, 0, { min: 0, max: 1000 }),
+      market: args.market,
+    })
+    const items = (data.results?.tracks || [])
+      .map((track, resultIndex) =>
+        mapSpotifySearchTrack(track, {
+          matchedQuery: query,
+          queryIndex,
+          resultIndex,
+        }),
+      )
+      .filter(Boolean)
+
+    searchRuns.push({
+      query,
+      items,
+    })
+  }
+
+  const mergedItems = searchRuns.flatMap((run) => run.items || [])
+  const items = selectDiverseSpotifyTracks(mergedItems, {
+    mood: queryPlan.mood,
+    avoidLiteralTerms: queryPlan.avoidLiteralTerms,
+    specificSearch: queryPlan.isSpecificTrackSearch,
+    limit: finalLimit,
+  })
+
+  return {
+    query: actualQueries[0] || '',
+    queries: actualQueries,
+    total: items.length,
+    items,
+    mood: queryPlan.mood,
+    avoidLiteralTerms: queryPlan.avoidLiteralTerms,
+    specificSearch: queryPlan.isSpecificTrackSearch,
+    queryCounts: searchRuns.map((run) => ({
+      query: run.query,
+      count: run.items.length,
+    })),
+    originalQuery: rawQuery,
+    originalMessage: rawMessage,
+  }
+}
+
 function mapArtistResult(artist = {}) {
   return {
     id: artist.id || '',
@@ -533,6 +789,7 @@ export function createAgentToolRegistry({
   providerLinks,
   toolCalls,
   conversationId,
+  currentMessage = '',
 }) {
   const tools = new Map()
   const visibleTools = []
@@ -810,19 +1067,7 @@ function createSpotifyRemoteTrack(input = {}) {
   )
 
   register('spotify.search_tracks', async (args = {}) => {
-    const data = await spotifyPublicProvider.search({
-      q: args.q,
-      type: 'track',
-      limit: parseInteger(args.limit, 10, { min: 1, max: 50 }),
-      offset: parseInteger(args.offset, 0, { min: 0, max: 1000 }),
-      market: args.market,
-    })
-
-    return {
-      query: args.q || '',
-      total: data.results?.tracks?.length || 0,
-      items: createTrackArtifacts(data.results?.tracks || []),
-    }
+    return performSpotifyTrackSearches(args, currentMessage)
   })
 
   register('spotify.search_artists', async (args = {}) => {

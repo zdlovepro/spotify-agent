@@ -86,13 +86,24 @@ function getSourceId(track, sourceType) {
     return explicitSourceId
   }
 
+  const uri = normalizeString(
+    track?.uri ||
+      track?.remoteUri ||
+      track?.remote_url ||
+      track?.remoteUrl,
+  )
+
+  if (uri.startsWith('spotify:')) {
+    return uri
+  }
+
   const id = normalizeString(track?.id)
 
   if (id) {
     return `${sourceType}:track:${id}`
   }
 
-  return `${sourceType}:track:unknown`
+  return ''
 }
 
 function getPreviewUrl(track) {
@@ -142,12 +153,17 @@ function derivePlayMode(track, localAudioUrl, previewUrl, uri) {
   return 'unavailable'
 }
 
-function derivePlayable(track, playMode, localAudioUrl, previewUrl) {
+function derivePlayable(track, playMode, localAudioUrl, previewUrl, uri) {
   const directlyPlayable =
     (playMode === 'local_audio' && Boolean(localAudioUrl)) ||
-    (playMode === 'preview' && Boolean(previewUrl))
+    (playMode === 'preview' && Boolean(previewUrl)) ||
+    (playMode === 'spotify_remote' && Boolean(uri))
 
   if (typeof track?.playable === 'boolean') {
+    if (playMode === 'spotify_remote') {
+      return directlyPlayable
+    }
+
     return track.playable && directlyPlayable
   }
 
@@ -172,7 +188,7 @@ export function createTrackArtifact(track = {}) {
     id: normalizeString(track?.id, sourceId),
     sourceType,
     sourceId,
-    name: normalizeString(track?.name || track?.title, 'Unknown track'),
+    name: normalizeString(track?.name || track?.title),
     artists: normalizeArtists(track?.artists || track?.artist),
     album: getAlbumName(track),
     image: getImage(track),
@@ -184,7 +200,7 @@ export function createTrackArtifact(track = {}) {
           : 0,
     audioUrl,
     uri: uri || normalizeString(track?.uri),
-    playable: derivePlayable(track, playMode, localAudioUrl, previewUrl),
+    playable: derivePlayable(track, playMode, localAudioUrl, previewUrl, uri),
     playMode,
   }
 }

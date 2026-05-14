@@ -15,6 +15,12 @@ import {
   buildConversationTitle,
   classifyIntent,
 } from './intent-classifier.js'
+import {
+  buildSpotifyRecommendationTitle,
+  buildSpotifySearchQueries,
+  isSpecificTrackSearch,
+  selectDiverseSpotifyTracks,
+} from './spotify-query-planner.js'
 import { createTrackArtifact, createTrackArtifacts } from './track-artifact.js'
 import { createAgentToolRegistry } from './tool-registry.js'
 
@@ -45,6 +51,10 @@ function normalizeMessage(message) {
 
 function unique(items) {
   return [...new Set(items.filter(Boolean))]
+}
+
+function getToolLayer(name) {
+  return String(name || '').split('.')[0] || 'unknown'
 }
 
 function getPrimaryImage(entity) {
@@ -426,23 +436,17 @@ function buildSpotifyRecommendationQueries({
   topArtists,
   memoryProfile,
 }) {
-  const normalizedQuery = extractRecommendationQuery(message)
-  const moodQuery =
-    SPOTIFY_RECOMMENDATION_SEARCH_TERMS[explicitGenres[0]] || explicitGenres[0] || ''
-  const favoriteArtist =
-    topArtists[0]?.name ||
-    memoryProfile.topArtists?.[0]?.name ||
-    ''
-
-  return unique(
-    [
-      hasMeaningfulRecommendationQuery(normalizedQuery) ? normalizedQuery : '',
-      moodQuery && favoriteArtist ? `${moodQuery} ${favoriteArtist}` : '',
-      moodQuery,
-      favoriteArtist,
-      memoryProfile.publicSeeds?.query || '',
-    ].filter(Boolean),
-  ).slice(0, 3)
+  return buildSpotifySearchQueries(message, {
+    intent: 'recommend_music',
+    memoryProfile,
+    preferredLanguage: shouldReplyInChinese(message) ? 'zh' : 'en',
+    rawQuery:
+      hasMeaningfulRecommendationQuery(extractRecommendationQuery(message))
+        ? extractRecommendationQuery(message)
+        : '',
+    explicitGenres,
+    topArtists,
+  })
 }
 
 function buildRecommendationReply({
@@ -512,6 +516,146 @@ function buildRecommendationReply({
       ? `I prepared ${trackCount} Spotify recommendations and started playback.`
       : `I prepared ${trackCount} Spotify recommendations.`,
   )
+}
+
+function formatQueryListText(queries = []) {
+  return (Array.isArray(queries) ? queries : [])
+    .map((query) => normalizeMessage(query))
+    .filter(Boolean)
+    .join('、')
+}
+
+function buildSpotifyMoodRecommendationReply({
+  message,
+  mood = 'generic',
+  queries = [],
+  tracks = [],
+  startedPlaying = false,
+}) {
+  const trackCount = Array.isArray(tracks) ? tracks.length : 0
+  const primaryTrack = tracks[0]
+  const primaryArtistText = Array.isArray(primaryTrack?.artists)
+    ? primaryTrack.artists.filter(Boolean).join(', ')
+    : ''
+  const primaryTrackText =
+    primaryTrack?.name && primaryArtistText
+      ? `《${primaryTrack.name}》— ${primaryArtistText}`
+      : primaryTrack?.name
+        ? `《${primaryTrack.name}》`
+        : ''
+  const moodLabelMap = {
+    energy: '高能量',
+    sleep: '睡前',
+    focus: '专注',
+    chill: '放松',
+    sad: '伤感',
+    party: '派对',
+    workout: '运动',
+    romantic: '浪漫',
+    generic: 'Spotify',
+  }
+  const moodLabel = moodLabelMap[mood] || 'Spotify'
+
+  if (!trackCount) {
+    return buildSpotifySearchNoResultReply(message)
+  }
+
+  const zhQueries = formatQueryListText(queries)
+  const zhResult = primaryTrackText
+    ? `先给你 ${trackCount} 首里比较合适的一首：${primaryTrackText}。`
+    : `我整理出了 ${trackCount} 首更合适的 Spotify 推荐。`
+
+  return localizePlaybackReply(
+    message,
+    zhQueries
+      ? `我把你的请求理解成${moodLabel}氛围，而不是字面搜索。我用 ${zhQueries} 这些 Spotify 搜索词整理结果。${zhResult}`
+      : `我把你的请求理解成${moodLabel}氛围，而不是字面搜索。${zhResult}`,
+    primaryTrack?.name
+      ? `I treated this as a ${mood} mood request instead of a literal keyword search, and found ${trackCount} Spotify picks. Start with ${primaryTrack.name}${primaryArtistText ? ` by ${primaryArtistText}` : ''}.`
+      : `I treated this as a ${mood} mood request instead of a literal keyword search, and found ${trackCount} Spotify picks.`,
+  )
+}
+
+function buildSpotifyMoodSourcePlan({
+  message,
+  mood = 'generic',
+  queries = [],
+  queryCounts = [],
+  tracks = [],
+}) {
+  const moodLabelMap = {
+    energy: '高能量 / 热血',
+    sleep: '睡前 / 助眠',
+    focus: '专注 / 写代码',
+    chill: '放松 / chill',
+    sad: '伤感 / emo',
+    party: '派对 / 跳舞',
+    workout: '运动 / 健身',
+    romantic: '浪漫 / 约会',
+    generic: 'Spotify 推荐',
+  }
+  const moodLabel = moodLabelMap[mood] || 'Spotify 推荐'
+  const queryText = formatQueryListText(queries)
+
+  return {
+    summary:
+      mood === 'generic'
+        ? localizePlaybackReply(
+            message,
+            '我从 Spotify 搜索并整理了更贴近这次请求的歌曲。',
+            'I searched Spotify and organized a better-fit recommendation set.',
+          )
+        : localizePlaybackReply(
+            message,
+            `我把你的请求理解为 ${moodLabel}，而不是字面搜索。`,
+            `I interpreted your request as a ${mood} mood instead of a literal keyword search.`,
+          ),
+    sources: [
+      {
+        type: 'spotify',
+        label: 'Spotify',
+        count: Array.isArray(tracks) ? tracks.length : 0,
+      },
+    ],
+    steps: [
+      localizePlaybackReply(
+        message,
+        `识别情绪：${moodLabel}`,
+        `Detected mood: ${mood}`,
+      ),
+      queryText
+        ? localizePlaybackReply(
+            message,
+            `转换为 Spotify 搜索词：${queryText}`,
+            `Converted it into Spotify queries: ${queries.join(', ')}`,
+          )
+        : localizePlaybackReply(
+            message,
+            '转换为更稳定的 Spotify 搜索词。',
+            'Converted it into more stable Spotify queries.',
+          ),
+      localizePlaybackReply(
+        message,
+        '合并并去重结果。',
+        'Merged and deduplicated the results.',
+      ),
+      localizePlaybackReply(
+        message,
+        '整理成可用 Spotify 播放的推荐队列。',
+        'Turned the result into a Spotify-playable recommendation queue.',
+      ),
+      ...queryCounts.map((entry) =>
+        localizePlaybackReply(
+          message,
+          `查询 ${entry.query} 命中 ${entry.count} 首。`,
+          `Query ${entry.query} returned ${entry.count} tracks.`,
+        ),
+      ),
+    ],
+    playbackMode: 'spotify_remote',
+    trackCount: Array.isArray(tracks) ? tracks.length : 0,
+    canPlay: Array.isArray(tracks) ? tracks.length > 0 : false,
+  }
 }
 
 function isPlaylistManagementRequest(message) {
@@ -1098,9 +1242,17 @@ async function handleHybridRecommendation({
   const spotifyConnected = mode === 'spotify_enhanced'
   const canUseLocal = mode !== 'guest'
   const recommendationQuery = extractRecommendationQuery(message)
+  const preferredLanguage = shouldReplyInChinese(message) ? 'zh' : 'en'
   let localTracks = []
   let spotifyTracks = []
   let spotifyTopArtists = []
+  let spotifyQueryPlan = {
+    mood: 'generic',
+    queries: [],
+    avoidLiteralTerms: [],
+    isSpecificTrackSearch: false,
+  }
+  let spotifyQueryCounts = []
 
   if (canUseLocal) {
     try {
@@ -1135,17 +1287,6 @@ async function handleHybridRecommendation({
   }
 
   if (spotifyConnected && (!localRequested || mixedRequested || localTracks.length === 0)) {
-    let spotifyTopTrackItems = []
-
-    try {
-      const topTrackResult = await tools.run('spotify.get_user_top_tracks', {
-        limit: 6,
-      })
-      spotifyTopTrackItems = topTrackResult.items || []
-    } catch {
-      spotifyTopTrackItems = []
-    }
-
     try {
       const topArtistResult = await tools.run('spotify.get_user_top_artists', {
         limit: 4,
@@ -1155,34 +1296,47 @@ async function handleHybridRecommendation({
       spotifyTopArtists = []
     }
 
-    const spotifySearchTracks = []
-    const spotifyQueries = buildSpotifyRecommendationQueries({
+    spotifyQueryPlan = buildSpotifyRecommendationQueries({
       message,
       explicitGenres: explicitGenres.length ? explicitGenres : defaultGenres,
       topArtists: spotifyTopArtists,
       memoryProfile,
     })
+    const spotifySearchRuns = []
 
-    for (const spotifyQuery of spotifyQueries) {
+    for (const spotifyQuery of spotifyQueryPlan.queries.slice(0, 5)) {
       try {
         const searchResult = await tools.run('spotify.search_tracks', {
           q: spotifyQuery,
-          limit: 6,
+          limit: 5,
+          finalLimit: 5,
+          disableQueryExpansion: true,
+          intent: 'recommend_music',
+          message,
+          preferredLanguage,
         })
-
-        spotifySearchTracks.push(...(searchResult.items || []))
+        spotifySearchRuns.push(searchResult)
       } catch {
         continue
       }
     }
 
-    spotifyTracks = sortRecommendationTracks(
-      filterAvoidedRecommendationTracks(
-        dedupeTrackArtifacts([...spotifyTopTrackItems, ...spotifySearchTracks]),
-        memoryProfile,
-      ),
-      memoryProfile,
-      { preferLocal: false },
+    spotifyQueryCounts = spotifySearchRuns.map((run) => ({
+      query: run.query || '',
+      count: run.items?.length || 0,
+    }))
+    const mergedSpotifyTracks = spotifySearchRuns.flatMap(
+      (run) => run.items || [],
+    )
+
+    spotifyTracks = selectDiverseSpotifyTracks(
+      filterAvoidedRecommendationTracks(mergedSpotifyTracks, memoryProfile),
+      {
+        mood: spotifyQueryPlan.mood,
+        avoidLiteralTerms: spotifyQueryPlan.avoidLiteralTerms,
+        specificSearch: spotifyQueryPlan.isSpecificTrackSearch,
+        limit: 8,
+      },
     )
   }
 
@@ -1190,11 +1344,13 @@ async function handleHybridRecommendation({
 
   if (localRequested && !mixedRequested) {
     tracks = localTracks.slice(0, 10)
-  } else if (spotifyConnected) {
+  } else if (mixedRequested && spotifyConnected) {
     tracks = interleaveRecommendationTracks(
       [localTracks.slice(0, 4), spotifyTracks.slice(0, 8)],
       10,
     )
+  } else if (spotifyConnected) {
+    tracks = spotifyTracks.slice(0, 10)
   } else {
     tracks = localTracks.slice(0, 10)
   }
@@ -1207,6 +1363,28 @@ async function handleHybridRecommendation({
 
   const saveToolName =
     mode === 'guest' ? 'history.save_recommendation' : 'recommendation.save_run'
+  const recommendationTitle =
+    spotifyTracks.length > 0 && !localRequested
+      ? buildSpotifyRecommendationTitle(spotifyQueryPlan.mood, preferredLanguage)
+      : buildConversationTitle(message)
+  const sourcePlan =
+    spotifyTracks.length > 0 && !spotifyQueryPlan.isSpecificTrackSearch
+      ? buildSpotifyMoodSourcePlan({
+          message,
+          mood: spotifyQueryPlan.mood,
+          queries: spotifyQueryPlan.queries,
+          queryCounts: spotifyQueryCounts,
+          tracks,
+        })
+      : null
+  const recommendationSummary =
+    spotifyTracks.length > 0 && !spotifyQueryPlan.isSpecificTrackSearch
+      ? localizePlaybackReply(
+          message,
+          `根据这次${spotifyQueryPlan.mood === 'generic' ? '推荐请求' : '氛围需求'}，我从 Spotify 搜索了 ${formatQueryListText(spotifyQueryPlan.queries)} 这些方向的歌曲。`,
+          `I searched Spotify with ${spotifyQueryPlan.queries.join(', ')} and curated the closest matches for this request.`,
+        )
+      : 'Agent-generated recommendation set from local audio and Spotify.'
   const seedSummary = {
     query: recommendationQuery || message,
     genres: explicitGenres.length ? explicitGenres : defaultGenres,
@@ -1215,15 +1393,18 @@ async function handleHybridRecommendation({
     spotifyConnected,
     localTrackCount: localTracks.length,
     spotifyTrackCount: spotifyTracks.length,
+    spotifyMood: spotifyQueryPlan.mood,
+    spotifyQueries: spotifyQueryPlan.queries,
+    spotifyQueryCounts,
     topArtistNames: spotifyTopArtists
       .map((artist) => artist?.name || '')
       .filter(Boolean)
       .slice(0, 4),
   }
   const historyEntry = await tools.run(saveToolName, {
-    title: buildConversationTitle(message),
+    title: recommendationTitle,
     prompt: message,
-    description: 'Agent-generated recommendation set from local audio and Spotify.',
+    description: recommendationSummary,
     seeds: seedSummary,
     tracks,
   })
@@ -1244,14 +1425,23 @@ async function handleHybridRecommendation({
       : []
 
   return {
-    reply: buildRecommendationReply({
-      message,
-      tracks,
-      localRequested,
-      spotifyConnected,
-      mixedRequested,
-      startedPlaying: actions.length > 0,
-    }),
+    reply:
+      spotifyTracks.length > 0 && !localRequested && !isSpecificTrackSearch(message)
+        ? buildSpotifyMoodRecommendationReply({
+            message,
+            mood: spotifyQueryPlan.mood,
+            queries: spotifyQueryPlan.queries,
+            tracks: spotifyTracks,
+            startedPlaying: actions.length > 0,
+          })
+        : buildRecommendationReply({
+            message,
+            tracks,
+            localRequested,
+            spotifyConnected,
+            mixedRequested,
+            startedPlaying: actions.length > 0,
+          }),
     intent: 'generate_recommendation',
     actions,
     artifacts: {
@@ -1259,8 +1449,24 @@ async function handleHybridRecommendation({
       recommendationTitle: historyEntry.title,
       tracks,
       seeds: historyEntry.seeds || seedSummary,
+      recommendation_set: {
+        title: historyEntry.title || recommendationTitle,
+        summary: recommendationSummary,
+        tracks,
+      },
+      spotifySearchDebug:
+        spotifyTracks.length > 0
+          ? {
+              originalMessage: message,
+              mood: spotifyQueryPlan.mood,
+              queries: spotifyQueryPlan.queries,
+              queryCounts: spotifyQueryCounts,
+              selectedCount: spotifyTracks.length,
+            }
+          : undefined,
       memoryProfile,
     },
+    sourcePlan,
   }
 }
 
@@ -1861,6 +2067,13 @@ function localizePlaybackReply(message, zhText, enText) {
   return shouldReplyInChinese(message) ? zhText : enText
 }
 
+const PLANNER_REFERENCE_EXACT_PATTERN =
+  /^\s*(?:\{\{\s*)?(\$(?:step\d+|steps(?:\[\d+\]|\.\d+)?|capabilities|currentPlaybackState|plannerInput|context)(?:[\w.[\]]*))(?:\s*\}\})?\s*$/
+const PLANNER_REFERENCE_PATTERN =
+  /\$(?:step\d+|steps(?:\[\d+\]|\.\d+)?|capabilities|currentPlaybackState|plannerInput|context)(?:[\w.[\]]*)/g
+const PLANNER_REFERENCE_DETECTION_PATTERN =
+  /\$(?:step\d+|steps(?:\[\d+\]|\.\d+)?|capabilities|currentPlaybackState|plannerInput|context)(?:[\w.[\]]*)/
+
 function extractPlannerReference(value) {
   if (typeof value !== 'string') {
     return ''
@@ -1872,19 +2085,12 @@ function extractPlannerReference(value) {
     return ''
   }
 
-  if (trimmed.startsWith('{{') && trimmed.endsWith('}}')) {
-    return trimmed.slice(2, -2).trim()
-  }
-
-  if (trimmed.startsWith('$')) {
-    return trimmed.slice(1).trim()
-  }
-
-  return ''
+  return trimmed.match(PLANNER_REFERENCE_EXACT_PATTERN)?.[1] || ''
 }
 
 function splitPlannerReferencePath(reference) {
   return String(reference || '')
+    .replace(/^\$/, '')
     .replace(/\[(\d+)\]/g, '.$1')
     .split('.')
     .map((segment) => segment.trim())
@@ -1916,7 +2122,11 @@ function readPlannerReferenceValue(source, pathSegments = []) {
 }
 
 function resolvePlannerReference(reference, plannerInput, executedSteps) {
-  const extractedReference = extractPlannerReference(reference)
+  const extractedReference =
+    extractPlannerReference(reference) ||
+    (typeof reference === 'string' && reference.trim().startsWith('$')
+      ? reference.trim()
+      : '')
 
   if (!extractedReference) {
     return undefined
@@ -1953,25 +2163,202 @@ function resolvePlannerReference(reference, plannerInput, executedSteps) {
   return readPlannerReferenceValue(plannerInput?.[rootSegment], restSegments)
 }
 
-function resolvePlannerArgumentValue(value, plannerInput, executedSteps) {
+function stringifyPlannerResolvedValue(value) {
+  if (value == null) {
+    return ''
+  }
+
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+
   if (Array.isArray(value)) {
-    return value.map((item) =>
-      resolvePlannerArgumentValue(item, plannerInput, executedSteps),
-    )
+    return value
+      .map((item) => stringifyPlannerResolvedValue(item))
+      .filter(Boolean)
+      .join(', ')
+  }
+
+  if (typeof value === 'object') {
+    if (typeof value.name === 'string' && value.name.trim()) {
+      const artistText = Array.isArray(value.artists)
+        ? value.artists.filter(Boolean).join(', ')
+        : ''
+
+      return artistText ? `${value.name} — ${artistText}` : value.name.trim()
+    }
+
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return ''
+    }
+  }
+
+  return ''
+}
+
+function resolvePlannerArgumentValue(
+  value,
+  plannerInput,
+  executedSteps,
+  errors = [],
+  path = 'args',
+) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item, index) =>
+        resolvePlannerArgumentValue(
+          item,
+          plannerInput,
+          executedSteps,
+          errors,
+          `${path}[${index}]`,
+        ),
+      )
+      .filter((item) => typeof item !== 'undefined')
   }
 
   if (value && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([key, nestedValue]) => [
-        key,
-        resolvePlannerArgumentValue(nestedValue, plannerInput, executedSteps),
-      ]),
+      Object.entries(value)
+        .map(([key, nestedValue]) => [
+          key,
+          resolvePlannerArgumentValue(
+            nestedValue,
+            plannerInput,
+            executedSteps,
+            errors,
+            `${path}.${key}`,
+          ),
+        ])
+        .filter(([, nestedValue]) => typeof nestedValue !== 'undefined'),
     )
   }
 
-  const resolvedReference = resolvePlannerReference(value, plannerInput, executedSteps)
+  if (typeof value !== 'string') {
+    return value
+  }
 
-  return typeof resolvedReference === 'undefined' ? value : resolvedReference
+  const exactReference = extractPlannerReference(value)
+
+  if (exactReference) {
+    const resolvedReference = resolvePlannerReference(
+      exactReference,
+      plannerInput,
+      executedSteps,
+    )
+
+    if (typeof resolvedReference === 'undefined') {
+      errors.push({
+        path,
+        reference: exactReference,
+      })
+    }
+
+    return resolvedReference
+  }
+
+  if (!PLANNER_REFERENCE_DETECTION_PATTERN.test(value)) {
+    return value
+  }
+
+  let hadResolutionError = false
+  const resolvedText = value.replace(PLANNER_REFERENCE_PATTERN, (reference) => {
+    const resolvedReference = resolvePlannerReference(
+      reference,
+      plannerInput,
+      executedSteps,
+    )
+
+    if (typeof resolvedReference === 'undefined') {
+      hadResolutionError = true
+      errors.push({
+        path,
+        reference,
+      })
+      return ''
+    }
+
+    return stringifyPlannerResolvedValue(resolvedReference)
+  })
+
+  if (hadResolutionError) {
+    return undefined
+  }
+
+  return resolvedText.replace(/\s+/g, ' ').trim()
+}
+
+function resolvePlannerArguments(value, plannerInput, executedSteps) {
+  const errors = []
+  const resolvedValue = resolvePlannerArgumentValue(
+    value,
+    plannerInput,
+    executedSteps,
+    errors,
+  )
+
+  return {
+    value: resolvedValue,
+    errors,
+  }
+}
+
+function containsPlannerPlaceholder(value) {
+  if (typeof value === 'string') {
+    return PLANNER_REFERENCE_DETECTION_PATTERN.test(value)
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => containsPlannerPlaceholder(item))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value).some((item) => containsPlannerPlaceholder(item))
+  }
+
+  return false
+}
+
+function sanitizePlannerPlaceholderString(value = '') {
+  const cleaned = String(value || '')
+    .replace(PLANNER_REFERENCE_PATTERN, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .trim()
+
+  return /[A-Za-z0-9\u3400-\u9fff]/.test(cleaned) ? cleaned : ''
+}
+
+function sanitizePlannerPlaceholderValue(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => sanitizePlannerPlaceholderValue(item))
+      .filter((item) => typeof item !== 'undefined')
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([key, nestedValue]) => [
+          key,
+          sanitizePlannerPlaceholderValue(nestedValue),
+        ])
+        .filter(([, nestedValue]) => typeof nestedValue !== 'undefined'),
+    )
+  }
+
+  if (typeof value === 'string' && containsPlannerPlaceholder(value)) {
+    const cleaned = sanitizePlannerPlaceholderString(value)
+    return cleaned || undefined
+  }
+
+  return value
 }
 
 function plannerRequestsPlayback(plan = {}) {
@@ -2132,6 +2519,340 @@ function buildPlannerOperationFailureReply({
     error,
     plannerInput,
   })
+}
+
+function collectUniqueTrackArtifactsFromExecutions(executedSteps = []) {
+  return dedupeTrackArtifacts(
+    executedSteps.flatMap((execution) => collectTracksFromToolExecution(execution)),
+  ).filter((track) => track.sourceId || track.id)
+}
+
+function collectSpotifySearchTracks(executedSteps = []) {
+  return dedupeTrackArtifacts(
+    executedSteps
+      .filter((step) => step.tool === 'spotify.search_tracks')
+      .flatMap((step) => step.result?.items || []),
+  ).filter(
+    (track) =>
+      track.sourceType === 'spotify' &&
+      track.playMode === 'spotify_remote' &&
+      typeof track.name === 'string' &&
+      track.name.trim() &&
+      typeof track.uri === 'string' &&
+      track.uri.startsWith('spotify:track:'),
+  )
+}
+
+function collectSpotifySearchPlanData(executedSteps = []) {
+  const spotifySearchSteps = executedSteps.filter(
+    (step) => step.tool === 'spotify.search_tracks',
+  )
+  const firstResult = spotifySearchSteps[0]?.result || {}
+
+  return {
+    mood: normalizeMessage(firstResult.mood) || 'generic',
+    queries: unique(
+      spotifySearchSteps.flatMap((step) =>
+        Array.isArray(step.result?.queries)
+          ? step.result.queries
+          : step.result?.query
+            ? [step.result.query]
+            : [],
+      ),
+    ),
+    queryCounts: spotifySearchSteps.flatMap((step) =>
+      Array.isArray(step.result?.queryCounts)
+        ? step.result.queryCounts
+        : step.result?.query
+          ? [{ query: step.result.query, count: step.result?.items?.length || 0 }]
+          : [],
+    ),
+    specificSearch: spotifySearchSteps.some(
+      (step) => step.result?.specificSearch === true,
+    ),
+  }
+}
+
+function formatTrackArtists(artists = []) {
+  if (!Array.isArray(artists)) {
+    return normalizeMessage(artists)
+  }
+
+  return artists
+    .map((artist) => normalizeMessage(artist))
+    .filter(Boolean)
+    .join(', ')
+}
+
+function hasPreparedSpotifyPlaybackAction(actions = []) {
+  return (Array.isArray(actions) ? actions : []).some((action) => {
+    if (!action?.type) {
+      return false
+    }
+
+    if (
+      action.type === 'player.play_spotify_uri' ||
+      action.type === 'player.play_spotify_uris'
+    ) {
+      return true
+    }
+
+    if (
+      action.type === 'player.replace_queue' ||
+      action.type === 'player.append_queue'
+    ) {
+      return Array.isArray(action.payload?.tracks)
+        ? action.payload.tracks.some(
+            (track) =>
+              track?.playMode === 'spotify_remote' ||
+              track?.uri?.startsWith?.('spotify:track:'),
+          )
+        : false
+    }
+
+    return false
+  })
+}
+
+function buildSpotifyRecommendationContextLabel(message) {
+  const normalizedMessage = normalizeMessage(message)
+
+  if (/睡觉|睡前|助眠|\bsleep\b/i.test(normalizedMessage)) {
+    return localizePlaybackReply(
+      message,
+      '适合睡前听的歌',
+      'a track for sleep',
+    )
+  }
+
+  if (/学习|写代码|coding|code|focus|专注|study/i.test(normalizedMessage)) {
+    return localizePlaybackReply(
+      message,
+      '适合专注时听的歌',
+      'a track for focus',
+    )
+  }
+
+  if (/健身|运动|workout|gym/i.test(normalizedMessage)) {
+    return localizePlaybackReply(
+      message,
+      '适合健身的歌',
+      'a track for workouts',
+    )
+  }
+
+  if (/放松|chill|relax|relaxing|轻松/i.test(normalizedMessage)) {
+    return localizePlaybackReply(
+      message,
+      '适合放松的歌',
+      'a relaxing track',
+    )
+  }
+
+  return localizePlaybackReply(
+    message,
+    '适合这次氛围的歌',
+    'a track that fits this mood',
+  )
+}
+
+function buildSpotifySearchNoResultReply(message) {
+  return localizePlaybackReply(
+    message,
+    '我没能从 Spotify 找到合适的歌曲，你可以换个更具体的歌名、歌手或氛围。',
+    'I could not find a suitable song on Spotify. Try a more specific song title, artist, or mood.',
+  )
+}
+
+function buildPlannerReplyFromToolResultsLegacy({
+  message,
+  planIntent,
+  plannerReply,
+  plannerInput,
+  executedSteps,
+  actions = [],
+}) {
+  const spotifyTracks = collectSpotifySearchTracks(executedSteps)
+  const usedSpotifySearch = executedSteps.some(
+    (step) => step.tool === 'spotify.search_tracks',
+  )
+
+  if (
+    usedSpotifySearch &&
+    (
+      planIntent === 'recommend_music' ||
+      planIntent === 'play_music' ||
+      planIntent === 'play_spotify'
+    )
+  ) {
+    if (!spotifyTracks.length) {
+      return buildSpotifySearchNoResultReply(message)
+    }
+
+    const primaryTrack = spotifyTracks[0]
+    const artistText = formatTrackArtists(primaryTrack.artists)
+    const zhTrackText = artistText
+      ? `《${primaryTrack.name}》— ${artistText}`
+      : `《${primaryTrack.name}》`
+    const englishTrackText = artistText
+      ? `${primaryTrack.name} by ${artistText}`
+      : primaryTrack.name
+    const spotifyReady = Boolean(
+      plannerInput?.capabilities?.spotifyPlaybackReady ||
+        plannerInput?.capabilities?.currentDeviceId,
+    )
+
+    if (planIntent === 'recommend_music') {
+      const contextLabel = buildSpotifyRecommendationContextLabel(message)
+
+      if (spotifyTracks.length > 1) {
+        return localizePlaybackReply(
+          message,
+          `我从 Spotify 找到 ${spotifyTracks.length} 首相关的歌，先推荐你听${zhTrackText}。`,
+          `I found ${spotifyTracks.length} Spotify matches for you. Start with ${englishTrackText}.`,
+        )
+      }
+
+      return localizePlaybackReply(
+        message,
+        `我从 Spotify 找到一首${contextLabel}：${zhTrackText}。`,
+        `I found ${contextLabel} for you on Spotify: ${englishTrackText}.`,
+      )
+    }
+
+    if (hasSuccessfulDirectPlayback(executedSteps)) {
+      return localizePlaybackReply(
+        message,
+        `正在通过 Spotify 播放${zhTrackText}。`,
+        `Now playing ${englishTrackText} through Spotify.`,
+      )
+    }
+
+    if (!spotifyReady) {
+      return localizePlaybackReply(
+        message,
+        `我在 Spotify 找到${zhTrackText}。先激活 Spotify 播放器或可用设备，我就能继续播放。`,
+        `I found ${englishTrackText} on Spotify. Activate a Spotify player or available device first so I can keep going.`,
+      )
+    }
+
+    if (hasPreparedSpotifyPlaybackAction(actions)) {
+      return localizePlaybackReply(
+        message,
+        `我在 Spotify 找到${zhTrackText}，已经为你准备好播放。`,
+        `I found ${englishTrackText} on Spotify and prepared it for playback.`,
+      )
+    }
+
+    return localizePlaybackReply(
+      message,
+      `我在 Spotify 找到${zhTrackText}。`,
+      `I found ${englishTrackText} on Spotify.`,
+    )
+  }
+
+  if (containsPlannerPlaceholder(plannerReply)) {
+    return sanitizePlannerPlaceholderString(plannerReply)
+  }
+
+  return normalizeMessage(plannerReply)
+}
+
+function buildPlannerReplyFromToolResults({
+  message,
+  planIntent,
+  plannerReply,
+  plannerInput,
+  executedSteps,
+  actions = [],
+}) {
+  const spotifyTracks = collectSpotifySearchTracks(executedSteps)
+  const usedSpotifySearch = executedSteps.some(
+    (step) => step.tool === 'spotify.search_tracks',
+  )
+  const spotifySearchPlan = collectSpotifySearchPlanData(executedSteps)
+
+  if (
+    usedSpotifySearch &&
+    (
+      planIntent === 'recommend_music' ||
+      planIntent === 'play_music' ||
+      planIntent === 'play_spotify'
+    )
+  ) {
+    if (!spotifyTracks.length) {
+      return buildSpotifySearchNoResultReply(message)
+    }
+
+    if (planIntent === 'recommend_music' && !spotifySearchPlan.specificSearch) {
+      return buildSpotifyMoodRecommendationReply({
+        message,
+        mood: spotifySearchPlan.mood,
+        queries: spotifySearchPlan.queries,
+        tracks: spotifyTracks,
+        startedPlaying:
+          hasSuccessfulDirectPlayback(executedSteps) ||
+          hasPreparedSpotifyPlaybackAction(actions),
+      })
+    }
+
+    const primaryTrack = spotifyTracks[0]
+    const artistText = formatTrackArtists(primaryTrack.artists)
+    const zhTrackText = artistText
+      ? `《${primaryTrack.name}》— ${artistText}`
+      : `《${primaryTrack.name}》`
+    const englishTrackText = artistText
+      ? `${primaryTrack.name} by ${artistText}`
+      : primaryTrack.name
+    const spotifyReady = Boolean(
+      plannerInput?.capabilities?.spotifyPlaybackReady ||
+        plannerInput?.capabilities?.currentDeviceId,
+    )
+
+    if (planIntent === 'recommend_music') {
+      return localizePlaybackReply(
+        message,
+        `我从 Spotify 找到${zhTrackText}。`,
+        `I found ${englishTrackText} on Spotify.`,
+      )
+    }
+
+    if (hasSuccessfulDirectPlayback(executedSteps)) {
+      return localizePlaybackReply(
+        message,
+        `正在通过 Spotify 播放${zhTrackText}。`,
+        `Now playing ${englishTrackText} through Spotify.`,
+      )
+    }
+
+    if (!spotifyReady) {
+      return localizePlaybackReply(
+        message,
+        `我在 Spotify 找到${zhTrackText}。先激活 Spotify 播放器或可用设备，我就能继续播放。`,
+        `I found ${englishTrackText} on Spotify. Activate a Spotify player or available device first so I can keep going.`,
+      )
+    }
+
+    if (hasPreparedSpotifyPlaybackAction(actions)) {
+      return localizePlaybackReply(
+        message,
+        `我在 Spotify 找到${zhTrackText}，已经为你准备好播放。`,
+        `I found ${englishTrackText} on Spotify and prepared it for playback.`,
+      )
+    }
+
+    return localizePlaybackReply(
+      message,
+      `我在 Spotify 找到${zhTrackText}。`,
+      `I found ${englishTrackText} on Spotify.`,
+    )
+  }
+
+  if (containsPlannerPlaceholder(plannerReply)) {
+    return sanitizePlannerPlaceholderString(plannerReply)
+  }
+
+  return normalizeMessage(plannerReply)
 }
 
 function mapPlannerIntentToAssistantIntent(intent) {
@@ -2607,21 +3328,30 @@ function finalizeAgentResult(
       actions: result.actions || [],
       toolCalls,
     })
+  const sanitizedActions = sanitizePlannerPlaceholderValue(
+    Array.isArray(result.actions) ? result.actions : [],
+  )
+  const sanitizedArtifacts = sanitizePlannerPlaceholderValue({
+    ...firstPassArtifacts,
+    sourcePlan,
+    memoryWriteback,
+  })
   const artifacts = normalizeAgentArtifacts(
-    {
-      ...firstPassArtifacts,
-      sourcePlan,
-      memoryWriteback,
-    },
+    sanitizedArtifacts,
     {
       intent: result.intent,
       sourcePlan,
     },
   )
+  const reply =
+    sanitizePlannerPlaceholderString(result.reply) ||
+    sourcePlan?.summary ||
+    normalizeMessage(result.reply)
 
   return {
     ...result,
-    actions: Array.isArray(result.actions) ? result.actions : [],
+    reply,
+    actions: Array.isArray(sanitizedActions) ? sanitizedActions : [],
     artifacts,
     toolCalls: Array.isArray(result.toolCalls) ? result.toolCalls : toolCalls,
     memoryWriteback,
@@ -2806,6 +3536,32 @@ function buildPlannerArtifacts({
     }
   }
 
+  if (plan.intent === 'recommend_music') {
+    const spotifySearchPlan = collectSpotifySearchPlanData(executedSteps)
+
+    if (trackArtifacts.length > 0 && !spotifySearchPlan.specificSearch) {
+      artifacts.recommendation_set = {
+        title:
+          artifacts.recommendationTitle ||
+          buildSpotifyRecommendationTitle(
+            spotifySearchPlan.mood,
+            'zh',
+          ),
+        summary:
+          spotifySearchPlan.queries.length > 0
+            ? `根据这次请求，我从 Spotify 搜索了 ${spotifySearchPlan.queries.join('、')} 这些方向的歌曲。`
+            : '根据这次请求，我从 Spotify 搜索并整理了更贴近的歌曲。',
+        tracks: trackArtifacts,
+      }
+      artifacts.spotifySearchDebug = {
+        mood: spotifySearchPlan.mood,
+        queries: spotifySearchPlan.queries,
+        queryCounts: spotifySearchPlan.queryCounts,
+        selectedCount: trackArtifacts.length,
+      }
+    }
+  }
+
   return artifacts
 }
 
@@ -2987,11 +3743,40 @@ async function runDeepSeekPlannedAgent({
   const executedSteps = []
 
   for (const step of plannerResponse.plan.toolPlan) {
-    const resolvedArgs = resolvePlannerArgumentValue(
+    const {
+      value: resolvedArgs,
+      errors: resolutionErrors,
+    } = resolvePlannerArguments(
       step.args,
       plannerInput,
       executedSteps,
     )
+
+    if (resolutionErrors.length > 0) {
+      toolCalls.push({
+        name: step.tool,
+        layer: getToolLayer(step.tool),
+        args: step.args,
+        summary: {
+          layer: getToolLayer(step.tool),
+          ok: false,
+          error: 'planner_reference_unresolved',
+          status: 400,
+          references: resolutionErrors.map((entry) => entry.reference),
+        },
+      })
+      executedSteps.push({
+        tool: step.tool,
+        args: step.args,
+        result: {
+          ok: false,
+          error: 'planner_reference_unresolved',
+          unresolvedReferences: resolutionErrors,
+        },
+        skipped: true,
+      })
+      continue
+    }
 
     try {
       const result = await tools.run(step.tool, resolvedArgs)
@@ -3001,17 +3786,7 @@ async function runDeepSeekPlannedAgent({
         result,
       })
     } catch (error) {
-      const trackArtifacts = unique(
-        executedSteps
-          .flatMap((execution) => collectTracksFromToolExecution(execution))
-          .map((track) => createTrackArtifact(track))
-          .filter((track) => track.sourceId || track.id),
-      ).map((sourceId) =>
-        executedSteps
-          .flatMap((execution) => collectTracksFromToolExecution(execution))
-          .map((track) => createTrackArtifact(track))
-          .find((track) => (track.sourceId || track.id) === sourceId),
-      )
+      const trackArtifacts = collectUniqueTrackArtifactsFromExecutions(executedSteps)
       const artifacts = buildPlannerArtifacts({
         plan: plannerResponse.plan,
         executedSteps,
@@ -3047,19 +3822,17 @@ async function runDeepSeekPlannedAgent({
     }
   }
 
-  const trackArtifacts = unique(
-    executedSteps
-      .flatMap((execution) => collectTracksFromToolExecution(execution))
-      .map((track) => createTrackArtifact(track))
-      .filter((track) => track.sourceId || track.id),
-  ).map((sourceId) =>
-    executedSteps
-      .flatMap((execution) => collectTracksFromToolExecution(execution))
-      .map((track) => createTrackArtifact(track))
-      .find((track) => (track.sourceId || track.id) === sourceId),
+  const trackArtifacts = collectUniqueTrackArtifactsFromExecutions(executedSteps)
+  const spotifySearchTracks = collectSpotifySearchTracks(executedSteps)
+  const usedSpotifySearch = executedSteps.some(
+    (step) => step.tool === 'spotify.search_tracks',
   )
 
-  if (plannerResponse.plan.intent === 'recommend_music' && trackArtifacts.length === 0) {
+  if (
+    plannerResponse.plan.intent === 'recommend_music' &&
+    trackArtifacts.length === 0 &&
+    !usedSpotifySearch
+  ) {
     const fallbackResult = await handleHybridRecommendation({
       mode,
       message,
@@ -3087,19 +3860,33 @@ async function runDeepSeekPlannedAgent({
         step.tool === 'history.save_recommendation' ||
         step.tool === 'recommendation.save_run',
     )
+    const recommendationSearchPlan = collectSpotifySearchPlanData(executedSteps)
 
     if (!alreadySaved) {
       const saveToolName =
         mode === 'guest' ? 'history.save_recommendation' : 'recommendation.save_run'
       const saveArgs = {
-        title: buildConversationTitle(message),
+        title:
+          recommendationSearchPlan.queries.length > 0 &&
+          !recommendationSearchPlan.specificSearch
+            ? buildSpotifyRecommendationTitle(
+                recommendationSearchPlan.mood,
+                shouldReplyInChinese(message) ? 'zh' : 'en',
+              )
+            : buildConversationTitle(message),
         prompt: message,
-        description: 'DeepSeek-generated recommendation set from local audio and Spotify.',
+        description:
+          recommendationSearchPlan.queries.length > 0
+            ? `DeepSeek-generated recommendation set from Spotify queries: ${recommendationSearchPlan.queries.join(', ')}.`
+            : 'DeepSeek-generated recommendation set from local audio and Spotify.',
         seeds: {
           query: extractRecommendationQuery(message) || message,
           localRequested: wantsLocalRecommendation(message),
           mixedRequested: wantsHybridRecommendation(message),
           spotifyConnected: Boolean(providerLinks?.spotify?.accessToken),
+          spotifyMood: recommendationSearchPlan.mood,
+          spotifyQueries: recommendationSearchPlan.queries,
+          spotifyQueryCounts: recommendationSearchPlan.queryCounts,
         },
         tracks: trackArtifacts,
       }
@@ -3167,11 +3954,25 @@ async function runDeepSeekPlannedAgent({
     trackArtifacts,
     memoryProfile,
   })
+  const plannerSpotifySearchPlan = collectSpotifySearchPlanData(executedSteps)
+  const sourcePlan =
+    plannerResponse.plan.intent === 'recommend_music' &&
+    trackArtifacts.length > 0 &&
+    !plannerSpotifySearchPlan.specificSearch
+      ? buildSpotifyMoodSourcePlan({
+          message,
+          mood: plannerSpotifySearchPlan.mood,
+          queries: plannerSpotifySearchPlan.queries,
+          queryCounts: plannerSpotifySearchPlan.queryCounts,
+          tracks: trackArtifacts,
+        })
+      : null
 
   if (
     plannerRequestsPlayback(plannerResponse.plan) &&
     actions.length === 0 &&
-    !hasSuccessfulDirectPlayback(executedSteps)
+    !hasSuccessfulDirectPlayback(executedSteps) &&
+    !(usedSpotifySearch && spotifySearchTracks.length === 0)
   ) {
     artifacts.error = {
       message: 'no_playable_result',
@@ -3198,11 +3999,21 @@ async function runDeepSeekPlannedAgent({
     })
   }
 
+  const reply = buildPlannerReplyFromToolResults({
+    message,
+    planIntent: plannerResponse.plan.intent,
+    plannerReply: plannerResponse.plan.reply,
+    plannerInput,
+    executedSteps,
+    actions,
+  })
+
   return finalizeAgentResult({
-    reply: plannerResponse.plan.reply,
+    reply,
     intent: mapPlannerIntentToAssistantIntent(plannerResponse.plan.intent),
     actions,
     artifacts,
+    sourcePlan,
     mode,
     confidence: 0.95,
     toolCalls,
@@ -3237,6 +4048,7 @@ async function runRuleBasedAgent({
       providerLinks,
       toolCalls: resolvedToolCalls,
       conversationId,
+      currentMessage: message,
     })
   const memoryProfile =
     intentResult.intent === 'control_player'
@@ -3323,6 +4135,7 @@ export async function runAgent({
     providerLinks,
     toolCalls,
     conversationId,
+    currentMessage: message,
   })
 
   if (isDeepSeekConfigured()) {
