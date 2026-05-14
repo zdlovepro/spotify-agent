@@ -2179,6 +2179,456 @@ function normalizePlaylistArtifact(playlist = {}) {
   }
 }
 
+function normalizeArtifactTrackList(tracks = []) {
+  return dedupeTrackArtifacts(Array.isArray(tracks) ? tracks : [])
+}
+
+function collectArtifactTracks(artifacts = {}) {
+  return normalizeArtifactTrackList([
+    ...(Array.isArray(artifacts.tracks) ? artifacts.tracks : []),
+    ...(Array.isArray(artifacts.recommendation_set?.tracks)
+      ? artifacts.recommendation_set.tracks
+      : []),
+    ...(Array.isArray(artifacts.local_audio?.tracks)
+      ? artifacts.local_audio.tracks
+      : []),
+    ...(Array.isArray(artifacts.spotify_track?.tracks)
+      ? artifacts.spotify_track.tracks
+      : []),
+    ...(artifacts.track ? [artifacts.track] : []),
+    ...(artifacts.local_audio?.primaryTrack ? [artifacts.local_audio.primaryTrack] : []),
+    ...(artifacts.spotify_track?.primaryTrack
+      ? [artifacts.spotify_track.primaryTrack]
+      : []),
+  ])
+}
+
+function splitArtifactTracks(trackArtifacts = []) {
+  const localTracks = []
+  const spotifyTracks = []
+  const previewTracks = []
+  const unavailableTracks = []
+
+  for (const track of normalizeArtifactTrackList(trackArtifacts)) {
+    if (
+      track.playMode === 'local_audio' ||
+      track.playMode === 'local' ||
+      track.sourceType === 'local_audio'
+    ) {
+      localTracks.push(track)
+      continue
+    }
+
+    if (
+      track.playMode === 'spotify_remote' ||
+      track.playMode === 'remote' ||
+      track.sourceType === 'spotify' ||
+      track.uri?.startsWith?.('spotify:track:') ||
+      track.sourceId?.startsWith?.('spotify:track:') ||
+      track.source_id?.startsWith?.('spotify:track:')
+    ) {
+      spotifyTracks.push(track)
+      continue
+    }
+
+    if (track.playMode === 'preview') {
+      previewTracks.push(track)
+      continue
+    }
+
+    unavailableTracks.push(track)
+  }
+
+  return {
+    localTracks,
+    spotifyTracks,
+    previewTracks,
+    unavailableTracks,
+  }
+}
+
+function buildArtifactSourceBreakdown(trackArtifacts = []) {
+  const {
+    localTracks,
+    spotifyTracks,
+    previewTracks,
+    unavailableTracks,
+  } = splitArtifactTracks(trackArtifacts)
+
+  return {
+    localAudioCount: localTracks.length,
+    spotifyTrackCount: spotifyTracks.length,
+    previewCount: previewTracks.length,
+    unavailableCount: unavailableTracks.length,
+  }
+}
+
+function getArtifactPlaybackMode(trackArtifacts = []) {
+  const {
+    localTracks,
+    spotifyTracks,
+    previewTracks,
+  } = splitArtifactTracks(trackArtifacts)
+
+  if (localTracks.length > 0 && spotifyTracks.length > 0) {
+    return 'mixed'
+  }
+
+  if (localTracks.length > 0) {
+    return 'local_audio'
+  }
+
+  if (spotifyTracks.length > 0) {
+    return 'spotify_remote'
+  }
+
+  if (previewTracks.length > 0) {
+    return 'preview'
+  }
+
+  return 'unavailable'
+}
+
+function buildAgentSourcePlan({
+  message,
+  intent,
+  artifacts = {},
+  actions = [],
+  toolCalls = [],
+}) {
+  const trackArtifacts = collectArtifactTracks(artifacts)
+  const {
+    localTracks,
+    spotifyTracks,
+    previewTracks,
+    unavailableTracks,
+  } = splitArtifactTracks(trackArtifacts)
+  const toolNames = new Set(
+    (Array.isArray(toolCalls) ? toolCalls : [])
+      .map((call) => call?.name || '')
+      .filter(Boolean),
+  )
+  const isChinese = shouldReplyInChinese(message)
+  const usedLocalDiscovery =
+    localTracks.length > 0 ||
+    toolNames.has('library.list_audio_assets') ||
+    toolNames.has('library.search_local_audio') ||
+    toolNames.has('library.get_audio_asset')
+  const usedSpotifyDiscovery =
+    spotifyTracks.length > 0 ||
+    toolNames.has('spotify.search_tracks') ||
+    toolNames.has('spotify.get_user_top_tracks') ||
+    toolNames.has('spotify.get_user_top_artists') ||
+    toolNames.has('spotify.get_track') ||
+    toolNames.has('spotify.get_playlist')
+  const usedPlaylistTools =
+    toolNames.has('library.create_playlist') ||
+    toolNames.has('library.add_track_to_playlist')
+  const usedFavoriteTools = toolNames.has('library.favorite_track')
+  const usedPlaybackTools =
+    actions.length > 0 ||
+    [...toolNames].some(
+      (name) =>
+        name.startsWith('player.') ||
+        name === 'spotify.play_uri' ||
+        name === 'spotify.play_uris' ||
+        name === 'spotify.pause' ||
+        name === 'spotify.next' ||
+        name === 'spotify.previous',
+    )
+  const usedMemorySignals = toolNames.has('memory.get_user_profile')
+  const usedRecommendationSave =
+    toolNames.has('recommendation.save_run') ||
+    toolNames.has('history.save_recommendation')
+  const playbackMode = getArtifactPlaybackMode(trackArtifacts)
+  const sources = []
+  const steps = []
+
+  if (localTracks.length > 0 || usedLocalDiscovery) {
+    sources.push({
+      type: 'local_audio',
+      label: isChinese ? '本地音频' : 'Local audio',
+      count: localTracks.length,
+    })
+    steps.push(
+      isChinese
+        ? localTracks.length > 0
+          ? `先看了你的本地音频库，挑出了 ${localTracks.length} 首更贴近这次需求的歌。`
+          : '先看了你的本地音频库。'
+        : localTracks.length > 0
+          ? `Checked your local audio library first and pulled ${localTracks.length} close matches.`
+          : 'Checked your local audio library first.',
+    )
+  }
+
+  if (spotifyTracks.length > 0 || usedSpotifyDiscovery) {
+    sources.push({
+      type: 'spotify_remote',
+      label: 'Spotify',
+      count: spotifyTracks.length,
+    })
+    steps.push(
+      isChinese
+        ? spotifyTracks.length > 0
+          ? `又从 Spotify 找了 ${spotifyTracks.length} 首更贴近这个氛围的歌。`
+          : '又去 Spotify 补了一轮更接近这次需求的结果。'
+        : spotifyTracks.length > 0
+          ? `Then I pulled ${spotifyTracks.length} more tracks from Spotify that fit the same mood.`
+          : 'Then I checked Spotify for closer matches.',
+    )
+  }
+
+  if (usedMemorySignals) {
+    steps.push(
+      isChinese
+        ? '也参考了你最近常听、收藏和反馈过的内容。'
+        : 'I also used your recent listening, favorites, and feedback as context.',
+    )
+  }
+
+  if (usedPlaylistTools && artifacts.playlist?.name) {
+    steps.push(
+      isChinese
+        ? `最后把结果整理进了歌单《${artifacts.playlist.name}》。`
+        : `Finally, I organized the result into "${artifacts.playlist.name}".`,
+    )
+  } else if (usedFavoriteTools) {
+    steps.push(
+      isChinese
+        ? '顺手把这首歌记进了你的收藏。'
+        : 'I also saved this track into your favorites.',
+    )
+  } else if (usedRecommendationSave) {
+    steps.push(
+      isChinese
+        ? '这组推荐也已经记进你的推荐历史里了。'
+        : 'This recommendation set is also saved into your history.',
+    )
+  }
+
+  if (usedPlaybackTools && playbackMode !== 'unavailable') {
+    steps.push(
+      isChinese
+        ? playbackMode === 'mixed'
+          ? '我已经把这组歌整理成一个可混合播放的队列。'
+          : playbackMode === 'local_audio'
+            ? '这次会直接走站内本地音频播放。'
+            : playbackMode === 'spotify_remote'
+              ? '这次会通过 Spotify 官方播放器来完整播放。'
+              : '这次播放会保持兼容模式。'
+        : playbackMode === 'mixed'
+          ? 'I turned it into a mixed queue that can switch between local audio and Spotify.'
+          : playbackMode === 'local_audio'
+            ? 'This one will play through local in-app audio.'
+            : playbackMode === 'spotify_remote'
+              ? 'This one will play in full through the official Spotify player.'
+              : 'This one stays in compatibility mode.',
+    )
+  }
+
+  let summary = isChinese
+    ? '我先整理了这次请求里可用的音乐来源。'
+    : 'I first organized the music sources available for this request.'
+
+  if (usedFavoriteTools) {
+    summary = isChinese
+      ? '我已经把这首歌加入你的收藏了。'
+      : 'I saved this track to your favorites.'
+  } else if (usedPlaylistTools && artifacts.playlist?.name) {
+    summary = isChinese
+      ? trackArtifacts.length > 0
+        ? `我先挑了几首合适的歌，再把它们整理进歌单《${artifacts.playlist.name}》。`
+        : `我已经先帮你建好了歌单《${artifacts.playlist.name}》。`
+      : trackArtifacts.length > 0
+        ? `I picked the right tracks first, then organized them into "${artifacts.playlist.name}".`
+        : `I created "${artifacts.playlist.name}" for you first.`
+  } else if (usedLocalDiscovery && usedSpotifyDiscovery) {
+    summary = isChinese
+      ? '我先查了你的本地音频，又从 Spotify 找了几首类似风格的歌。'
+      : 'I checked your local audio first, then pulled a few similar tracks from Spotify.'
+  } else if (usedLocalDiscovery) {
+    summary = isChinese
+      ? '我先看了你的本地音频库，挑了几首更贴近这次需求的歌。'
+      : 'I started with your local audio library and picked the closest fits.'
+  } else if (usedSpotifyDiscovery) {
+    summary = isChinese
+      ? '我先从 Spotify 找了几首更贴近这次氛围的歌。'
+      : 'I started by finding a few Spotify tracks that fit this mood better.'
+  } else if (intent === 'play_music' && trackArtifacts.length > 0) {
+    summary = isChinese
+      ? '我已经把这次要播的歌准备好了。'
+      : 'I have the next playback choice ready.'
+  }
+
+  if (previewTracks.length > 0 && localTracks.length === 0 && spotifyTracks.length === 0) {
+    sources.push({
+      type: 'preview',
+      label: isChinese ? '试听' : 'Preview',
+      count: previewTracks.length,
+    })
+  }
+
+  if (unavailableTracks.length > 0 && localTracks.length === 0 && spotifyTracks.length === 0) {
+    sources.push({
+      type: 'unavailable',
+      label: isChinese ? '暂不可播放' : 'Unavailable',
+      count: unavailableTracks.length,
+    })
+  }
+
+  return {
+    summary,
+    steps,
+    sources,
+    playbackMode,
+    trackCount: trackArtifacts.length,
+    canPlay:
+      localTracks.length > 0 ||
+      spotifyTracks.length > 0 ||
+      playbackMode === 'mixed',
+  }
+}
+
+function normalizeAgentArtifacts(
+  artifacts = {},
+  { intent = '', sourcePlan = null } = {},
+) {
+  const normalizedArtifacts = {
+    ...artifacts,
+  }
+  const trackArtifacts = collectArtifactTracks(artifacts)
+  const {
+    localTracks,
+    spotifyTracks,
+    previewTracks,
+    unavailableTracks,
+  } = splitArtifactTracks(trackArtifacts)
+
+  if (trackArtifacts.length > 0) {
+    normalizedArtifacts.tracks = trackArtifacts
+  }
+
+  if (artifacts.track || trackArtifacts[0]) {
+    normalizedArtifacts.track = createTrackArtifact(artifacts.track || trackArtifacts[0])
+  }
+
+  if (artifacts.playlist) {
+    normalizedArtifacts.playlist = normalizePlaylistArtifact(artifacts.playlist)
+  }
+
+  if (localTracks.length > 0) {
+    normalizedArtifacts.local_audio = {
+      type: 'local_audio',
+      count: localTracks.length,
+      primaryTrack: localTracks[0],
+      tracks: localTracks,
+    }
+  }
+
+  if (spotifyTracks.length > 0) {
+    normalizedArtifacts.spotify_track = {
+      type: 'spotify_track',
+      count: spotifyTracks.length,
+      primaryTrack: spotifyTracks[0],
+      tracks: spotifyTracks,
+    }
+  }
+
+  if (
+    artifacts.recommendation_set ||
+    normalizedArtifacts.recommendationId ||
+    trackArtifacts.length > 1 ||
+    intent === 'generate_recommendation'
+  ) {
+    normalizedArtifacts.recommendation_set = {
+      ...(artifacts.recommendation_set || {}),
+      type: 'recommendation_set',
+      id:
+        artifacts.recommendation_set?.id ||
+        normalizedArtifacts.recommendationId ||
+        '',
+      title:
+        artifacts.recommendation_set?.title ||
+        normalizedArtifacts.recommendationTitle ||
+        normalizedArtifacts.playlist?.name ||
+        '',
+      summary:
+        artifacts.recommendation_set?.summary ||
+        sourcePlan?.summary ||
+        '',
+      trackCount:
+        artifacts.recommendation_set?.trackCount || trackArtifacts.length,
+      tracks: trackArtifacts,
+      sourceBreakdown: buildArtifactSourceBreakdown(trackArtifacts),
+    }
+  }
+
+  if (previewTracks.length > 0 && !normalizedArtifacts.preview) {
+    normalizedArtifacts.preview = {
+      type: 'preview',
+      count: previewTracks.length,
+    }
+  }
+
+  if (unavailableTracks.length > 0 && !normalizedArtifacts.unavailable) {
+    normalizedArtifacts.unavailable = {
+      type: 'unavailable',
+      count: unavailableTracks.length,
+    }
+  }
+
+  return normalizedArtifacts
+}
+
+function finalizeAgentResult(
+  result = {},
+  {
+    message,
+    toolCalls = [],
+    fallbackMemoryWriteback = null,
+  } = {},
+) {
+  const firstPassArtifacts = normalizeAgentArtifacts(result.artifacts || {}, {
+    intent: result.intent,
+  })
+  const memoryWriteback =
+    result.memoryWriteback ||
+    firstPassArtifacts.memoryWriteback ||
+    firstPassArtifacts.planner?.memoryWriteback ||
+    fallbackMemoryWriteback ||
+    null
+  const sourcePlan =
+    result.sourcePlan ||
+    firstPassArtifacts.sourcePlan ||
+    buildAgentSourcePlan({
+      message,
+      intent: result.intent,
+      artifacts: firstPassArtifacts,
+      actions: result.actions || [],
+      toolCalls,
+    })
+  const artifacts = normalizeAgentArtifacts(
+    {
+      ...firstPassArtifacts,
+      sourcePlan,
+      memoryWriteback,
+    },
+    {
+      intent: result.intent,
+      sourcePlan,
+    },
+  )
+
+  return {
+    ...result,
+    actions: Array.isArray(result.actions) ? result.actions : [],
+    artifacts,
+    toolCalls: Array.isArray(result.toolCalls) ? result.toolCalls : toolCalls,
+    memoryWriteback,
+    sourcePlan,
+  }
+}
+
 function collectTracksFromToolExecution(execution) {
   const { tool, result } = execution
 
@@ -2574,7 +3024,7 @@ async function runDeepSeekPlannedAgent({
         tool: step.tool,
       }
 
-      return {
+      return finalizeAgentResult({
         reply: buildPlannerOperationFailureReply({
           message,
           error,
@@ -2589,7 +3039,11 @@ async function runDeepSeekPlannedAgent({
         toolCalls,
         memoryProfile,
         conversationTitle: buildConversationTitle(message),
-      }
+      }, {
+        message,
+        toolCalls,
+        fallbackMemoryWriteback: plannerResponse.plan.memoryWriteback,
+      })
     }
   }
 
@@ -2613,14 +3067,18 @@ async function runDeepSeekPlannedAgent({
       tools,
     })
 
-    return {
+    return finalizeAgentResult({
       ...fallbackResult,
       mode,
       confidence: 0.93,
       toolCalls,
       memoryProfile,
       conversationTitle: buildConversationTitle(message),
-    }
+    }, {
+      message,
+      toolCalls,
+      fallbackMemoryWriteback: plannerResponse.plan.memoryWriteback,
+    })
   }
 
   if (plannerResponse.plan.intent === 'recommend_music' && trackArtifacts.length > 0) {
@@ -2719,7 +3177,7 @@ async function runDeepSeekPlannedAgent({
       message: 'no_playable_result',
     }
 
-    return {
+    return finalizeAgentResult({
       reply: buildPlaybackFailureReply({
         message,
         plannerInput,
@@ -2733,10 +3191,14 @@ async function runDeepSeekPlannedAgent({
       toolCalls,
       memoryProfile,
       conversationTitle: buildConversationTitle(message),
-    }
+    }, {
+      message,
+      toolCalls,
+      fallbackMemoryWriteback: plannerResponse.plan.memoryWriteback,
+    })
   }
 
-  return {
+  return finalizeAgentResult({
     reply: plannerResponse.plan.reply,
     intent: mapPlannerIntentToAssistantIntent(plannerResponse.plan.intent),
     actions,
@@ -2746,7 +3208,11 @@ async function runDeepSeekPlannedAgent({
     toolCalls,
     memoryProfile,
     conversationTitle: buildConversationTitle(message),
-  }
+  }, {
+    message,
+    toolCalls,
+    fallbackMemoryWriteback: plannerResponse.plan.memoryWriteback,
+  })
 }
 
 async function runRuleBasedAgent({
@@ -2826,14 +3292,17 @@ async function runRuleBasedAgent({
       break
   }
 
-  return {
+  return finalizeAgentResult({
     ...result,
     mode,
     confidence: intentResult.confidence,
     toolCalls: resolvedToolCalls,
     memoryProfile,
     conversationTitle: buildConversationTitle(message),
-  }
+  }, {
+    message,
+    toolCalls: resolvedToolCalls,
+  })
 }
 
 export async function runAgent({

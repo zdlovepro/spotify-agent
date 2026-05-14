@@ -88,7 +88,12 @@ function buildAssistantMessage(result) {
     content: result.reply,
     intent: result.intent,
     actions: result.actions,
-    artifacts: result.artifacts,
+    artifacts: {
+      ...(result.artifacts || {}),
+      sourcePlan: result.sourcePlan || result.artifacts?.sourcePlan || null,
+      memoryWriteback:
+        result.memoryWriteback || result.artifacts?.memoryWriteback || null,
+    },
     toolCalls: result.toolCalls,
   }
 }
@@ -380,6 +385,8 @@ router.post(
         actions: agentResult.actions,
         artifacts: agentResult.artifacts,
         toolCalls: agentResult.toolCalls,
+        memoryWriteback: agentResult.memoryWriteback,
+        sourcePlan: agentResult.sourcePlan,
         memoryProfile: agentResult.memoryProfile,
       },
       user: req.localUser

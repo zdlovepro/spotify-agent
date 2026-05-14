@@ -51,6 +51,7 @@
 
 .PrimaryBtn,
 .SecondaryBtn,
+.SecondaryActionBtn,
 .Chip,
 .SendBtn,
 .FeedbackBtn,
@@ -277,18 +278,70 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.SourcePlanCard {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(30, 215, 96, 0.12), rgba(62, 179, 255, 0.08));
+  border: 1px solid rgba(143, 240, 180, 0.18);
+}
+
 .ArtifactHeader {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 10px;
 }
 
+.HeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .ArtifactTitle {
   margin: 0;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.78);
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.ArtifactCaption,
+.SourcePlanSummary {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.SectionLabel {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.SourceChipRow,
+.ToolSummaryList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.SourceChip,
+.ToolSummaryItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .ActionBtn {
@@ -298,19 +351,46 @@
   color: #8ff0b4;
 }
 
+.SecondaryActionBtn {
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.84);
+}
+
 .TrackList {
   display: grid;
   gap: 8px;
 }
 
 .TrackRow {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
   padding: 10px 12px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.04);
+}
+
+.TrackMain {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.TrackMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.TrackActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .TrackName {
@@ -329,6 +409,19 @@
 .TrackTag {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.5);
+}
+
+.ToolSummaryBox {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ActionNotice {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #8ff0b4;
 }
 
 .FeedbackRow {
@@ -425,5 +518,11 @@
 
   .SendBtn {
     width: 100%;
+  }
+
+  .HeaderActions,
+  .TrackActions {
+    width: 100%;
+    justify-content: flex-start;
   }
 }
