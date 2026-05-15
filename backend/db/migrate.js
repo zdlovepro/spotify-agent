@@ -70,6 +70,17 @@ const schemaStatements = [
     )
   `,
   `
+    CREATE TABLE IF NOT EXISTS oauth_pending_states (
+      state TEXT PRIMARY KEY,
+      provider_name TEXT NOT NULL,
+      local_user_id TEXT NOT NULL,
+      return_to TEXT NOT NULL DEFAULT '/',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (local_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+  `
     CREATE TABLE IF NOT EXISTS audio_assets (
       id TEXT PRIMARY KEY,
       owner_user_id TEXT,
@@ -254,6 +265,7 @@ const schemaStatements = [
       event_type TEXT NOT NULL,
       source_type TEXT NOT NULL,
       source_id TEXT NOT NULL,
+      play_mode TEXT,
       position_ms INTEGER NOT NULL DEFAULT 0,
       duration_ms INTEGER,
       context_type TEXT,
@@ -273,6 +285,10 @@ const schemaStatements = [
   `
     CREATE INDEX IF NOT EXISTS idx_provider_links_user_id
     ON provider_links(user_id)
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS idx_oauth_pending_states_provider_name
+    ON oauth_pending_states(provider_name)
   `,
   `
     CREATE INDEX IF NOT EXISTS idx_library_playlists_owner_user_id
@@ -334,6 +350,11 @@ const runMigrationTransaction = db.transaction(() => {
   addColumnIfMissing('library_favorites', 'image_url', 'TEXT')
   addColumnIfMissing('library_favorites', 'preview_url', 'TEXT')
   addColumnIfMissing('library_favorites', 'duration_ms', 'INTEGER')
+
+  addColumnIfMissing('audio_assets', 'user_id', 'TEXT')
+  addColumnIfMissing('audio_assets', 'artists_json', "TEXT NOT NULL DEFAULT '[]'")
+  addColumnIfMissing('audio_assets', 'size_bytes', 'INTEGER')
+  addColumnIfMissing('listening_events', 'play_mode', 'TEXT')
 
   db.pragma('user_version = 1')
 })

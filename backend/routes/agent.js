@@ -22,6 +22,41 @@ import { parseInteger } from '../services/spotify-api.js'
 
 const router = Router()
 
+function sanitizeTrackContext(track) {
+  if (!track || typeof track !== 'object' || Array.isArray(track)) {
+    return null
+  }
+
+  const artists = Array.isArray(track.artists)
+    ? track.artists
+        .map((artist) => (typeof artist === 'string' ? artist.trim() : ''))
+        .filter(Boolean)
+    : []
+
+  return {
+    id: typeof track.id === 'string' ? track.id : '',
+    sourceType: typeof track.sourceType === 'string' ? track.sourceType : '',
+    sourceId: typeof track.sourceId === 'string' ? track.sourceId : '',
+    name: typeof track.name === 'string' ? track.name : '',
+    artists,
+    album:
+      typeof track.album === 'string'
+        ? track.album
+        : track.album && typeof track.album === 'object' && !Array.isArray(track.album)
+          ? track.album.name || ''
+          : '',
+    image: typeof track.image === 'string' ? track.image : '',
+    durationMs:
+      Number.isFinite(Number(track.durationMs)) && Number(track.durationMs) >= 0
+        ? Number(track.durationMs)
+        : 0,
+    audioUrl: typeof track.audioUrl === 'string' ? track.audioUrl : '',
+    uri: typeof track.uri === 'string' ? track.uri : '',
+    playMode: typeof track.playMode === 'string' ? track.playMode : '',
+    playable: track.playable === true,
+  }
+}
+
 function sanitizeContext(context) {
   if (!context || typeof context !== 'object' || Array.isArray(context)) {
     return {}
@@ -33,6 +68,10 @@ function sanitizeContext(context) {
     currentPlaylistId:
       typeof context.currentPlaylistId === 'string' ? context.currentPlaylistId : '',
     playerState: typeof context.playerState === 'string' ? context.playerState : '',
+    spotifyPlaybackReady: context.spotifyPlaybackReady === true,
+    currentDeviceId:
+      typeof context.currentDeviceId === 'string' ? context.currentDeviceId : '',
+    currentTrack: sanitizeTrackContext(context.currentTrack),
   }
 }
 
@@ -49,7 +88,12 @@ function buildAssistantMessage(result) {
     content: result.reply,
     intent: result.intent,
     actions: result.actions,
-    artifacts: result.artifacts,
+    artifacts: {
+      ...(result.artifacts || {}),
+      sourcePlan: result.sourcePlan || result.artifacts?.sourcePlan || null,
+      memoryWriteback:
+        result.memoryWriteback || result.artifacts?.memoryWriteback || null,
+    },
     toolCalls: result.toolCalls,
   }
 }
@@ -301,10 +345,12 @@ router.post(
     const agentResult = await runAgent({
       mode,
       localUserId: req.localUserId,
+      localSessionToken: req.localSessionToken || '',
       providerLinks: req.providerLinks || {},
       message,
       context,
       conversationId: conversation.id,
+      conversation,
     })
 
     const nextMessages = [buildUserMessage(message), buildAssistantMessage(agentResult)]
@@ -339,6 +385,8 @@ router.post(
         actions: agentResult.actions,
         artifacts: agentResult.artifacts,
         toolCalls: agentResult.toolCalls,
+        memoryWriteback: agentResult.memoryWriteback,
+        sourcePlan: agentResult.sourcePlan,
         memoryProfile: agentResult.memoryProfile,
       },
       user: req.localUser

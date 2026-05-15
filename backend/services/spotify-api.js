@@ -6,17 +6,33 @@ const spotifyApi = axios.create({
   timeout: 10000,
 })
 
-function createSpotifyApiError(error, fallbackMessage) {
+function createSpotifyApiError(error, fallbackMessage, path = '') {
   const status = error.response?.status || 400
-  const message =
-    error.response?.data?.error?.message ||
-    error.response?.data?.error ||
+  const spotifyPayload = error.response?.data?.error || error.response?.data || null
+  const spotifyMessage =
+    (typeof spotifyPayload === 'object' && spotifyPayload?.message) ||
+    (typeof spotifyPayload === 'string' ? spotifyPayload : '') ||
     error.message ||
     fallbackMessage
+  const message =
+    spotifyMessage && spotifyMessage !== fallbackMessage
+      ? `${fallbackMessage}: ${spotifyMessage}`
+      : spotifyMessage || fallbackMessage
 
   const normalized = new Error(message)
   normalized.status = status
+  normalized.code = 'spotify_api_error'
   normalized.details = error.response?.data
+  normalized.spotifyError = {
+    status,
+    path,
+    message: spotifyMessage || fallbackMessage,
+    details: error.response?.data || null,
+    reason:
+      typeof spotifyPayload === 'object' && spotifyPayload
+        ? spotifyPayload.reason || spotifyPayload.error || null
+        : null,
+  }
 
   return normalized
 }
@@ -39,9 +55,32 @@ async function spotifyGet(path, accessToken, params = {}, { ttlMs = 0 } = {}) {
 
       return response.data
     } catch (error) {
-      throw createSpotifyApiError(error, `Spotify request failed for ${path}`)
+      throw createSpotifyApiError(error, `Spotify request failed for ${path}`, path)
     }
   })
+}
+
+async function spotifyMutation(
+  method,
+  path,
+  accessToken,
+  { params = undefined, data = undefined } = {},
+) {
+  try {
+    const response = await spotifyApi.request({
+      method,
+      url: path,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      params,
+      data,
+    })
+
+    return response.data ?? null
+  } catch (error) {
+    throw createSpotifyApiError(error, `Spotify request failed for ${path}`, path)
+  }
 }
 
 export function parseInteger(value, defaultValue, { min = 0, max = 50 } = {}) {
@@ -104,6 +143,19 @@ export async function getPlaylist(accessToken, playlistId, { market }) {
     `/playlists/${playlistId}`,
     accessToken,
     { market },
+    { ttlMs: 30_000 },
+  )
+}
+
+export async function getPlaylistTracks(
+  accessToken,
+  playlistId,
+  { limit, offset, market },
+) {
+  return spotifyGet(
+    `/playlists/${playlistId}/tracks`,
+    accessToken,
+    { limit, offset, market },
     { ttlMs: 30_000 },
   )
 }
@@ -248,4 +300,79 @@ export async function getUserTopItems(
     },
     { ttlMs: 60_000 },
   )
+}
+
+export async function getAvailableDevices(accessToken) {
+  return spotifyGet('/me/player/devices', accessToken, {}, { ttlMs: 5_000 })
+}
+
+export async function getCurrentPlaybackState(accessToken) {
+  return spotifyGet('/me/player', accessToken, {}, { ttlMs: 3_000 })
+}
+
+export async function transferPlayback(accessToken, { deviceId, play = true }) {
+  return spotifyMutation('PUT', '/me/player', accessToken, {
+    data: {
+      device_ids: [deviceId],
+      play: Boolean(play),
+    },
+  })
+}
+
+export async function startOrResumePlayback(
+  accessToken,
+  { deviceId = '', uris = null, contextUri = '', offset = null, positionMs = null } = {},
+) {
+  const payload = {}
+
+  if (Array.isArray(uris) && uris.length) {
+    payload.uris = uris
+  }
+
+  if (contextUri) {
+    payload.context_uri = contextUri
+  }
+
+  if (offset && typeof offset === 'object') {
+    const normalizedOffset = {}
+
+    if (typeof offset.uri === 'string' && offset.uri.trim()) {
+      normalizedOffset.uri = offset.uri.trim()
+    }
+
+    if (Number.isFinite(Number(offset.position)) && Number(offset.position) >= 0) {
+      normalizedOffset.position = Number(offset.position)
+    }
+
+    if (Object.keys(normalizedOffset).length) {
+      payload.offset = normalizedOffset
+    }
+  }
+
+  if (Number.isFinite(Number(positionMs)) && Number(positionMs) >= 0) {
+    payload.position_ms = Number(positionMs)
+  }
+
+  return spotifyMutation('PUT', '/me/player/play', accessToken, {
+    params: deviceId ? { device_id: deviceId } : undefined,
+    data: Object.keys(payload).length ? payload : undefined,
+  })
+}
+
+export async function pausePlayback(accessToken, { deviceId = '' } = {}) {
+  return spotifyMutation('PUT', '/me/player/pause', accessToken, {
+    params: deviceId ? { device_id: deviceId } : undefined,
+  })
+}
+
+export async function skipToNextPlayback(accessToken, { deviceId = '' } = {}) {
+  return spotifyMutation('POST', '/me/player/next', accessToken, {
+    params: deviceId ? { device_id: deviceId } : undefined,
+  })
+}
+
+export async function skipToPreviousPlayback(accessToken, { deviceId = '' } = {}) {
+  return spotifyMutation('POST', '/me/player/previous', accessToken, {
+    params: deviceId ? { device_id: deviceId } : undefined,
+  })
 }

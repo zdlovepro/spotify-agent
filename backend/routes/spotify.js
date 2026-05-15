@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { asyncHandler } from '../middleware/async-handler.js'
+import { requireLocalUser } from '../middleware/require-local-user.js'
 import { requireSpotifyAccessToken } from '../middleware/require-spotify-access-token.js'
 import { assert } from '../utils/assert.js'
 import {
@@ -22,8 +23,158 @@ import {
   parseInteger,
   searchSpotify,
 } from '../services/spotify-api.js'
+import {
+  getCurrentPlayback,
+  listDevices,
+  next,
+  pause,
+  playUri,
+  playUris,
+  previous,
+  resume,
+  transferPlayback,
+} from '../services/provider/spotify-player-service.js'
 
 const router = Router()
+
+router.get(
+  '/sdk-token',
+  requireLocalUser,
+  requireSpotifyAccessToken,
+  asyncHandler(async (req, res) => {
+    const scopes = Array.isArray(req.spotifyProviderLink?.scopes)
+      ? req.spotifyProviderLink.scopes
+      : []
+    const missingScopes = ['streaming'].filter((scope) => !scopes.includes(scope))
+
+    if (missingScopes.length > 0) {
+      const error = new Error(
+        `Reconnect Spotify to grant playback permissions: ${missingScopes.join(', ')}`,
+      )
+      error.status = 403
+      error.code = 'spotify_forbidden'
+      error.details = { missingScopes }
+      throw error
+    }
+
+    res.json({
+      accessToken: req.accessToken,
+      expiresAt: req.spotifyProviderLink?.tokenExpiresAt || null,
+      scopes,
+    })
+  }),
+)
+
+router.use('/player', requireLocalUser)
+
+function normalizeDeviceId(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizeString(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function buildPlaybackOptions(body = {}) {
+  const options = {}
+  const deviceId = normalizeDeviceId(body?.deviceId)
+
+  if (deviceId) {
+    options.deviceId = deviceId
+  }
+
+  if (body?.offset && typeof body.offset === 'object') {
+    options.offset = body.offset
+  }
+
+  if (
+    Number.isFinite(Number(body?.positionMs)) &&
+    Number(body.positionMs) >= 0
+  ) {
+    options.positionMs = Number(body.positionMs)
+  }
+
+  return options
+}
+
+const handleGetCurrentPlayback = asyncHandler(async (req, res) => {
+  const data = await getCurrentPlayback(req.localUserId)
+  res.json(data || {})
+})
+
+router.get(
+  '/player/devices',
+  asyncHandler(async (req, res) => {
+    const data = await listDevices(req.localUserId)
+
+    res.json({
+      total: data.total,
+      items: data.items,
+      devices: data.items,
+    })
+  }),
+)
+
+router.get('/player/current', handleGetCurrentPlayback)
+router.get('/player/state', handleGetCurrentPlayback)
+
+router.put(
+  '/player/transfer',
+  asyncHandler(async (req, res) => {
+    const deviceId = normalizeDeviceId(req.body?.deviceId)
+
+    assert(deviceId, 'deviceId is required', 400)
+
+    const data = await transferPlayback(
+      req.localUserId,
+      deviceId,
+      req.body?.play !== false,
+    )
+
+    res.json(data)
+  }),
+)
+
+router.put(
+  '/player/play',
+  asyncHandler(async (req, res) => {
+    const options = buildPlaybackOptions(req.body)
+    const uris = Array.isArray(req.body?.uris) ? req.body.uris : []
+    const uri = normalizeString(req.body?.uri || req.body?.contextUri)
+
+    const data = uris.length
+      ? await playUris(req.localUserId, uris, options)
+      : uri
+        ? await playUri(req.localUserId, uri, options)
+        : await resume(req.localUserId, options)
+
+    res.json(data)
+  }),
+)
+
+router.put(
+  '/player/pause',
+  asyncHandler(async (req, res) => {
+    const data = await pause(req.localUserId, buildPlaybackOptions(req.body))
+    res.json(data)
+  }),
+)
+
+router.post(
+  '/player/next',
+  asyncHandler(async (req, res) => {
+    const data = await next(req.localUserId, buildPlaybackOptions(req.body))
+    res.json(data)
+  }),
+)
+
+router.post(
+  '/player/previous',
+  asyncHandler(async (req, res) => {
+    const data = await previous(req.localUserId, buildPlaybackOptions(req.body))
+    res.json(data)
+  }),
+)
 
 router.use(requireSpotifyAccessToken)
 
@@ -336,5 +487,4 @@ router.get(
     res.json(data)
   }),
 )
-
 export default router

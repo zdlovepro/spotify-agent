@@ -1,113 +1,103 @@
-import crypto from 'crypto'
-import { fileURLToPath } from 'url'
-import { mkdir, readFile, writeFile } from 'fs/promises'
-import path from 'path'
-
-const currentFilePath = fileURLToPath(import.meta.url)
-const currentDirectory = path.dirname(currentFilePath)
-const dataDirectory = path.join(currentDirectory, '..', 'data')
-const historyFilePath = path.join(dataDirectory, 'recommendation-history.json')
-const maxEntriesPerUser = 50
-
-let writeQueue = Promise.resolve()
-
-async function ensureHistoryFile() {
-  await mkdir(dataDirectory, { recursive: true })
-
-  try {
-    await readFile(historyFilePath, 'utf8')
-  } catch {
-    await writeFile(historyFilePath, JSON.stringify({}, null, 2))
-  }
-}
-
-async function readHistoryData() {
-  await ensureHistoryFile()
-
-  const raw = await readFile(historyFilePath, 'utf8')
-
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return {}
-  }
-}
-
-function queueWrite(mutator) {
-  writeQueue = writeQueue.then(async () => {
-    const data = await readHistoryData()
-    const nextData = await mutator(data)
-    await writeFile(historyFilePath, JSON.stringify(nextData, null, 2))
-    return nextData
-  })
-
-  return writeQueue
-}
+import db from '../db/index.js'
+import { assert } from '../utils/assert.js'
+import { resolveLocalUserId } from './auth/resolve-local-user-id.js'
+import {
+  listStoredRecommendationRuns,
+  saveStoredRecommendationRun,
+} from './agent/agent-recommendation-service.js'
 
 function sanitizeTrack(track = {}) {
   return {
-    id: track.id || '',
-    name: track.name || 'Unknown track',
+    id: track.id || track.source_id || '',
+    source_type: track.source_type || track.sourceType || 'spotify',
+    source_id: track.source_id || track.sourceId || track.id || '',
+    name: track.name || track.title || 'Unknown track',
+    title: track.title || track.name || 'Unknown track',
     artists: Array.isArray(track.artists) ? track.artists : [],
-    album: track.album || '',
-    image: track.image || '',
-    previewUrl: track.previewUrl || '',
+    album:
+      typeof track.album === 'string'
+        ? track.album
+        : track.album?.name || '',
+    image: track.image || track.image_url || '',
+    previewUrl: track.previewUrl || track.preview_url || '',
+    audioUrl: track.audioUrl || track.audio_url || '',
+    durationMs: track.durationMs ?? track.duration_ms ?? null,
+    playable:
+      typeof track.playable === 'boolean'
+        ? track.playable
+        : Boolean(track.audioUrl || track.audio_url || track.previewUrl || track.preview_url),
+    playMode:
+      track.playMode ||
+      track.play_mode ||
+      (track.audioUrl || track.audio_url
+        ? 'local'
+        : track.previewUrl || track.preview_url
+          ? 'preview'
+          : 'unavailable'),
   }
 }
 
-export async function listRecommendationHistory(userId, limit = 20) {
-  const data = await readHistoryData()
-  const entries = Array.isArray(data[userId]) ? data[userId] : []
+function requireLocalUserId(localUserIdOrLegacyUserId) {
+  const resolvedLocalUserId = resolveLocalUserId(localUserIdOrLegacyUserId)
 
-  return entries.slice(0, limit)
+  assert(
+    resolvedLocalUserId,
+    'localUserId is required; legacy spotifyUserId callers must be mapped to a local account first',
+    401,
+  )
+
+  return resolvedLocalUserId
 }
 
-export async function saveRecommendationHistory(userId, payload) {
-  const entry = {
-    id: crypto.randomUUID(),
-    title: payload.title || 'Untitled Recommendation',
-    prompt: payload.prompt || '',
-    description: payload.description || '',
-    seeds: payload.seeds || {},
-    tracks: Array.isArray(payload.tracks)
-      ? payload.tracks.map((track) => sanitizeTrack(track))
+function mapLegacyRecommendationEntry(entry) {
+  if (!entry) {
+    return null
+  }
+
+  return {
+    id: entry.id,
+    title: entry.title || 'Untitled Recommendation',
+    prompt: entry.prompt || '',
+    description: entry.description || '',
+    seeds: entry.seeds || {},
+    tracks: Array.isArray(entry.tracks)
+      ? entry.tracks.map((track) => sanitizeTrack(track))
       : [],
-    createdAt: new Date().toISOString(),
+    createdAt: entry.createdAt || entry.updatedAt || new Date().toISOString(),
   }
-
-  await queueWrite((data) => {
-    const currentEntries = Array.isArray(data[userId]) ? data[userId] : []
-    const nextEntries = [entry, ...currentEntries].slice(0, maxEntriesPerUser)
-
-    return {
-      ...data,
-      [userId]: nextEntries,
-    }
-  })
-
-  return entry
 }
 
-export async function deleteRecommendationHistory(userId, entryId) {
-  let removed = false
+export async function listRecommendationHistory(
+  localUserIdOrLegacyUserId,
+  limit = 20,
+) {
+  const localUserId = requireLocalUserId(localUserIdOrLegacyUserId)
+  const entries = listStoredRecommendationRuns(localUserId, limit)
 
-  await queueWrite((data) => {
-    const currentEntries = Array.isArray(data[userId]) ? data[userId] : []
-    const nextEntries = currentEntries.filter((entry) => {
-      const shouldKeep = entry.id !== entryId
+  return entries.map((entry) => mapLegacyRecommendationEntry(entry))
+}
 
-      if (!shouldKeep) {
-        removed = true
-      }
+export async function saveRecommendationHistory(localUserIdOrLegacyUserId, payload) {
+  const localUserId = requireLocalUserId(localUserIdOrLegacyUserId)
+  const entry = saveStoredRecommendationRun(localUserId, payload)
 
-      return shouldKeep
-    })
+  return mapLegacyRecommendationEntry(entry)
+}
 
-    return {
-      ...data,
-      [userId]: nextEntries,
-    }
-  })
+export async function deleteRecommendationHistory(
+  localUserIdOrLegacyUserId,
+  entryId,
+) {
+  const localUserId = requireLocalUserId(localUserIdOrLegacyUserId)
+  const result = db
+    .prepare(
+      `
+        DELETE FROM recommendation_runs
+        WHERE owner_user_id = ?
+          AND id = ?
+      `,
+    )
+    .run(localUserId, entryId)
 
-  return removed
+  return result.changes > 0
 }

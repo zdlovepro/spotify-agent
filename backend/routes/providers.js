@@ -3,8 +3,12 @@ import { Router } from 'express'
 import env from '../config/env.js'
 import { asyncHandler } from '../middleware/async-handler.js'
 import { requireLocalUser } from '../middleware/require-local-user.js'
-import { getSession } from '../services/auth/session-service.js'
 import { findUserById } from '../services/auth/user-service.js'
+import {
+  consumeOAuthPendingState,
+  createOAuthPendingState,
+  pruneExpiredOAuthPendingStates,
+} from '../services/auth/oauth-state-service.js'
 import {
   linkProvider,
   listProviderLinks,
@@ -18,19 +22,17 @@ import {
   SPOTIFY_PROVIDER_NAME,
   SPOTIFY_SCOPES,
 } from '../services/provider/spotify-provider-service.js'
+import {
+  importAllSpotifyPlaylists,
+  importSpotifyPlaylist,
+  syncSpotifySavedTracks,
+} from '../services/provider/spotify-library-import-service.js'
 
 const router = Router()
 const STATE_TTL_MS = 10 * 60 * 1000
-const pendingStates = new Map()
 
 function pruneExpiredStates() {
-  const now = Date.now()
-
-  for (const [state, entry] of pendingStates.entries()) {
-    if (entry.expiresAt <= now) {
-      pendingStates.delete(state)
-    }
-  }
+  pruneExpiredOAuthPendingStates(SPOTIFY_PROVIDER_NAME)
 }
 
 function buildFrontendRedirect(pathname, params = {}) {
@@ -55,32 +57,77 @@ function shouldReturnJson(req) {
   )
 }
 
+function buildSpotifyImportErrorPayload(error) {
+  return {
+    provider: SPOTIFY_PROVIDER_NAME,
+    message: error.message || 'spotify_import_failed',
+    error: error.message || 'spotify_import_failed',
+    ...(error.code ? { code: error.code } : {}),
+    ...(error.stage ? { stage: error.stage } : {}),
+    ...(Array.isArray(error.missingScopes) ? { missingScopes: error.missingScopes } : {}),
+    ...(error.details ? { details: error.details } : {}),
+  }
+}
+
+function getSpotifyImportResponseStatus(result) {
+  if ((result?.importedCount || 0) > 0) {
+    return 201
+  }
+
+  if ((result?.failedCount || 0) > 0) {
+    return 207
+  }
+
+  return 200
+}
+
 router.get(
   '/',
   requireLocalUser,
   asyncHandler(async (req, res) => {
     const providerLinks = await Promise.all(
       listProviderLinks(req.localUserId).map(async (providerLink) => {
-        const activeLink =
-          providerLink.providerName === SPOTIFY_PROVIDER_NAME
-            ? await refreshProviderToken(providerLink)
-            : providerLink
+        try {
+          const activeLink =
+            providerLink.providerName === SPOTIFY_PROVIDER_NAME
+              ? await refreshProviderToken(providerLink)
+              : providerLink
 
-        return {
-          provider: activeLink.providerName,
-          connected: true,
-          displayName: activeLink.displayName,
-          sourceType: activeLink.sourceType,
-          sourceId: activeLink.sourceId,
-          scopes: activeLink.scopes,
-          profile: activeLink.profile,
-          linkedAt: activeLink.createdAt,
-          updatedAt: activeLink.updatedAt,
+          if (
+            providerLink.providerName === SPOTIFY_PROVIDER_NAME &&
+            !activeLink?.accessToken
+          ) {
+            return null
+          }
+
+          return {
+            provider: activeLink.providerName,
+            connected: true,
+            displayName: activeLink.displayName,
+            sourceType: activeLink.sourceType,
+            sourceId: activeLink.sourceId,
+            scopes: activeLink.scopes,
+            profile: activeLink.profile,
+            linkedAt: activeLink.createdAt,
+            updatedAt: activeLink.updatedAt,
+          }
+        } catch (error) {
+          if (
+            providerLink.providerName === SPOTIFY_PROVIDER_NAME &&
+            ['spotify_reconnect_required', 'spotify_token_unavailable'].includes(
+              error.code,
+            )
+          ) {
+            return null
+          }
+
+          throw error
         }
       }),
     )
+    const resolvedProviderLinks = providerLinks.filter(Boolean)
 
-    const spotifyLink = providerLinks.find(
+    const spotifyLink = resolvedProviderLinks.find(
       (item) => item.provider === SPOTIFY_PROVIDER_NAME,
     )
 
@@ -109,11 +156,12 @@ router.get(
         ? req.query.return_to
         : '/'
 
-    pendingStates.set(state, {
+    createOAuthPendingState({
+      state,
+      providerName: SPOTIFY_PROVIDER_NAME,
       localUserId: req.localUserId,
-      localSessionToken: req.localSessionToken,
       returnTo,
-      expiresAt: Date.now() + STATE_TTL_MS,
+      ttlMs: STATE_TTL_MS,
     })
 
     const params = new URLSearchParams({
@@ -122,6 +170,7 @@ router.get(
       scope: SPOTIFY_SCOPES,
       redirect_uri: env.spotifyRedirectUri,
       state,
+      show_dialog: 'true',
     })
 
     const authorizeUrl = `https://accounts.spotify.com/authorize?${params.toString()}`
@@ -153,7 +202,7 @@ router.get(
       )
     }
 
-    const stateEntry = pendingStates.get(state)
+    const stateEntry = consumeOAuthPendingState(state, SPOTIFY_PROVIDER_NAME)
 
     if (!stateEntry) {
       return res.redirect(
@@ -164,15 +213,9 @@ router.get(
       )
     }
 
-    pendingStates.delete(state)
+    const localUser = findUserById(stateEntry.localUserId)
 
-    const session = getSession(stateEntry.localSessionToken)
-    const localUser =
-      session && session.userId === stateEntry.localUserId
-        ? findUserById(stateEntry.localUserId)
-        : null
-
-    if (!session || !localUser) {
+    if (!localUser) {
       return res.redirect(
         buildFrontendRedirect(stateEntry.returnTo, {
           provider: SPOTIFY_PROVIDER_NAME,
@@ -232,6 +275,68 @@ router.delete(
     res.json({
       provider: SPOTIFY_PROVIDER_NAME,
       disconnected: removed,
+    })
+  }),
+)
+
+router.post(
+  '/spotify/import/playlists',
+  requireLocalUser,
+  asyncHandler(async (req, res) => {
+    try {
+      const result = await importAllSpotifyPlaylists(req.localUserId)
+
+      res.status(getSpotifyImportResponseStatus(result)).json({
+        provider: SPOTIFY_PROVIDER_NAME,
+        ...result,
+      })
+    } catch (error) {
+      if (error?.code?.startsWith('spotify_')) {
+        return res
+          .status(error.status || 403)
+          .json(buildSpotifyImportErrorPayload(error))
+      }
+
+      throw error
+    }
+  }),
+)
+
+router.post(
+  '/spotify/import/playlists/:spotifyPlaylistId',
+  requireLocalUser,
+  asyncHandler(async (req, res) => {
+    try {
+      const result = await importSpotifyPlaylist(
+        req.localUserId,
+        req.params.spotifyPlaylistId,
+      )
+
+      res.status(result?.skipped ? 200 : 201).json({
+        provider: SPOTIFY_PROVIDER_NAME,
+        ...result,
+      })
+    } catch (error) {
+      if (error?.code?.startsWith('spotify_')) {
+        return res
+          .status(error.status || 403)
+          .json(buildSpotifyImportErrorPayload(error))
+      }
+
+      throw error
+    }
+  }),
+)
+
+router.post(
+  '/spotify/sync/saved-tracks',
+  requireLocalUser,
+  asyncHandler(async (req, res) => {
+    const result = await syncSpotifySavedTracks(req.localUserId)
+
+    res.status(201).json({
+      provider: SPOTIFY_PROVIDER_NAME,
+      ...result,
     })
   }),
 )

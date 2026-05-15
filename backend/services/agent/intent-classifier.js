@@ -19,8 +19,10 @@ const controlPatterns = [
 
 const searchPatterns =
   /(介绍|是什么|谁唱|歌手|专辑|歌曲信息|bio|artist|album|track info|歌词|信息)/i
+const playlistPatterns =
+  /(新建|创建|建一个|建个|做一个|做个).*(歌单|playlist)|(加入|加到).*(歌单|playlist)|收藏|favorite|saved? track/i
 const playPatterns =
-  /(播放|放一首|来一首|听一首|play|listen to|播一下)/i
+  /(播放|放一首|来一首|听一首|play|listen to|播一个)/i
 const recommendPatterns =
   /(推荐|来点|适合|随机|歌单|想听|类似|风格|mood|recommend|discover)/i
 
@@ -55,6 +57,13 @@ export function classifyIntent(message) {
     return {
       intent: 'search_entity',
       confidence: 0.84,
+    }
+  }
+
+  if (playlistPatterns.test(normalized)) {
+    return {
+      intent: 'create_playlist',
+      confidence: 0.9,
     }
   }
 

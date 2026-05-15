@@ -1,52 +1,15 @@
-import crypto from 'crypto'
-import { fileURLToPath } from 'url'
-import { mkdir, readFile, writeFile } from 'fs/promises'
-import path from 'path'
-
-const currentFilePath = fileURLToPath(import.meta.url)
-const currentDirectory = path.dirname(currentFilePath)
-const dataDirectory = path.join(currentDirectory, '..', 'data')
-const conversationsFilePath = path.join(dataDirectory, 'conversations.json')
-const maxMessagesPerConversation = 100
-
-let writeQueue = Promise.resolve()
-
-async function ensureConversationsFile() {
-  await mkdir(dataDirectory, { recursive: true })
-
-  try {
-    await readFile(conversationsFilePath, 'utf8')
-  } catch {
-    await writeFile(conversationsFilePath, JSON.stringify({}, null, 2))
-  }
-}
-
-async function readConversationData() {
-  await ensureConversationsFile()
-
-  const raw = await readFile(conversationsFilePath, 'utf8')
-
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return {}
-  }
-}
-
-function queueWrite(mutator) {
-  writeQueue = writeQueue.then(async () => {
-    const data = await readConversationData()
-    const nextData = await mutator(data)
-    await writeFile(conversationsFilePath, JSON.stringify(nextData, null, 2))
-    return nextData
-  })
-
-  return writeQueue
-}
+import { assert } from '../utils/assert.js'
+import { resolveLocalUserId } from './auth/resolve-local-user-id.js'
+import {
+  appendStoredConversationMessages,
+  createStoredConversation,
+  getStoredConversation,
+  listStoredConversations,
+} from './agent/agent-conversation-service.js'
 
 function sanitizeMessage(message = {}) {
   return {
-    id: message.id || crypto.randomUUID(),
+    id: message.id || '',
     role: message.role || 'assistant',
     content: message.content || '',
     intent: message.intent || null,
@@ -59,116 +22,85 @@ function sanitizeMessage(message = {}) {
 
 function sanitizeConversation(conversation = {}) {
   return {
-    id: conversation.id || crypto.randomUUID(),
+    id: conversation.id || '',
     title: conversation.title || 'New Conversation',
-    createdAt: conversation.createdAt || new Date().toISOString(),
-    updatedAt: conversation.updatedAt || new Date().toISOString(),
+    createdAt: conversation.createdAt || '',
+    updatedAt: conversation.updatedAt || '',
     messages: Array.isArray(conversation.messages)
       ? conversation.messages.map((message) => sanitizeMessage(message))
       : [],
   }
 }
 
-function getUserConversations(data, userId) {
-  return Array.isArray(data[userId]) ? data[userId] : []
-}
+function requireLocalUserId(localUserIdOrLegacyUserId) {
+  const resolvedLocalUserId = resolveLocalUserId(localUserIdOrLegacyUserId)
 
-function sortConversations(conversations) {
-  return [...conversations].sort((left, right) =>
-    right.updatedAt.localeCompare(left.updatedAt),
+  assert(
+    resolvedLocalUserId,
+    'localUserId is required; legacy spotifyUserId callers must be mapped to a local account first',
+    401,
   )
+
+  return resolvedLocalUserId
 }
 
-export async function createConversation(userId, payload = {}) {
-  const conversation = sanitizeConversation({
+function mapLegacyConversation(conversation) {
+  if (!conversation) {
+    return null
+  }
+
+  const normalizedConversation = sanitizeConversation(conversation)
+
+  return {
+    id: normalizedConversation.id,
+    title: normalizedConversation.title,
+    createdAt: normalizedConversation.createdAt,
+    updatedAt: normalizedConversation.updatedAt,
+    messages: normalizedConversation.messages,
+  }
+}
+
+export async function createConversation(localUserIdOrLegacyUserId, payload = {}) {
+  const localUserId = requireLocalUserId(localUserIdOrLegacyUserId)
+  const conversation = createStoredConversation(localUserId, {
     id: payload.id,
     title: payload.title,
+    mode: payload.mode,
+    context: payload.context,
+    metadata: payload.metadata,
   })
 
-  await queueWrite((data) => {
-    const current = getUserConversations(data, userId)
-
-    return {
-      ...data,
-      [userId]: sortConversations([conversation, ...current]),
-    }
-  })
-
-  return conversation
+  return mapLegacyConversation(conversation)
 }
 
-export async function listConversations(userId, limit = 20) {
-  const data = await readConversationData()
-  const conversations = getUserConversations(data, userId)
-
-  return sortConversations(conversations)
-    .slice(0, limit)
-    .map((conversation) => {
-      const lastMessage = conversation.messages.at(-1)
-
-      return {
-        id: conversation.id,
-        title: conversation.title,
-        createdAt: conversation.createdAt,
-        updatedAt: conversation.updatedAt,
-        messageCount: conversation.messages.length,
-        lastMessagePreview: lastMessage?.content?.slice(0, 120) || '',
-      }
-    })
+export async function listConversations(localUserIdOrLegacyUserId, limit = 20) {
+  const localUserId = requireLocalUserId(localUserIdOrLegacyUserId)
+  return listStoredConversations(localUserId, limit)
 }
 
-export async function getConversation(userId, conversationId) {
-  const data = await readConversationData()
-  const conversations = getUserConversations(data, userId)
+export async function getConversation(
+  localUserIdOrLegacyUserId,
+  conversationId,
+) {
+  const localUserId = requireLocalUserId(localUserIdOrLegacyUserId)
+  const conversation = getStoredConversation(localUserId, conversationId)
 
-  return conversations.find((conversation) => conversation.id === conversationId) || null
+  return mapLegacyConversation(conversation)
 }
 
 export async function appendConversationMessages(
-  userId,
+  localUserIdOrLegacyUserId,
   conversationId,
   messages,
   options = {},
 ) {
-  let updatedConversation = null
+  const localUserId = requireLocalUserId(localUserIdOrLegacyUserId)
+  const conversation = appendStoredConversationMessages(
+    localUserId,
+    conversationId,
+    Array.isArray(messages) ? messages : [],
+    options,
+  )
 
-  await queueWrite((data) => {
-    const current = getUserConversations(data, userId)
-    const now = new Date().toISOString()
-    const messageBatch = messages.map((message) => sanitizeMessage(message))
-    const nextConversations = current.map((conversation) => sanitizeConversation(conversation))
-    let target = nextConversations.find(
-      (conversation) => conversation.id === conversationId,
-    )
-
-    if (!target) {
-      target = sanitizeConversation({
-        id: conversationId,
-        title: options.title,
-      })
-      nextConversations.unshift(target)
-    }
-
-    if (
-      options.title &&
-      (!target.title ||
-        target.title === 'New Conversation' ||
-        target.messages.length === 0)
-    ) {
-      target.title = options.title
-    }
-
-    target.messages = [...target.messages, ...messageBatch].slice(
-      -maxMessagesPerConversation,
-    )
-    target.updatedAt = now
-    updatedConversation = target
-
-    return {
-      ...data,
-      [userId]: sortConversations(nextConversations),
-    }
-  })
-
-  return updatedConversation
+  return mapLegacyConversation(conversation)
 }

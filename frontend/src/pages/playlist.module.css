@@ -80,6 +80,52 @@
 .PlaylistSongs{
     padding: 0 32px;
 }
+
+.AvailabilityBanner{
+    margin: 0 32px 18px;
+    padding: 18px 20px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.08);
+}
+.AvailabilityTitle{
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+}
+.AvailabilityText{
+    margin: 8px 0 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: rgba(255,255,255,.7);
+}
+.AvailabilityActions{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.AvailabilityBtn,
+.AvailabilityBtnSecondary{
+    min-height: 42px;
+    border-radius: 999px;
+    padding: 0 16px;
+    border: 0;
+    cursor: pointer;
+    font-weight: 700;
+}
+.AvailabilityBtn{
+    background: linear-gradient(135deg,#1ed760,#17b44f);
+    color: #04160a;
+}
+.AvailabilityBtnSecondary{
+    background: rgba(255,255,255,.08);
+    color: #fff;
+}
 .ListHead{
     margin: 0 20px 16px 40px;
     padding: 8px 16px;
@@ -149,6 +195,11 @@
     }
     .PlaylistSongs{
         padding: 0px 16px;
+    }
+    .AvailabilityBanner{
+        margin: 0 16px 14px;
+        padding: 16px;
+        display: grid;
     }
     .SongBtn{
         padding: 0;

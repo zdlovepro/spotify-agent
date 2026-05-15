@@ -2,17 +2,21 @@ import { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { Link } from 'react-router-dom'
 import { changePlay, changeTrack } from '../../store/index.js'
-import { createPlaybackQueue } from '../../lib/spotify.js'
+import { useSpotify } from '../../context/SpotifyContext.jsx'
+import { canStartTrackPlayback, createPlaybackQueue } from '../../lib/spotify.js'
 import TextBoldL from '../text/TextBoldL'
 import PlayButton from '../buttons/PlayButton'
 import styles from './playlist-card-s.module.css'
 
 function PlaylistCardS({ data }) {
   const dispatch = useDispatch()
+  const { isConnected } = useSpotify()
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const [isthisplay, setIsthisPlay] = useState(false)
-  const canPlay = (data.playlistData || []).some((song) => song.link)
+  const canPlay = (data.playlistData || []).some((song) =>
+    canStartTrackPlayback(song, { allowRemote: isConnected }),
+  )
 
   function changeTheme() {
     document.documentElement.style.setProperty('--hover-home-bg', data.hoverColor)

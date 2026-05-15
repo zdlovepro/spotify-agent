@@ -1,19 +1,38 @@
 import { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { changePlay, changeTrack } from '../../store/index.js'
-import { createPlaybackQueue } from '../../lib/spotify.js'
+import { useSpotify } from '../../context/SpotifyContext.jsx'
+import { canStartTrackPlayback, createPlaybackQueue } from '../../lib/spotify.js'
 import TextBoldL from '../text/TextBoldL'
 import TextRegularM from '../text/TextRegularM'
 import PlayButton from '../buttons/PlayButton'
 import styles from './playlist-card-m.module.css'
 
-function PlaylistCardM({ data }) {
+function PlaylistCardM({
+  data,
+  showDisabledPlayButton = false,
+  disabledPlayTitle = '',
+}) {
+  const { t } = useTranslation()
   const dispatch = useDispatch()
+  const { isConnected } = useSpotify()
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const [isthisplay, setIsthisPlay] = useState(false)
-  const canPlay = (data.playlistData || []).some((song) => song.link)
+  const trackCount = Number(data.itemCount)
+  const trackCountText = Number.isFinite(trackCount)
+    ? t('search_tracks_count', { count: trackCount })
+    : ''
+  const secondaryText =
+    data.artist && trackCountText
+      ? `${data.artist} | ${trackCountText}`
+      : data.artist || trackCountText
+  const canPlay = (data.playlistData || []).some((song) =>
+    canStartTrackPlayback(song, { allowRemote: isConnected }),
+  )
+  const shouldRenderPlayButton = canPlay || showDisabledPlayButton
 
   function handlePlay(event) {
     event.preventDefault()
@@ -44,17 +63,27 @@ function PlaylistCardM({ data }) {
             <img src={data.imgUrl} alt={data.title} />
           </div>
           <div className={styles.Title}>
+            {data.sourceLabel && (
+              <span className={styles.SourceBadge}>{t(data.sourceLabel)}</span>
+            )}
             <TextBoldL>{data.title}</TextBoldL>
-            <TextRegularM>{data.artist}</TextRegularM>
+            <TextRegularM>{secondaryText}</TextRegularM>
           </div>
         </div>
       </Link>
-      {canPlay && (
+      {shouldRenderPlayButton && (
         <div
-          onClick={handlePlay}
-          className={`${styles.IconBox} ${isthisplay && isPlaying ? styles.ActiveIconBox : ''}`}
+          onClick={canPlay ? handlePlay : undefined}
+          className={`${styles.IconBox} ${
+            isthisplay && isPlaying ? styles.ActiveIconBox : ''
+          } ${!canPlay ? styles.DisabledIconBox : ''}`}
         >
-          <PlayButton isthisplay={isthisplay} onClick={handlePlay} />
+          <PlayButton
+            isthisplay={isthisplay}
+            onClick={handlePlay}
+            disabled={!canPlay}
+            title={!canPlay ? disabledPlayTitle : ''}
+          />
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import fallbackArtwork from '../assets/hero.png'
+import { resolveTrackPlaybackMeta } from '../lib/spotify.js'
 
 const LOCAL_LIBRARY_ACCENT = '#1ed760'
 
@@ -33,22 +34,50 @@ function getArtistNames(artists = []) {
 }
 
 function mapTrackToPlaylistSong(track, index) {
+  const playback = resolveTrackPlaybackMeta(track)
+  const durationMs = track.duration_ms || track.durationMs || 0
+  const songImage = getImageFromTrack(track)
+  const songName = track.title || track.name || 'Unknown track'
+  const songArtist = getArtistNames(track.artists) || 'Unknown artist'
+
   return {
     id: track.id || track.source_id || track.sourceId || `track-${index}`,
     index: String(index + 1),
-    songName: track.title || track.name || 'Unknown track',
-    songimg: getImageFromTrack(track),
-    songArtist: getArtistNames(track.artists) || 'Unknown artist',
-    link: track.preview_url || track.previewUrl || '',
-    trackTime: formatDuration(track.duration_ms || track.durationMs || 0),
-    playable: Boolean(track.preview_url || track.previewUrl),
+    songName,
+    songImg: songImage,
+    songimg: songImage,
+    songArtist,
+    link: playback.streamUrl,
+    audioUrl: playback.audioUrl,
+    previewUrl: playback.previewUrl,
+    remoteUri: playback.remoteUri,
+    sourceType:
+      track.source_type ||
+      track.sourceType ||
+      (playback.isLocalAudio ? 'local_audio' : playback.isSpotifyRemote ? 'spotify' : ''),
+    playMode: playback.playMode,
+    duration: durationMs,
+    durationMs,
+    trackTime: formatDuration(durationMs),
+    playable: playback.playable,
+    sourceId: track.source_id || track.sourceId || '',
+    uri: track.uri || playback.remoteUri,
+    title: songName,
+    name: songName,
   }
 }
 
 export function mapLocalPlaylistSummary(playlist, index = 0) {
+  const isSpotifyImport = playlist.sourceType === 'spotify_import'
+  const itemCount = Number.isFinite(Number(playlist.itemCount))
+    ? Number(playlist.itemCount)
+    : Array.isArray(playlist.items)
+      ? playlist.items.length
+      : 0
+
   return {
     index: String(index),
-    source: 'agentmusic',
+    source: playlist.sourceType || 'agentmusic',
     type: 'playlist',
     title: playlist.title || 'Untitled playlist',
     link: playlist.id,
@@ -58,9 +87,13 @@ export function mapLocalPlaylistSummary(playlist, index = 0) {
       playlist.items?.[0]?.image ||
       fallbackArtwork,
     hoverColor: LOCAL_LIBRARY_ACCENT,
-    artist: 'AgentMusic Library',
+    artist: isSpotifyImport
+      ? playlist.metadata?.spotifyOwnerName || 'Spotify import'
+      : 'AgentMusic Library',
     playlistBg: LOCAL_LIBRARY_ACCENT,
     description: playlist.description || '',
+    sourceLabel: isSpotifyImport ? 'spotify_import' : 'local_library',
+    itemCount,
     playlistData: Array.isArray(playlist.items)
       ? playlist.items.map(mapTrackToPlaylistSong)
       : [],

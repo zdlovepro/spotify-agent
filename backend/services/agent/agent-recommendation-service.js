@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import db from '../../db/index.js'
 import { assert } from '../../utils/assert.js'
+import { createTrackArtifact } from './track-artifact.js'
 
 const AGENT_SOURCE_TYPE = 'agentmusic'
 
@@ -74,6 +75,12 @@ function normalizeTrack(track = {}) {
       : typeof track.preview_url === 'string'
         ? track.preview_url.trim()
         : ''
+  const audioUrl =
+    typeof track.audioUrl === 'string'
+      ? track.audioUrl.trim()
+      : typeof track.audio_url === 'string'
+        ? track.audio_url.trim()
+        : ''
   const durationMs =
     Number.isFinite(Number(track.durationMs)) && Number(track.durationMs) >= 0
       ? Number(track.durationMs)
@@ -94,6 +101,12 @@ function normalizeTrack(track = {}) {
         : track.id
           ? `${sourceType}:track:${track.id}`
           : `${sourceType}:track:${crypto.randomUUID()}`
+  const uri =
+    typeof track.uri === 'string'
+      ? track.uri.trim()
+      : sourceId.startsWith('spotify:')
+        ? sourceId
+        : ''
 
   return {
     sourceType,
@@ -104,9 +117,31 @@ function normalizeTrack(track = {}) {
     album: albumName,
     image,
     previewUrl,
+    audioUrl,
     durationMs,
+    playMode:
+      typeof track.playMode === 'string'
+        ? track.playMode
+        : typeof track.play_mode === 'string'
+          ? track.play_mode
+          : audioUrl
+            ? 'local_audio'
+            : uri
+              ? 'spotify_remote'
+              : previewUrl
+              ? 'preview'
+              : 'unavailable',
+    playable:
+      typeof track.playable === 'boolean'
+        ? track.playable
+        : Boolean(audioUrl || previewUrl),
     metadata:
-      track && typeof track === 'object' && !Array.isArray(track) ? track : {},
+      track && typeof track === 'object' && !Array.isArray(track)
+        ? {
+            ...track,
+            uri: track.uri || uri,
+          }
+        : {},
   }
 }
 
@@ -122,20 +157,23 @@ function mapRecommendationRun(runRow, itemRows = []) {
     prompt: runRow.prompt || '',
     description: runRow.description || '',
     seeds: parseJson(runRow.seed_summary_json, {}),
-    tracks: itemRows.map((itemRow) => ({
-      id: parseJson(itemRow.metadata_json, {}).id || itemRow.source_id,
-      source_type: itemRow.source_type,
-      source_id: itemRow.source_id,
-      name: itemRow.title || 'Unknown track',
-      title: itemRow.title || 'Unknown track',
-      artists: itemRow.artist_name
-        ? itemRow.artist_name.split(', ').filter(Boolean)
-        : [],
-      album: itemRow.album_name || '',
-      image: parseJson(itemRow.metadata_json, {}).image || '',
-      previewUrl: itemRow.preview_url || '',
-      durationMs: parseJson(itemRow.metadata_json, {}).durationMs ?? null,
-    })),
+    tracks: itemRows.map((itemRow) =>
+      createTrackArtifact({
+        ...parseJson(itemRow.metadata_json, {}),
+        id: parseJson(itemRow.metadata_json, {}).id || itemRow.source_id,
+        sourceType: itemRow.source_type,
+        sourceId: itemRow.source_id,
+        name: itemRow.title || 'Unknown track',
+        title: itemRow.title || 'Unknown track',
+        artists: itemRow.artist_name
+          ? itemRow.artist_name.split(', ').filter(Boolean)
+          : [],
+        album: itemRow.album_name || '',
+        image: parseJson(itemRow.metadata_json, {}).image || '',
+        previewUrl: itemRow.preview_url || '',
+        durationMs: parseJson(itemRow.metadata_json, {}).durationMs ?? null,
+      }),
+    ),
     createdAt: runRow.created_at,
     updatedAt: runRow.updated_at,
   }
@@ -246,7 +284,7 @@ export function saveStoredRecommendationRun(ownerUserId, payload = {}) {
       JSON.stringify(payload.constraints || {}),
       JSON.stringify({
         totalTracks: normalizedTracks.length,
-        playableTracks: normalizedTracks.filter((track) => track.previewUrl).length,
+        playableTracks: normalizedTracks.filter((track) => track.playable).length,
       }),
       JSON.stringify(payload.metadata || {}),
       createdAt,

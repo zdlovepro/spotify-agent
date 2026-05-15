@@ -20,6 +20,59 @@
     flex-direction: column;
     align-items: center;
 }
+.spotifyStatusRow{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 10px;
+    min-height: 24px;
+}
+.spotifyStatusBadge{
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    color: rgb(222, 222, 222);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+}
+.ready{
+    background: rgba(30, 215, 96, 0.18);
+    color: rgb(181, 255, 203);
+}
+.warning{
+    background: rgba(255, 177, 66, 0.18);
+    color: rgb(255, 214, 145);
+}
+.muted{
+    background: rgba(255,255,255,0.08);
+    color: rgb(207, 207, 207);
+}
+.spotifyDeviceId{
+    color: rgb(165, 165, 165);
+    font-size: 11px;
+}
+.spotifyActivateButton{
+    border: none;
+    border-radius: 999px;
+    padding: 5px 12px;
+    background: #1db954;
+    color: #04130a;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.spotifyActivateButton:disabled{
+    cursor: wait;
+    opacity: 0.72;
+}
+.spotifyStatusHint{
+    color: rgb(170, 170, 170);
+    font-size: 11px;
+}
 @media screen and (max-width: 640px) {
     .footer{
         bottom: 45px;
@@ -28,5 +81,8 @@
         padding: 8px 16px;
         grid-template-columns: 1fr;
         row-gap: 16px;
+    }
+    .spotifyStatusRow{
+        margin-top: 8px;
     }
 }

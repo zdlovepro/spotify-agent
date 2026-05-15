@@ -6,6 +6,23 @@ import {
   exchangeSpotifyToken,
 } from './spotify-provider-service.js'
 
+function createProviderLinkError(
+  message,
+  code,
+  status = 403,
+  extras = undefined,
+) {
+  const error = new Error(message)
+  error.code = code
+  error.status = status
+
+  if (extras && typeof extras === 'object') {
+    Object.assign(error, extras)
+  }
+
+  return error
+}
+
 function parseJson(value, fallback) {
   if (!value) {
     return fallback
@@ -199,14 +216,73 @@ export async function refreshProviderToken(providerLink) {
     return providerLink
   }
 
-  assert(providerLink.refreshToken, 'Spotify refresh token is missing', 401)
+  if (!providerLink.refreshToken) {
+    throw createProviderLinkError(
+      'Spotify login has expired. Please reconnect Spotify.',
+      'spotify_reconnect_required',
+      403,
+    )
+  }
 
-  const tokenData = await exchangeSpotifyToken(
-    new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: providerLink.refreshToken,
-    }),
-  )
+  let tokenData
+
+  try {
+    tokenData = await exchangeSpotifyToken(
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: providerLink.refreshToken,
+      }),
+    )
+  } catch (error) {
+    const refreshErrorCode = error.response?.data?.error || ''
+
+    if (refreshErrorCode === 'invalid_grant') {
+      unlinkProvider(providerLink.userId, providerLink.providerName)
+      console.info('[spotify-provider] refresh token invalid, provider link removed', {
+        localUserId: providerLink.userId,
+        provider: providerLink.providerName,
+      })
+
+      throw createProviderLinkError(
+        'Spotify login has expired. Please reconnect Spotify.',
+        'spotify_reconnect_required',
+        403,
+      )
+    }
+
+    throw createProviderLinkError(
+      'Spotify token refresh failed.',
+      'spotify_token_refresh_failed',
+      error.response?.status || 502,
+      {
+        details: {
+          provider: providerLink.providerName,
+          reason:
+            error.response?.data?.error_description ||
+            error.response?.data?.error ||
+            error.message ||
+            'spotify_refresh_failed',
+        },
+      },
+    )
+  }
+
+  if (!tokenData?.access_token) {
+    throw createProviderLinkError(
+      'Spotify access token is unavailable.',
+      'spotify_token_unavailable',
+      503,
+    )
+  }
+
+  console.info('[spotify-provider] refreshed spotify access token', {
+    localUserId: providerLink.userId,
+    provider: providerLink.providerName,
+    expiresInSeconds:
+      Number.isFinite(Number(tokenData.expires_in)) && Number(tokenData.expires_in) > 0
+        ? Number(tokenData.expires_in)
+        : null,
+  })
 
   return linkProvider({
     userId: providerLink.userId,

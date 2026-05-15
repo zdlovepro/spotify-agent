@@ -42,21 +42,37 @@ export async function backendRequest(path, options = {}) {
     ...(options.headers || {}),
   }
   const hasBody = options.body !== undefined
+  const isFormData =
+    typeof FormData !== 'undefined' && options.body instanceof FormData
 
   if (options.token && !headers.Authorization) {
     headers.Authorization = `Bearer ${options.token}`
   }
 
-  if (hasBody && !headers['Content-Type']) {
+  if (hasBody && !isFormData && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json'
   }
 
-  const response = await fetch(`${BACKEND_BASE_URL}${path}`, {
-    method: options.method || 'GET',
-    headers,
-    body: hasBody ? JSON.stringify(options.body) : undefined,
-    signal: options.signal,
-  })
+  let response
+
+  try {
+    response = await fetch(`${BACKEND_BASE_URL}${path}`, {
+      method: options.method || 'GET',
+      headers,
+      body: hasBody
+        ? isFormData
+          ? options.body
+          : JSON.stringify(options.body)
+        : undefined,
+      signal: options.signal,
+    })
+  } catch (error) {
+    const networkError = new Error(
+      `Unable to reach AgentMusic backend at ${BACKEND_BASE_URL}. Please make sure the backend server is running.`,
+    )
+    networkError.cause = error
+    throw networkError
+  }
 
   const raw = await response.text()
   let data = null
