@@ -21,6 +21,14 @@ function PlaylistCardM({
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const [isthisplay, setIsthisPlay] = useState(false)
+  const trackCount = Number(data.itemCount)
+  const trackCountText = Number.isFinite(trackCount)
+    ? t('search_tracks_count', { count: trackCount })
+    : ''
+  const secondaryText =
+    data.artist && trackCountText
+      ? `${data.artist} | ${trackCountText}`
+      : data.artist || trackCountText
   const canPlay = (data.playlistData || []).some((song) =>
     canStartTrackPlayback(song, { allowRemote: isConnected }),
   )
@@ -59,7 +67,7 @@ function PlaylistCardM({
               <span className={styles.SourceBadge}>{t(data.sourceLabel)}</span>
             )}
             <TextBoldL>{data.title}</TextBoldL>
-            <TextRegularM>{data.artist}</TextRegularM>
+            <TextRegularM>{secondaryText}</TextRegularM>
           </div>
         </div>
       </Link>

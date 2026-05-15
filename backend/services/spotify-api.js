@@ -6,17 +6,33 @@ const spotifyApi = axios.create({
   timeout: 10000,
 })
 
-function createSpotifyApiError(error, fallbackMessage) {
+function createSpotifyApiError(error, fallbackMessage, path = '') {
   const status = error.response?.status || 400
-  const message =
-    error.response?.data?.error?.message ||
-    error.response?.data?.error ||
+  const spotifyPayload = error.response?.data?.error || error.response?.data || null
+  const spotifyMessage =
+    (typeof spotifyPayload === 'object' && spotifyPayload?.message) ||
+    (typeof spotifyPayload === 'string' ? spotifyPayload : '') ||
     error.message ||
     fallbackMessage
+  const message =
+    spotifyMessage && spotifyMessage !== fallbackMessage
+      ? `${fallbackMessage}: ${spotifyMessage}`
+      : spotifyMessage || fallbackMessage
 
   const normalized = new Error(message)
   normalized.status = status
+  normalized.code = 'spotify_api_error'
   normalized.details = error.response?.data
+  normalized.spotifyError = {
+    status,
+    path,
+    message: spotifyMessage || fallbackMessage,
+    details: error.response?.data || null,
+    reason:
+      typeof spotifyPayload === 'object' && spotifyPayload
+        ? spotifyPayload.reason || spotifyPayload.error || null
+        : null,
+  }
 
   return normalized
 }
@@ -39,7 +55,7 @@ async function spotifyGet(path, accessToken, params = {}, { ttlMs = 0 } = {}) {
 
       return response.data
     } catch (error) {
-      throw createSpotifyApiError(error, `Spotify request failed for ${path}`)
+      throw createSpotifyApiError(error, `Spotify request failed for ${path}`, path)
     }
   })
 }
@@ -63,7 +79,7 @@ async function spotifyMutation(
 
     return response.data ?? null
   } catch (error) {
-    throw createSpotifyApiError(error, `Spotify request failed for ${path}`)
+    throw createSpotifyApiError(error, `Spotify request failed for ${path}`, path)
   }
 }
 

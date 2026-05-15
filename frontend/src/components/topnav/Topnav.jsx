@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -28,7 +28,9 @@ function Topnav() {
     profile,
   } = useSpotify()
   const location = useLocation()
+  const accountMenuRef = useRef(null)
   const [connectHint, setConnectHint] = useState('')
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
 
   const toggleLanguage = () => {
     const next = i18n.language === 'zh' ? 'en' : 'zh'
@@ -52,12 +54,60 @@ function Topnav() {
     : isSpotifyEnhanced
       ? t('mode_spotify_enhanced')
       : t('mode_local')
+  const accountButtonLabel = isAuthenticated ? displayName : t('agent_guest_label')
+  const accountAvatarText = String(accountButtonLabel || t('appName'))
+    .trim()
+    .charAt(0)
+    .toUpperCase()
+  const accountSubtitle = isAuthenticated
+    ? profile?.display_name && profile.display_name !== displayName
+      ? profile.display_name
+      : user?.email && user.email !== displayName
+        ? user.email
+        : ''
+    : t('mode_guest')
+  const accountMenuAriaLabel =
+    i18n.language === 'zh' ? '账户菜单' : 'Account menu'
+  const languageToggleLabel =
+    i18n.language === 'zh' ? 'Switch to English' : '切换中文'
 
   useEffect(() => {
     if (isAuthenticated || isConnected) {
       setConnectHint('')
     }
   }, [isAuthenticated, isConnected])
+
+  useEffect(() => {
+    setIsAccountMenuOpen(false)
+  }, [location.hash, location.pathname, location.search])
+
+  useEffect(() => {
+    if (!isAccountMenuOpen) {
+      return undefined
+    }
+
+    function handlePointerDown(event) {
+      if (!accountMenuRef.current?.contains(event.target)) {
+        setIsAccountMenuOpen(false)
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setIsAccountMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isAccountMenuOpen])
 
   function handleConnectSpotify() {
     const returnTo = `${location.pathname}${location.search}${location.hash}` || '/'
@@ -75,6 +125,17 @@ function Topnav() {
   function handleDisconnectSpotify() {
     setConnectHint('')
     disconnect()
+  }
+
+  function closeAccountMenu() {
+    setIsAccountMenuOpen(false)
+  }
+
+  function handleMenuAction(action) {
+    return () => {
+      closeAccountMenu()
+      action()
+    }
   }
 
   return (
@@ -108,59 +169,108 @@ function Topnav() {
         <div className={styles.RightGroup}>
           {statusText && <small className={styles.StatusText}>{statusText}</small>}
 
-          <span
-            className={`${styles.ModeBadge} ${
-              isSpotifyEnhanced
-                ? styles.ModeBadgeEnhanced
-                : isAuthenticated
-                  ? styles.ModeBadgeLocal
-                  : styles.ModeBadgeGuest
-            }`}
-          >
-            {modeLabel}
-          </span>
+          <div className={styles.AccountMenuWrapper} ref={accountMenuRef}>
+            <button
+              type="button"
+              className={styles.AccountMenuButton}
+              aria-haspopup="menu"
+              aria-expanded={isAccountMenuOpen}
+              aria-label={accountMenuAriaLabel}
+              onClick={() => setIsAccountMenuOpen((currentValue) => !currentValue)}
+              title={accountButtonLabel}
+            >
+              <span className={styles.AccountAvatar}>{accountAvatarText || 'A'}</span>
+              <span className={styles.AccountName}>{accountButtonLabel}</span>
+              <span
+                className={`${styles.AccountChevron} ${
+                  isAccountMenuOpen ? styles.AccountChevronOpen : ''
+                }`}
+                aria-hidden="true"
+              >
+                v
+              </span>
+            </button>
 
-          <button className={styles.LangBtn} onClick={toggleLanguage}>
-            {i18n.language === 'zh' ? 'EN' : '中文'}
-          </button>
+            {isAccountMenuOpen && (
+              <div
+                className={styles.AccountDropdown}
+                role="menu"
+                aria-label={accountMenuAriaLabel}
+              >
+                <div className={styles.AccountMenuStatus} role="none">
+                  <span className={styles.AccountMenuLabel}>{t('agent_mode_title')}</span>
+                  <span className={styles.AccountMenuValue}>{modeLabel}</span>
+                </div>
 
-          {isAuthenticated ? (
-            <>
-              <button
-                className={styles.SecondaryBtn}
-                onClick={isConnected ? handleDisconnectSpotify : handleConnectSpotify}
-              >
-                {isConnected ? t('spotify_disconnect') : t('spotify_connect')}
-              </button>
-              <button className={styles.ProfileBtn} title={displayName}>
-                {displayName}
-              </button>
-              <button className={styles.SecondaryBtn} onClick={logout}>
-                {t('logout')}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                className={styles.SecondaryBtn}
-                onClick={handleConnectSpotify}
-              >
-                {t('spotify_connect')}
-              </button>
-              <button
-                className={styles.SecondaryBtn}
-                onClick={() => openAuthDialog('register')}
-              >
-                {t('register')}
-              </button>
-              <button
-                className={styles.ProfileBtn}
-                onClick={() => openAuthDialog('login')}
-              >
-                {t('login')}
-              </button>
-            </>
-          )}
+                <div className={styles.AccountMenuStatus} role="none">
+                  <span className={styles.AccountMenuValue}>
+                    {isAuthenticated ? displayName : t('agent_guest_label')}
+                  </span>
+                  {accountSubtitle && (
+                    <span className={styles.AccountMenuMeta}>{accountSubtitle}</span>
+                  )}
+                </div>
+
+                <div className={styles.AccountMenuDivider} role="separator" />
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.AccountMenuItem}
+                  onClick={handleMenuAction(
+                    isConnected ? handleDisconnectSpotify : handleConnectSpotify,
+                  )}
+                >
+                  {isConnected ? t('spotify_disconnect') : t('spotify_connect')}
+                </button>
+
+                {!isAuthenticated && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.AccountMenuItem}
+                    onClick={handleMenuAction(() => openAuthDialog('register'))}
+                  >
+                    {t('register')}
+                  </button>
+                )}
+
+                {!isAuthenticated && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.AccountMenuItem}
+                    onClick={handleMenuAction(() => openAuthDialog('login'))}
+                  >
+                    {t('login')}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.AccountMenuItem}
+                  onClick={handleMenuAction(toggleLanguage)}
+                >
+                  {languageToggleLabel}
+                </button>
+
+                {isAuthenticated && (
+                  <>
+                    <div className={styles.AccountMenuDivider} role="separator" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={`${styles.AccountMenuItem} ${styles.AccountMenuDanger}`}
+                      onClick={handleMenuAction(logout)}
+                    >
+                      {t('logout')}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -121,7 +121,6 @@ function Playlist() {
   const filterItems = [
     { key: 'playlist', label: t('library_filter_playlists') },
     { key: 'album', label: t('library_filter_albums') },
-    { key: 'podcast', label: t('podcasts') },
   ]
 
   async function handleCreatePlaylist() {
@@ -152,6 +151,10 @@ function Playlist() {
     }
   }
 
+  function handleOpenLibrary() {
+    navigate('/library')
+  }
+
   return (
     <div className={styles.Playlist}>
       <header className={styles.Header}>
@@ -172,8 +175,9 @@ function Playlist() {
           <button
             type="button"
             className={styles.IconAction}
-            aria-label={t('library_action_expand')}
-            title={t('library_action_expand')}
+            aria-label={t('library_action_open')}
+            title={t('library_action_open')}
+            onClick={handleOpenLibrary}
           >
             ↗
           </button>

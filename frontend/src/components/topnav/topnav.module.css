@@ -33,6 +33,7 @@
 
 .RightGroup {
     flex: 0 0 auto;
+    position: relative;
 }
 
 .BrandLink {
@@ -121,6 +122,152 @@
     margin-top: 12px;
 }
 
+.AccountMenuWrapper {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.AccountMenuButton {
+    max-width: min(280px, calc(100vw - 32px));
+    height: 40px;
+    border: 0;
+    border-radius: 999px;
+    padding: 0 10px 0 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, .09);
+    color: #fff;
+    cursor: pointer;
+    transition: transform .2s ease, background-color .2s ease;
+}
+
+.AccountMenuButton:hover,
+.AccountMenuButton[aria-expanded='true'] {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, .15);
+}
+
+.AccountAvatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, .42);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.AccountName {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.AccountChevron {
+    flex: 0 0 auto;
+    color: rgba(255, 255, 255, .72);
+    font-size: 11px;
+    line-height: 1;
+    transition: transform .2s ease;
+}
+
+.AccountChevronOpen {
+    transform: rotate(180deg);
+}
+
+.AccountDropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: min(280px, calc(100vw - 24px));
+    padding: 8px;
+    border-radius: 16px;
+    background: #181818;
+    border: 1px solid rgba(255, 255, 255, .08);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, .42);
+    z-index: 160;
+}
+
+.AccountMenuStatus {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+}
+
+.AccountMenuLabel {
+    color: rgba(255, 255, 255, .58);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.AccountMenuValue,
+.AccountMenuMeta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.AccountMenuValue {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.AccountMenuMeta {
+    color: rgba(255, 255, 255, .64);
+    font-size: 12px;
+}
+
+.AccountMenuDivider {
+    height: 1px;
+    margin: 8px 4px;
+    background: rgba(255, 255, 255, .08);
+}
+
+.AccountMenuItem {
+    width: 100%;
+    min-height: 40px;
+    border: 0;
+    border-radius: 12px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: background-color .2s ease;
+}
+
+.AccountMenuItem:hover {
+    background: rgba(255, 255, 255, .08);
+}
+
+.AccountMenuDanger {
+    color: #ffb3b3;
+}
+
+.AccountMenuDanger:hover {
+    background: rgba(255, 82, 82, .12);
+}
+
 .LangBtn,
 .SecondaryBtn,
 .ProfileBtn {
@@ -148,11 +295,12 @@
 }
 
 .StatusText {
-    max-width: 220px;
+    max-width: 180px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     color: rgba(255, 255, 255, .7);
+    text-align: right;
 }
 
 .ModeBadge {
@@ -234,6 +382,14 @@
 
     .ProfileBtn {
         max-width: 140px;
+    }
+
+    .StatusText {
+        display: none;
+    }
+
+    .AccountMenuButton {
+        max-width: 220px;
     }
 }
 

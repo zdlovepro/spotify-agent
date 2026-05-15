@@ -493,6 +493,28 @@ export function createPlaylist(ownerUserId, input = {}) {
   return getPlaylist(ownerUserId, id)
 }
 
+export function findPlaylistBySource(ownerUserId, sourceType, sourceId) {
+  if (!ownerUserId || !sourceType || !sourceId) {
+    return null
+  }
+
+  const row = db
+    .prepare(
+      `
+        SELECT id
+        FROM library_playlists
+        WHERE owner_user_id = ?
+          AND source_type = ?
+          AND source_id = ?
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 1
+      `,
+    )
+    .get(ownerUserId, sourceType, sourceId)
+
+  return row?.id ? getPlaylist(ownerUserId, row.id) : null
+}
+
 export function getPlaylist(ownerUserId, playlistId) {
   const row = db
     .prepare(
@@ -525,6 +547,7 @@ export function getPlaylist(ownerUserId, playlistId) {
   return {
     ...playlist,
     items: itemRows.map(mapPlaylistItemRow),
+    itemCount: itemRows.length,
   }
 }
 
@@ -844,6 +867,7 @@ export function deleteFavorite(ownerUserId, favoriteId) {
 export default {
   listPlaylists,
   createPlaylist,
+  findPlaylistBySource,
   getPlaylist,
   updatePlaylist,
   deletePlaylist,

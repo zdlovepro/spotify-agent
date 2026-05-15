@@ -129,10 +129,51 @@
     border: 1px solid rgba(30, 215, 96, 0.18);
 }
 
+.NoticeSuccess {
+    background: rgba(30, 215, 96, 0.08);
+    border-color: rgba(30, 215, 96, 0.18);
+}
+
+.NoticeWarning {
+    background: rgba(255, 193, 7, 0.08);
+    border-color: rgba(255, 193, 7, 0.24);
+}
+
+.NoticeError {
+    background: rgba(255, 82, 82, 0.08);
+    border-color: rgba(255, 82, 82, 0.24);
+}
+
 .NoticeText {
     margin: 0;
     color: rgba(220, 255, 229, 0.92);
     line-height: 1.6;
+}
+
+.NoticeWarning .NoticeText {
+    color: rgba(255, 249, 230, 0.95);
+}
+
+.NoticeError .NoticeText {
+    color: rgba(255, 232, 232, 0.95);
+}
+
+.NoticeMeta {
+    margin: 10px 0 0;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.6;
+}
+
+.NoticeWarning .NoticeMeta,
+.NoticeError .NoticeMeta {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.NoticeActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
 }
 
 .AssetGrid {

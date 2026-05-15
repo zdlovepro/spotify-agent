@@ -35,13 +35,18 @@ function getArtistNames(artists = []) {
 
 function mapTrackToPlaylistSong(track, index) {
   const playback = resolveTrackPlaybackMeta(track)
+  const durationMs = track.duration_ms || track.durationMs || 0
+  const songImage = getImageFromTrack(track)
+  const songName = track.title || track.name || 'Unknown track'
+  const songArtist = getArtistNames(track.artists) || 'Unknown artist'
 
   return {
     id: track.id || track.source_id || track.sourceId || `track-${index}`,
     index: String(index + 1),
-    songName: track.title || track.name || 'Unknown track',
-    songimg: getImageFromTrack(track),
-    songArtist: getArtistNames(track.artists) || 'Unknown artist',
+    songName,
+    songImg: songImage,
+    songimg: songImage,
+    songArtist,
     link: playback.streamUrl,
     audioUrl: playback.audioUrl,
     previewUrl: playback.previewUrl,
@@ -51,16 +56,24 @@ function mapTrackToPlaylistSong(track, index) {
       track.sourceType ||
       (playback.isLocalAudio ? 'local_audio' : playback.isSpotifyRemote ? 'spotify' : ''),
     playMode: playback.playMode,
-    durationMs: track.duration_ms || track.durationMs || 0,
-    trackTime: formatDuration(track.duration_ms || track.durationMs || 0),
+    duration: durationMs,
+    durationMs,
+    trackTime: formatDuration(durationMs),
     playable: playback.playable,
     sourceId: track.source_id || track.sourceId || '',
     uri: track.uri || playback.remoteUri,
+    title: songName,
+    name: songName,
   }
 }
 
 export function mapLocalPlaylistSummary(playlist, index = 0) {
   const isSpotifyImport = playlist.sourceType === 'spotify_import'
+  const itemCount = Number.isFinite(Number(playlist.itemCount))
+    ? Number(playlist.itemCount)
+    : Array.isArray(playlist.items)
+      ? playlist.items.length
+      : 0
 
   return {
     index: String(index),
@@ -80,6 +93,7 @@ export function mapLocalPlaylistSummary(playlist, index = 0) {
     playlistBg: LOCAL_LIBRARY_ACCENT,
     description: playlist.description || '',
     sourceLabel: isSpotifyImport ? 'spotify_import' : 'local_library',
+    itemCount,
     playlistData: Array.isArray(playlist.items)
       ? playlist.items.map(mapTrackToPlaylistSong)
       : [],

@@ -16,6 +16,11 @@ export const SPOTIFY_SCOPES = [
   'user-read-currently-playing',
 ].join(' ')
 
+export const SPOTIFY_PLAYLIST_IMPORT_SCOPES = [
+  'playlist-read-private',
+  'playlist-read-collaborative',
+]
+
 function createClientCredentials() {
   return Buffer.from(
     `${env.spotifyClientId}:${env.spotifyClientSecret}`,
@@ -51,11 +56,12 @@ export function buildSpotifyLinkPayload({
   userId,
   tokenData,
   profile,
-  scopes = SPOTIFY_SCOPES,
+  scopes = undefined,
 }) {
   const expiresAt = tokenData.expires_in
     ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
     : null
+  const resolvedScopes = scopes || tokenData.scope || SPOTIFY_SCOPES
 
   return {
     userId,
@@ -67,7 +73,10 @@ export function buildSpotifyLinkPayload({
     accessToken: tokenData.access_token,
     refreshToken: tokenData.refresh_token || null,
     tokenExpiresAt: expiresAt,
-    scopes: typeof scopes === 'string' ? scopes.split(' ').filter(Boolean) : scopes,
+    scopes:
+      typeof resolvedScopes === 'string'
+        ? resolvedScopes.split(' ').filter(Boolean)
+        : resolvedScopes,
     profile,
     metadata: {
       linkedVia: 'oauth',
@@ -77,6 +86,7 @@ export function buildSpotifyLinkPayload({
 
 export default {
   SPOTIFY_PROVIDER_NAME,
+  SPOTIFY_PLAYLIST_IMPORT_SCOPES,
   SPOTIFY_SCOPES,
   exchangeSpotifyToken,
   fetchSpotifyProfile,
