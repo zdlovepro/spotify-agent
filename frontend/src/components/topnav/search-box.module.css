@@ -17,7 +17,7 @@
 .SeachBox input {
     color: #fff;
     background: rgba(255, 255, 255, 0.08);
-    padding: 0 18px 0 46px;
+    padding: 0 52px 0 46px;
     height: 46px;
     width: 100%;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -27,6 +27,12 @@
     font-weight: 600;
     line-height: 16px;
     box-sizing: border-box;
+    outline: none;
+    transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.SeachBox input::-webkit-search-cancel-button {
+    display: none;
 }
 
 .SeachBox input::placeholder {
@@ -37,6 +43,36 @@
     background: #fff;
     border-color: #fff;
     color: #000;
+}
+
+.ClearBtn {
+    position: absolute;
+    top: 7px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.72);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    transition: background-color .18s ease, color .18s ease;
+}
+
+.ClearBtn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+}
+
+.SeachBox input:focus + .ClearBtn {
+    background: rgba(0, 0, 0, 0.08);
+    color: rgba(0, 0, 0, 0.72);
 }
 
 @media screen and (max-width: 1180px) {
@@ -65,8 +101,15 @@
     }
 
     .SeachBox input {
-        padding: 0 14px 0 38px;
+        padding: 0 42px 0 38px;
         height: 38px;
         width: 100%;
+    }
+
+    .ClearBtn {
+        top: 4px;
+        right: 5px;
+        width: 30px;
+        height: 30px;
     }
 }

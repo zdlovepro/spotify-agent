@@ -230,6 +230,28 @@ function normalizePlaylistSummary(playlist) {
   }
 }
 
+function normalizeShowSummary(show) {
+  if (!show?.id) {
+    return null
+  }
+
+  return {
+    provider: PROVIDER_NAME,
+    entity_type: 'show',
+    source_type: PROVIDER_NAME,
+    source_id: createSourceId('show', show.id),
+    id: show.id,
+    name: show.name || '',
+    description: show.description || '',
+    publisher: show.publisher || '',
+    media_type: show.media_type || 'audio',
+    total_episodes: show.total_episodes ?? null,
+    explicit: Boolean(show.explicit),
+    images: normalizeImages(show.images),
+    external_url: show.external_urls?.spotify || null,
+  }
+}
+
 function normalizePlaylistTrackItems(items) {
   if (!Array.isArray(items)) {
     return []
@@ -272,6 +294,7 @@ function normalizeSearchResponse(data, params) {
       playlists: (data.playlists?.items || [])
         .map(normalizePlaylistSummary)
         .filter(Boolean),
+      shows: (data.shows?.items || []).map(normalizeShowSummary).filter(Boolean),
     },
   }
 }

@@ -239,17 +239,6 @@ function PlaylistTab({
     <div className={styles.LibrarySections}>
       <div className={styles.SectionHeader}>
         <TitleM>{t('playlists')}</TitleM>
-        <div className={styles.SectionActions}>
-          <button
-            type="button"
-            className={styles.PrimaryBtn}
-            onClick={onUploadClick}
-            disabled={isUploading}
-          >
-            {isUploading ? t('library_uploading') : t('library_upload_audio')}
-          </button>
-          <p className={styles.UploadMeta}>{t('library_upload_support')}</p>
-        </div>
       </div>
 
       <section className={styles.SectionBlock}>
@@ -274,8 +263,21 @@ function PlaylistTab({
 
       <section className={styles.AssetSection}>
         <div className={styles.SectionHeader}>
-          <TitleM>{t('library_audio_section')}</TitleM>
-          <p className={styles.SectionHint}>{t('library_audio_hint')}</p>
+          <div className={styles.SectionCopy}>
+            <TitleM>{t('library_audio_section')}</TitleM>
+            <p className={styles.SectionHint}>{t('library_audio_hint')}</p>
+          </div>
+          <div className={styles.SectionActions}>
+            <button
+              type="button"
+              className={styles.PrimaryBtn}
+              onClick={onUploadClick}
+              disabled={isUploading}
+            >
+              {isUploading ? t('library_uploading') : t('library_upload_audio')}
+            </button>
+            <p className={styles.UploadMeta}>{t('library_upload_support')}</p>
+          </div>
         </div>
 
         {audioAssets.length ? (

@@ -47,6 +47,12 @@
     gap: 8px;
 }
 
+.SectionCopy {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
 .UploadMeta {
     margin: 0;
     color: rgba(255, 255, 255, 0.62);
@@ -252,6 +258,10 @@
         padding: 16px;
         margin-bottom: 180px;
         margin-top: 42px;
+    }
+
+    .SectionHeader {
+        align-items: flex-start;
     }
 
     .SectionActions {

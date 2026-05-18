@@ -2,455 +2,32 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
-import fallbackArtwork from '../assets/hero.png'
 import SearchPageCard from '../components/cards/SearchPageCard'
+import SearchEmptyState from '../components/search/SearchEmptyState.jsx'
+import SearchHeader from '../components/search/SearchHeader.jsx'
+import SearchResultList from '../components/search/SearchResultList.jsx'
+import SearchSkeleton from '../components/search/SearchSkeleton.jsx'
+import SearchTopResult from '../components/search/SearchTopResult.jsx'
+import {
+  buildAgentPrompt,
+  buildAllSections,
+  buildBrowsePrompt,
+  buildEmptyQueryPrompt,
+  buildQueryPrompt,
+  getResultCount,
+  getTabItems,
+  getTopResult,
+  getTrackUri,
+  normalizeSearchResults,
+  resolveTrackActionState,
+} from '../components/search/search-utils.js'
 import { SEARCHCARDS } from '../data/index.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSpotify } from '../context/SpotifyContext.jsx'
 import { useSpotifyPlayback } from '../context/SpotifyPlaybackContext.jsx'
-import {
-  resolveTrackPlaybackMeta,
-  TRACK_PLAY_MODES,
-} from '../lib/spotify.js'
+import { TRACK_PLAY_MODES } from '../lib/spotify.js'
 import { startAgentPlayback } from '../store/index.js'
 import styles from './search.module.css'
-
-function getArtistNames(artists = []) {
-  return artists.map((artist) => artist.name).filter(Boolean).join(', ')
-}
-
-function getImage(item, type) {
-  if (type === 'track') {
-    return item.album?.images?.[0]?.url || fallbackArtwork
-  }
-
-  return item.images?.[0]?.url || fallbackArtwork
-}
-
-function getSubtitle(item, type, t) {
-  switch (type) {
-    case 'track':
-      return getArtistNames(item.artists) || t('appName')
-    case 'artist':
-      return (item.genres || []).slice(0, 3).join(', ') || t('artists')
-    case 'album':
-      return getArtistNames(item.artists) || t('albums')
-    case 'playlist':
-      return item.owner?.display_name || t('playlists')
-    default:
-      return t('appName')
-  }
-}
-
-function getMeta(item, type, t, allowRemotePlayback = false) {
-  switch (type) {
-    case 'track': {
-      const playback = resolveTrackPlaybackMeta(item)
-
-      if (playback.playMode === TRACK_PLAY_MODES.SPOTIFY_REMOTE) {
-        return allowRemotePlayback
-          ? t('search_play_on_spotify')
-          : t('spotify_playback_status_connect')
-      }
-
-      if (playback.playMode === TRACK_PLAY_MODES.PREVIEW) {
-        return t('search_listenable_meta')
-      }
-
-      return t('search_not_listenable_meta')
-    }
-    case 'artist':
-      return item.followers
-        ? t('search_followers', {
-            count: Number(item.followers).toLocaleString(),
-          })
-        : ''
-    case 'album':
-      return item.release_date || ''
-    case 'playlist':
-      return item.total_tracks
-        ? t('search_tracks_count', {
-            count: item.total_tracks,
-          })
-        : ''
-    default:
-      return ''
-  }
-}
-
-function getAlbumName(item, type) {
-  if (type === 'track') {
-    return item.album?.name || ''
-  }
-
-  if (type === 'album') {
-    return item.name || ''
-  }
-
-  return ''
-}
-
-function getTrackUri(item) {
-  if (typeof item?.uri === 'string' && item.uri.trim().startsWith('spotify:')) {
-    return item.uri.trim()
-  }
-
-  if (item?.id) {
-    return `spotify:track:${item.id}`
-  }
-
-  return ''
-}
-
-function getSpotlightType(results) {
-  if (results.tracks[0]) {
-    return 'track'
-  }
-
-  if (results.artists[0]) {
-    return 'artist'
-  }
-
-  if (results.albums[0]) {
-    return 'album'
-  }
-
-  if (results.playlists[0]) {
-    return 'playlist'
-  }
-
-  return ''
-}
-
-function buildAgentPrompt(item, type, { query = '' } = {}) {
-  switch (type) {
-    case 'track':
-      return [
-        `I found a Spotify track in search and want to use it as recommendation context.`,
-        `Track: "${item.name}".`,
-        `Artists: ${getArtistNames(item.artists) || 'Unknown artist'}.`,
-        `Album: ${getAlbumName(item, type) || 'Unknown album'}.`,
-        `Spotify URI: ${getTrackUri(item) || 'unavailable'}.`,
-        query ? `Search query context: "${query}".` : '',
-        'Please introduce this track and recommend a few songs with a similar vibe.',
-      ]
-        .filter(Boolean)
-        .join(' ')
-    case 'artist':
-      return `Introduce the artist ${item.name} and recommend a few essential starting tracks.`
-    case 'album':
-      return `Break down the album "${item.name}" and tell me which songs I should start with.`
-    case 'playlist':
-      return `Use the playlist "${item.name}" as a reference and recommend more songs with a similar style.`
-    default:
-      return `Help me continue exploring ${item.name}.`
-  }
-}
-
-function buildQueryPrompt(query) {
-  return `I'm searching for "${query}". Help me decide what to start with and give me a smarter recommendation direction.`
-}
-
-function buildEmptyQueryPrompt(query) {
-  return `I couldn't find "${query}" in the public music catalog. Please recommend similar music from a different angle.`
-}
-
-function buildBrowsePrompt() {
-  return 'Recommend a set of songs that would be good to start with today.'
-}
-
-function resolveTrackActionState({
-  item,
-  isConnected,
-  isReady,
-  isConnecting,
-  errorCode,
-  t,
-}) {
-  const playback = resolveTrackPlaybackMeta(item)
-
-  if (playback.playMode !== TRACK_PLAY_MODES.SPOTIFY_REMOTE) {
-    if (playback.playMode === TRACK_PLAY_MODES.PREVIEW) {
-      return {
-        mode: 'info',
-        label: t('search_play_preview'),
-        hint: t('search_preview_secondary_hint'),
-        disabled: true,
-      }
-    }
-
-    return {
-      mode: 'disabled',
-      label: t('agent_playback_unavailable'),
-      hint: t('player_unavailable_hint'),
-      disabled: true,
-    }
-  }
-
-  if (!isConnected) {
-    return {
-      mode: 'connect',
-      label: t('spotify_connect'),
-      hint: t('player_spotify_connect_hint'),
-      disabled: false,
-    }
-  }
-
-  if (errorCode === 'spotify_premium_required') {
-    return {
-      mode: 'disabled',
-      label: t('spotify_playback_status_premium'),
-      hint: t('search_spotify_premium_hint'),
-      disabled: true,
-    }
-  }
-
-  if (isConnecting) {
-    return {
-      mode: 'waiting',
-      label: t('spotify_playback_status_connecting'),
-      hint: t('player_spotify_activate_hint'),
-      disabled: true,
-    }
-  }
-
-  if (!isReady) {
-    return {
-      mode: 'activate',
-      label: t('spotify_playback_activate'),
-      hint: t('player_spotify_activate_hint'),
-      disabled: false,
-    }
-  }
-
-  return {
-    mode: 'play',
-    label: t('search_play_on_spotify'),
-    hint: t('search_spotify_full_playback_hint'),
-    disabled: false,
-  }
-}
-
-function ResultCard({
-  item,
-  type,
-  onAgentAction,
-  onOpenPlaylist,
-  onPlayTrack,
-  onConnectSpotify,
-  onActivatePlayer,
-  onOpenLocalAudio,
-  isSpotifyConnected,
-  isSpotifyPlayerReady,
-  isSpotifyPlayerConnecting,
-  spotifyPlaybackErrorCode,
-  t,
-  searchQuery,
-}) {
-  const subtitle = getSubtitle(item, type, t)
-  const playback = type === 'track' ? resolveTrackPlaybackMeta(item) : null
-  const meta = getMeta(item, type, t, isSpotifyConnected)
-  const albumName = getAlbumName(item, type)
-  const trackAction =
-    type === 'track'
-      ? resolveTrackActionState({
-          item,
-          isConnected: isSpotifyConnected,
-          isReady: isSpotifyPlayerReady,
-          isConnecting: isSpotifyPlayerConnecting,
-          errorCode: spotifyPlaybackErrorCode,
-          t,
-        })
-      : null
-
-  const handleTrackAction = () => {
-    if (!trackAction || trackAction.disabled) {
-      return
-    }
-
-    if (trackAction.mode === 'connect') {
-      onConnectSpotify()
-      return
-    }
-
-    if (trackAction.mode === 'activate') {
-      onActivatePlayer()
-      return
-    }
-
-    if (trackAction.mode === 'play') {
-      onPlayTrack(item)
-    }
-  }
-
-  return (
-    <article className={styles.ResultCard}>
-      <div className={styles.ResultArtBox}>
-        <img
-          src={getImage(item, type)}
-          alt={item.name}
-          className={`${styles.ResultArt} ${
-            type === 'artist' ? styles.ResultArtRound : ''
-          }`}
-        />
-      </div>
-
-      <div className={styles.ResultBody}>
-        <div className={styles.ResultHeader}>
-          <div className={styles.ResultTagRow}>
-            <span className={styles.ResultType}>{t(`search_result_${type}`)}</span>
-            {type === 'track' && (
-              <span className={styles.ResultSourceBadge}>
-                {t('search_source_spotify')}
-              </span>
-            )}
-          </div>
-          {meta && <span className={styles.ResultMeta}>{meta}</span>}
-        </div>
-
-        <h3 className={styles.ResultTitle}>{item.name}</h3>
-        <p className={styles.ResultSubtitle}>{subtitle}</p>
-        {type === 'track' && albumName && (
-          <p className={styles.ResultDetail}>
-            {t('search_result_album_label', {
-              album: albumName,
-            })}
-          </p>
-        )}
-
-        <div className={styles.ResultActions}>
-          {type === 'track' && (
-            <>
-              <button
-                type="button"
-                className={styles.PrimaryBtn}
-                disabled={trackAction?.disabled}
-                onClick={handleTrackAction}
-              >
-                {trackAction?.label || t('agent_playback_unavailable')}
-              </button>
-              {trackAction?.hint && (
-                <div className={styles.UnavailableBox}>
-                  <p className={styles.UnavailableText}>{trackAction.hint}</p>
-                  {(trackAction.mode === 'connect' ||
-                    trackAction.mode === 'disabled' ||
-                    trackAction.mode === 'info') && (
-                    <div className={styles.UnavailableActions}>
-                      <button
-                        type="button"
-                        className={styles.SecondaryBtn}
-                        onClick={onOpenLocalAudio}
-                      >
-                        {t('library_upload_audio')}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-
-          {type === 'playlist' && (
-            <button
-              type="button"
-              className={styles.PrimaryBtn}
-              onClick={() => onOpenPlaylist(item)}
-            >
-              {t('search_open_playlist')}
-            </button>
-          )}
-
-          {(type === 'artist' || type === 'album') && (
-            <button
-              type="button"
-              className={styles.PrimaryBtn}
-              onClick={() => onAgentAction(buildAgentPrompt(item, type))}
-            >
-              {type === 'artist'
-                ? t('search_send_artist_to_agent')
-                : t('search_send_album_to_agent')}
-            </button>
-          )}
-
-          {type === 'track' && (
-            <button
-              type="button"
-              className={styles.SecondaryBtn}
-              onClick={() =>
-                onAgentAction(buildAgentPrompt(item, type, { query: searchQuery }))
-              }
-            >
-              {t('search_send_track_to_agent')}
-            </button>
-          )}
-
-          {type === 'playlist' && (
-            <button
-              type="button"
-              className={styles.SecondaryBtn}
-              onClick={() => onAgentAction(buildAgentPrompt(item, type))}
-            >
-              {t('search_send_playlist_to_agent')}
-            </button>
-          )}
-        </div>
-      </div>
-    </article>
-  )
-}
-
-function SearchSection({
-  title,
-  items,
-  type,
-  onAgentAction,
-  onOpenPlaylist,
-  onPlayTrack,
-  onConnectSpotify,
-  onActivatePlayer,
-  onOpenLocalAudio,
-  isSpotifyConnected,
-  isSpotifyPlayerReady,
-  isSpotifyPlayerConnecting,
-  spotifyPlaybackErrorCode,
-  t,
-  searchQuery,
-}) {
-  if (!items.length) {
-    return null
-  }
-
-  return (
-    <section className={styles.Section}>
-      <div className={styles.SectionHeader}>
-        <h2 className={styles.SectionTitle}>{title}</h2>
-        <span className={styles.SectionCount}>{items.length}</span>
-      </div>
-
-      <div className={styles.ResultGrid}>
-        {items.map((item) => (
-          <ResultCard
-            key={item.id}
-            item={item}
-            type={type}
-            onAgentAction={onAgentAction}
-            onOpenPlaylist={onOpenPlaylist}
-            onPlayTrack={onPlayTrack}
-            onConnectSpotify={onConnectSpotify}
-            onActivatePlayer={onActivatePlayer}
-            onOpenLocalAudio={onOpenLocalAudio}
-            isSpotifyConnected={isSpotifyConnected}
-            isSpotifyPlayerReady={isSpotifyPlayerReady}
-            isSpotifyPlayerConnecting={isSpotifyPlayerConnecting}
-            spotifyPlaybackErrorCode={spotifyPlaybackErrorCode}
-            t={t}
-            searchQuery={searchQuery}
-          />
-        ))}
-      </div>
-    </section>
-  )
-}
 
 function Search() {
   const { t } = useTranslation()
@@ -466,26 +43,22 @@ function Search() {
     isReady: isSpotifyPlayerReady,
   } = useSpotifyPlayback()
   const query = searchParams.get('q')?.trim() || ''
-  const [results, setResults] = useState({
-    tracks: [],
-    artists: [],
-    albums: [],
-    playlists: [],
-  })
+  const [activeTab, setActiveTab] = useState('all')
+  const [results, setResults] = useState(() => normalizeSearchResults())
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
+
+  useEffect(() => {
+    setActiveTab('all')
+  }, [query])
 
   useEffect(() => {
     let cancelled = false
 
     async function runSearch() {
       if (!query) {
-        setResults({
-          tracks: [],
-          artists: [],
-          albums: [],
-          playlists: [],
-        })
+        setResults(normalizeSearchResults())
         setSearchError('')
         setIsSearching(false)
         return
@@ -496,8 +69,8 @@ function Search() {
       try {
         const params = new URLSearchParams({
           q: query,
-          type: 'track,artist,album,playlist',
-          limit: '6',
+          type: 'track,artist,album,playlist,show',
+          limit: '8',
         })
         const data = await request(`/api/catalog/search?${params.toString()}`)
 
@@ -505,16 +78,12 @@ function Search() {
           return
         }
 
-        setResults({
-          tracks: data.results?.tracks || [],
-          artists: data.results?.artists || [],
-          albums: data.results?.albums || [],
-          playlists: data.results?.playlists || [],
-        })
+        setResults(normalizeSearchResults(data.results))
         setSearchError('')
       } catch (error) {
         if (!cancelled) {
-          setSearchError(error.message)
+          setSearchError(error?.message || t('library_error_title'))
+          setResults(normalizeSearchResults())
         }
       } finally {
         if (!cancelled) {
@@ -528,28 +97,31 @@ function Search() {
     return () => {
       cancelled = true
     }
-  }, [query, request])
+  }, [query, request, retryCount, t])
 
-  const resultCount = useMemo(
-    () =>
-      results.tracks.length +
-      results.artists.length +
-      results.albums.length +
-      results.playlists.length,
-    [results],
+  const resultCount = useMemo(() => getResultCount(results), [results])
+  const topResult = useMemo(() => getTopResult(results), [results])
+  const allSections = useMemo(() => buildAllSections(results, t), [results, t])
+  const activeTabItems = useMemo(
+    () => getTabItems(activeTab, results),
+    [activeTab, results],
   )
-
-  const spotlight = useMemo(
-    () =>
-      results.tracks[0] ||
-      results.artists[0] ||
-      results.albums[0] ||
-      results.playlists[0] ||
-      null,
-    [results],
-  )
-
-  const spotlightType = getSpotlightType(results)
+  const activeTabTitle = useMemo(() => {
+    switch (activeTab) {
+      case 'track':
+        return t('search_section_tracks')
+      case 'artist':
+        return t('search_section_artists')
+      case 'playlist':
+        return t('search_section_playlists')
+      case 'album':
+        return t('search_section_albums')
+      case 'show':
+        return t('search_section_shows')
+      default:
+        return t('search_results')
+    }
+  }, [activeTab, t])
 
   function openAgentWithPrompt(prompt) {
     navigate('/agent', {
@@ -560,17 +132,46 @@ function Search() {
     })
   }
 
-  function handlePlayTrack(track) {
+  function handleTrackAction(track) {
+    const trackAction = resolveTrackActionState({
+      item: track,
+      isConnected,
+      isReady: isSpotifyPlayerReady,
+      isConnecting: isSpotifyPlayerConnecting,
+      errorCode: spotifyPlaybackErrorCode,
+      t,
+    })
+
+    if (trackAction.disabled) {
+      return
+    }
+
+    if (trackAction.mode === 'connect') {
+      handleConnectSpotify()
+      return
+    }
+
+    if (trackAction.mode === 'activate') {
+      handleActivatePlayer()
+      return
+    }
+
     dispatch(
       startAgentPlayback({
         tracks: [
           {
             ...track,
+            source: 'spotify',
             sourceType: 'spotify',
-            sourceId: track.sourceId || (track.id ? `spotify:track:${track.id}` : ''),
+            sourceId: getTrackUri(track),
             uri: getTrackUri(track),
-            playMode: TRACK_PLAY_MODES.SPOTIFY_REMOTE,
-            playable: false,
+            previewUrl: track.preview_url || track.previewUrl || '',
+            preview_url: track.preview_url || track.previewUrl || '',
+            playMode:
+              trackAction.mode === 'preview'
+                ? TRACK_PLAY_MODES.PREVIEW
+                : TRACK_PLAY_MODES.SPOTIFY_REMOTE,
+            playable: trackAction.mode === 'preview',
           },
         ],
         playlistId: `search-track-${track.id}`,
@@ -596,206 +197,41 @@ function Search() {
     activatePlayer().catch(() => {})
   }
 
-  function handleOpenLocalAudio() {
-    if (!isAuthenticated) {
-      openAuthDialog('login')
+  function handleTopResultPrimaryAction() {
+    if (!topResult) {
       return
     }
 
-    navigate('/library')
+    if (topResult.type === 'track') {
+      handleTrackAction(topResult.item)
+      return
+    }
+
+    if (topResult.type === 'playlist') {
+      handleOpenPlaylist(topResult.item)
+    }
   }
 
   return (
     <div className={styles.SearchPage}>
-      <div className={styles.Search}>
-        {query ? (
-          <>
-            <section className={styles.SearchHero}>
-              <div>
-                <p className={styles.Eyebrow}>{t('search_results')}</p>
-                <h1 className={styles.HeroTitle}>
-                  {t('search_results_for', { query })}
-                </h1>
-                <p className={styles.HeroText}>{t('search_intro_body')}</p>
-                <div className={styles.HeroActions}>
-                  <button
-                    type="button"
-                    className={styles.PrimaryBtn}
-                    onClick={() => openAgentWithPrompt(buildQueryPrompt(query))}
-                  >
-                    {t('search_open_agent_for_query')}
-                  </button>
-                  {spotlight && (
-                    <button
-                      type="button"
-                      className={styles.SecondaryBtn}
-                      onClick={() =>
-                        openAgentWithPrompt(buildAgentPrompt(spotlight, spotlightType))
-                      }
-                    >
-                      {t('search_send_spotlight_to_agent')}
-                    </button>
-                  )}
-                </div>
-              </div>
+      <div className={styles.SearchShell}>
+        <div className={styles.SearchMain}>
+          <SearchHeader
+            query={query}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            resultCount={resultCount}
+            t={t}
+          />
 
-              <div className={styles.HeroStats}>
-                <div className={styles.StatCard}>
-                  <span className={styles.StatLabel}>{t('search_results')}</span>
-                  <strong className={styles.StatValue}>
-                    {isSearching ? '...' : resultCount}
-                  </strong>
-                  <p className={styles.StatText}>
-                    {isSearching ? t('search_loading') : t('search_agent_hint')}
-                  </p>
-                </div>
-                <div className={styles.StatCard}>
-                  <span className={styles.StatLabel}>{t('search_spotlight')}</span>
-                  <strong className={styles.StatValue}>
-                    {spotlight?.name || t('search_no_results_short')}
-                  </strong>
-                  <p className={styles.StatText}>
-                    {spotlight
-                      ? getSubtitle(spotlight, spotlightType, t)
-                      : t('search_agent_hint')}
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            {isSearching && (
-              <section className={styles.EmptyState}>
-                <p className={styles.EmptyText}>{t('search_loading')}</p>
-              </section>
-            )}
-
-            {!isSearching && searchError && (
-              <section className={styles.EmptyState}>
-                <p className={styles.EmptyText}>{searchError}</p>
-              </section>
-            )}
-
-            {!isSearching && !searchError && !resultCount && (
-              <section className={styles.EmptyState}>
-                <h2 className={styles.SectionTitle}>{t('search_no_results')}</h2>
-                <p className={styles.EmptyText}>{t('search_try_agent')}</p>
-                <button
-                  type="button"
-                  className={styles.PrimaryBtn}
-                  onClick={() =>
-                    openAgentWithPrompt(buildEmptyQueryPrompt(query))
-                  }
-                >
-                  {t('search_open_agent_for_query')}
-                </button>
-              </section>
-            )}
-
-            {!isSearching && resultCount > 0 && (
-              <>
-                <SearchSection
-                  title={t('search_section_tracks')}
-                  items={results.tracks}
-                  type="track"
-                  onAgentAction={openAgentWithPrompt}
-                  onOpenPlaylist={handleOpenPlaylist}
-                  onPlayTrack={handlePlayTrack}
-                  onConnectSpotify={handleConnectSpotify}
-                  onActivatePlayer={handleActivatePlayer}
-                  onOpenLocalAudio={handleOpenLocalAudio}
-                  isSpotifyConnected={isConnected}
-                  isSpotifyPlayerReady={isSpotifyPlayerReady}
-                  isSpotifyPlayerConnecting={isSpotifyPlayerConnecting}
-                  spotifyPlaybackErrorCode={spotifyPlaybackErrorCode}
-                  t={t}
-                  searchQuery={query}
-                />
-                <SearchSection
-                  title={t('search_section_artists')}
-                  items={results.artists}
-                  type="artist"
-                  onAgentAction={openAgentWithPrompt}
-                  onOpenPlaylist={handleOpenPlaylist}
-                  onPlayTrack={handlePlayTrack}
-                  onConnectSpotify={handleConnectSpotify}
-                  onActivatePlayer={handleActivatePlayer}
-                  onOpenLocalAudio={handleOpenLocalAudio}
-                  isSpotifyConnected={isConnected}
-                  isSpotifyPlayerReady={isSpotifyPlayerReady}
-                  isSpotifyPlayerConnecting={isSpotifyPlayerConnecting}
-                  spotifyPlaybackErrorCode={spotifyPlaybackErrorCode}
-                  t={t}
-                  searchQuery={query}
-                />
-                <SearchSection
-                  title={t('search_section_albums')}
-                  items={results.albums}
-                  type="album"
-                  onAgentAction={openAgentWithPrompt}
-                  onOpenPlaylist={handleOpenPlaylist}
-                  onPlayTrack={handlePlayTrack}
-                  onConnectSpotify={handleConnectSpotify}
-                  onActivatePlayer={handleActivatePlayer}
-                  onOpenLocalAudio={handleOpenLocalAudio}
-                  isSpotifyConnected={isConnected}
-                  isSpotifyPlayerReady={isSpotifyPlayerReady}
-                  isSpotifyPlayerConnecting={isSpotifyPlayerConnecting}
-                  spotifyPlaybackErrorCode={spotifyPlaybackErrorCode}
-                  t={t}
-                  searchQuery={query}
-                />
-                <SearchSection
-                  title={t('search_section_playlists')}
-                  items={results.playlists}
-                  type="playlist"
-                  onAgentAction={openAgentWithPrompt}
-                  onOpenPlaylist={handleOpenPlaylist}
-                  onPlayTrack={handlePlayTrack}
-                  onConnectSpotify={handleConnectSpotify}
-                  onActivatePlayer={handleActivatePlayer}
-                  onOpenLocalAudio={handleOpenLocalAudio}
-                  isSpotifyConnected={isConnected}
-                  isSpotifyPlayerReady={isSpotifyPlayerReady}
-                  isSpotifyPlayerConnecting={isSpotifyPlayerConnecting}
-                  spotifyPlaybackErrorCode={spotifyPlaybackErrorCode}
-                  t={t}
-                  searchQuery={query}
-                />
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            <section className={styles.SearchHero}>
-              <div>
-                <p className={styles.Eyebrow}>{t('browseAll')}</p>
-                <h1 className={styles.HeroTitle}>{t('search_intro_title')}</h1>
-                <p className={styles.HeroText}>{t('search_intro_body')}</p>
-                <div className={styles.HeroActions}>
-                  <button
-                    type="button"
-                    className={styles.PrimaryBtn}
-                    onClick={() => openAgentWithPrompt(buildBrowsePrompt())}
-                  >
-                    {t('search_open_agent_for_query')}
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.HeroStats}>
-                <div className={styles.StatCard}>
-                  <span className={styles.StatLabel}>{t('search_results')}</span>
-                  <strong className={styles.StatValue}>{SEARCHCARDS.length}</strong>
-                  <p className={styles.StatText}>{t('search_browse_hint')}</p>
-                </div>
-              </div>
-            </section>
-
-            <section className={styles.Section}>
-              <div className={styles.SectionHeader}>
-                <h2 className={styles.SectionTitle}>{t('browseAll')}</h2>
-              </div>
-              <div className={styles.SearchCardGrid}>
+          {!query && (
+            <SearchEmptyState
+              title={t('search_empty_prompt_title')}
+              body={t('search_empty_prompt_body')}
+              actionLabel={t('search_open_agent_for_query')}
+              onAction={() => openAgentWithPrompt(buildBrowsePrompt())}
+            >
+              <div className={styles.SearchBrowseGrid}>
                 {SEARCHCARDS.map((card) => (
                   <SearchPageCard
                     key={card.title}
@@ -807,9 +243,83 @@ function Search() {
                   />
                 ))}
               </div>
-            </section>
-          </>
-        )}
+            </SearchEmptyState>
+          )}
+
+          {query && isSearching && <SearchSkeleton />}
+
+          {query && !isSearching && searchError && (
+            <SearchEmptyState
+              title={t('library_error_title')}
+              body={searchError}
+              actionLabel={t('search_retry')}
+              onAction={() => setRetryCount((current) => current + 1)}
+              tone="error"
+            />
+          )}
+
+          {query && !isSearching && !searchError && resultCount === 0 && (
+            <SearchEmptyState
+              title={t('search_no_results_for', { query })}
+              body={t('search_try_agent')}
+              actionLabel={t('search_open_agent_for_query')}
+              onAction={() => openAgentWithPrompt(buildEmptyQueryPrompt(query))}
+            />
+          )}
+
+          {query && !isSearching && !searchError && resultCount > 0 && (
+            <>
+              {activeTab === 'all' ? (
+                <>
+                  <SearchTopResult
+                    result={topResult}
+                    t={t}
+                    onPrimaryAction={handleTopResultPrimaryAction}
+                    onAgentAction={() =>
+                      topResult
+                        ? openAgentWithPrompt(
+                            buildAgentPrompt(topResult.item, topResult.type, {
+                              query,
+                            }),
+                          )
+                        : undefined
+                    }
+                  />
+
+                  {allSections.map((section) => (
+                    <SearchResultList
+                      key={section.key}
+                      title={section.title}
+                      items={section.items}
+                      type={section.type}
+                      t={t}
+                      onOpenPlaylist={handleOpenPlaylist}
+                      onPlayTrack={handleTrackAction}
+                    />
+                  ))}
+                </>
+              ) : activeTabItems.length > 0 ? (
+                <SearchResultList
+                  title={activeTabTitle}
+                  items={activeTabItems}
+                  type={activeTab}
+                  t={t}
+                  onOpenPlaylist={handleOpenPlaylist}
+                  onPlayTrack={handleTrackAction}
+                />
+              ) : (
+                <SearchEmptyState
+                  title={t('search_no_results_in_tab', {
+                    tab: activeTabTitle,
+                  })}
+                  body={t('search_try_agent')}
+                  actionLabel={t('search_open_agent_for_query')}
+                  onAction={() => openAgentWithPrompt(buildQueryPrompt(query))}
+                />
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
