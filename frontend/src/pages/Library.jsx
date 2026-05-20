@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useDispatch } from 'react-redux'
@@ -7,6 +7,10 @@ import PlaylistCardM from '../components/cards/PlaylistCardM'
 import { useAuth } from '../context/AuthContext.jsx'
 import { startAgentPlayback } from '../store/index.js'
 import { mapLocalPlaylistSummary } from '../utils/library.js'
+import {
+  emitLibraryPlaylistsUpdated,
+  subscribeLibraryPlaylistsUpdated,
+} from '../utils/library-events.js'
 import {
   createLocalAudioTrack,
   mapLocalAudioCard,
@@ -49,14 +53,40 @@ function Library() {
   const [error, setError] = useState('')
   const [isUploading, setIsUploading] = useState(false)
 
+  const loadLibrary = useCallback(async () => {
+    if (!isAuthenticated) {
+      setPlaylists([])
+      setAudioAssets([])
+      setError('')
+      return
+    }
+
+    try {
+      const [playlistData, audioData] = await Promise.all([
+        request('/api/library/playlists'),
+        request('/api/media/assets'),
+      ])
+
+      setPlaylists((playlistData.items || []).map(mapLocalPlaylistSummary))
+      setAudioAssets(audioData.items || [])
+      setError('')
+    } catch (requestError) {
+      setError(requestError.message)
+      setPlaylists([])
+      setAudioAssets([])
+    }
+  }, [isAuthenticated, request])
+
   useEffect(() => {
     let cancelled = false
 
-    async function loadLibrary() {
+    async function bootstrapLibrary() {
       if (!isAuthenticated) {
-        setPlaylists([])
-        setAudioAssets([])
-        setError('')
+        if (!cancelled) {
+          setPlaylists([])
+          setAudioAssets([])
+          setError('')
+        }
         return
       }
 
@@ -82,12 +112,19 @@ function Library() {
       }
     }
 
-    loadLibrary()
+    bootstrapLibrary()
+
+    const unsubscribe = subscribeLibraryPlaylistsUpdated(() => {
+      if (!cancelled) {
+        loadLibrary().catch(() => {})
+      }
+    })
 
     return () => {
       cancelled = true
+      unsubscribe()
     }
-  }, [isAuthenticated, request])
+  }, [isAuthenticated, loadLibrary, request])
 
   async function handleFileChange(event) {
     const file = event.target.files?.[0]
@@ -156,6 +193,101 @@ function Library() {
     }
   }
 
+  async function handleRenamePlaylist(playlist) {
+    if (!playlist?.canEdit) {
+      window.alert(t('playlist_manage_local_only'))
+      return
+    }
+
+    // TODO: Replace browser prompt with a first-class modal when the library UI gets a shared dialog system.
+    const nextTitle = window.prompt(
+      t('playlist_rename_prompt'),
+      playlist.title || t('library_new_playlist'),
+    )
+
+    if (nextTitle === null) {
+      return
+    }
+
+    const normalizedTitle = nextTitle.trim()
+
+    if (!normalizedTitle) {
+      window.alert(t('playlist_rename_empty'))
+      return
+    }
+
+    if (normalizedTitle.length > 80) {
+      window.alert(t('playlist_rename_too_long'))
+      return
+    }
+
+    if (normalizedTitle === playlist.title) {
+      return
+    }
+
+    try {
+      const data = await request(`/api/library/playlists/${playlist.link}`, {
+        method: 'PATCH',
+        body: {
+          title: normalizedTitle,
+        },
+      })
+      const updatedPlaylist = data?.playlist
+        ? mapLocalPlaylistSummary(data.playlist)
+        : null
+
+      if (!updatedPlaylist) {
+        return
+      }
+
+      setPlaylists((currentPlaylists) =>
+        currentPlaylists.map((item) =>
+          item.link === playlist.link ? updatedPlaylist : item,
+        ),
+      )
+      emitLibraryPlaylistsUpdated({
+        type: 'renamed',
+        playlistId: playlist.link,
+        playlist: updatedPlaylist,
+      })
+    } catch (requestError) {
+      window.alert(requestError.message || t('playlist_rename_failed'))
+    }
+  }
+
+  async function handleDeletePlaylist(playlist) {
+    if (!playlist?.canDelete) {
+      window.alert(t('playlist_manage_local_only'))
+      return
+    }
+
+    // TODO: Replace browser confirm with a shared danger modal when one exists in the project.
+    const confirmed = window.confirm(
+      t('playlist_delete_confirm', {
+        title: playlist.title || t('library_new_playlist'),
+      }),
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await request(`/api/library/playlists/${playlist.link}`, {
+        method: 'DELETE',
+      })
+      setPlaylists((currentPlaylists) =>
+        currentPlaylists.filter((item) => item.link !== playlist.link),
+      )
+      emitLibraryPlaylistsUpdated({
+        type: 'deleted',
+        playlistId: playlist.link,
+      })
+    } catch (requestError) {
+      window.alert(requestError.message || t('playlist_delete_failed'))
+    }
+  }
+
   return (
     <div className={styles.LibPage}>
       <div className={styles.Library}>
@@ -197,8 +329,10 @@ function Library() {
                   playlists={playlists}
                   audioAssets={audioAssets}
                   isUploading={isUploading}
+                  onDeletePlaylist={handleDeletePlaylist}
                   onDeleteAsset={handleDeleteAsset}
                   onPlayAsset={handlePlayAsset}
+                  onRenamePlaylist={handleRenamePlaylist}
                   onUploadClick={handleUploadClick}
                 />
               }
@@ -226,8 +360,10 @@ function PlaylistTab({
   playlists,
   audioAssets,
   isUploading,
+  onDeletePlaylist,
   onDeleteAsset,
   onPlayAsset,
+  onRenamePlaylist,
   onUploadClick,
 }) {
   const { t } = useTranslation()
@@ -250,7 +386,12 @@ function PlaylistTab({
         <div className={styles.Grid}>
           {localPlaylists.length ? (
             localPlaylists.map((item) => (
-              <PlaylistCardM key={item.link} data={item} />
+              <PlaylistCardM
+                key={item.link}
+                data={item}
+                onDelete={onDeletePlaylist}
+                onRename={onRenamePlaylist}
+              />
             ))
           ) : (
             <div className={styles.EmptyState}>

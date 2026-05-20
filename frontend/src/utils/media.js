@@ -1,4 +1,4 @@
-import fallbackArtwork from '../assets/hero.png'
+import defaultPlaylistCover from '../assets/default-playlist-cover.png'
 import { BACKEND_BASE_URL } from './api.js'
 
 function formatDuration(durationMs = 0) {
@@ -65,7 +65,7 @@ export function createLocalAudioTrack(asset, sessionToken = '') {
     audio_url: audioUrl,
     playMode: 'local_audio',
     playable: true,
-    image: fallbackArtwork,
+    image: defaultPlaylistCover,
   }
 }
 
@@ -101,6 +101,6 @@ export function mapLocalAudioCard(asset) {
       ? formatDuration(asset.durationMs)
       : fallbackFormatLabel,
     sizeText: formatFileSize(asset.sizeBytes || 0),
-    imageUrl: fallbackArtwork,
+    imageUrl: defaultPlaylistCover,
   }
 }

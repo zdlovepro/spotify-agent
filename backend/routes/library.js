@@ -20,6 +20,8 @@ import {
 
 const router = Router()
 
+const LOCAL_LIBRARY_SOURCE_TYPE = 'agentmusic'
+
 function createLocalAudioStreamUrl(req, assetId) {
   if (typeof assetId !== 'string' || !assetId.trim()) {
     return ''
@@ -51,6 +53,22 @@ function enrichFavoriteForResponse(req, favorite) {
   })
 }
 
+function readPlaylistTitleInput(input = {}) {
+  if (typeof input.title === 'string') {
+    return input.title.trim()
+  }
+
+  if (typeof input.name === 'string') {
+    return input.name.trim()
+  }
+
+  return null
+}
+
+function canManagePlaylist(playlist) {
+  return playlist?.sourceType === LOCAL_LIBRARY_SOURCE_TYPE
+}
+
 router.use(requireLocalUser)
 
 router.get(
@@ -73,7 +91,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const playlist = createPlaylist(req.localUserId, req.body || {})
     res.status(201).json({
-      playlist,
+      playlist: enrichPlaylistForResponse(req, playlist),
     })
   }),
 )
@@ -96,7 +114,37 @@ router.get(
 router.patch(
   '/playlists/:id',
   asyncHandler(async (req, res) => {
-    const playlist = updatePlaylist(req.localUserId, req.params.id, req.body || {})
+    const existing = getPlaylist(req.localUserId, req.params.id)
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Playlist not found' })
+    }
+
+    if (!canManagePlaylist(existing)) {
+      return res.status(403).json({
+        error: 'Only local AgentMusic playlists can be renamed',
+      })
+    }
+
+    const nextTitle = readPlaylistTitleInput(req.body || {})
+
+    if (nextTitle !== null) {
+      if (!nextTitle) {
+        return res.status(400).json({ error: 'Playlist name cannot be empty' })
+      }
+
+      if (nextTitle.length > 80) {
+        return res
+          .status(400)
+          .json({ error: 'Playlist name cannot exceed 80 characters' })
+      }
+    }
+
+    const payload = {
+      ...(req.body || {}),
+      ...(nextTitle !== null ? { title: nextTitle } : {}),
+    }
+    const playlist = updatePlaylist(req.localUserId, req.params.id, payload)
 
     if (!playlist) {
       return res.status(404).json({ error: 'Playlist not found' })
@@ -111,13 +159,25 @@ router.patch(
 router.delete(
   '/playlists/:id',
   asyncHandler(async (req, res) => {
+    const existing = getPlaylist(req.localUserId, req.params.id)
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Playlist not found' })
+    }
+
+    if (!canManagePlaylist(existing)) {
+      return res.status(403).json({
+        error: 'Only local AgentMusic playlists can be deleted',
+      })
+    }
+
     const removed = deletePlaylist(req.localUserId, req.params.id)
 
     if (!removed) {
       return res.status(404).json({ error: 'Playlist not found' })
     }
 
-    res.status(204).send()
+    res.json({ ok: true })
   }),
 )
 

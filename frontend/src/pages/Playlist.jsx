@@ -18,10 +18,12 @@ import {
 import TextRegularM from '../components/text/TextRegularM'
 import PlayButton from '../components/buttons/PlayButton'
 import IconButton from '../components/buttons/IconButton'
+import PlaylistActionsMenu from '../components/library/PlaylistActionsMenu.jsx'
 import PlaylistDetails from '../components/playlist/PlaylistDetails'
 import PlaylistTrack from '../components/playlist/PlaylistTrack'
 import * as Icons from '../components/icons/index.jsx'
 import { PLAYLIST } from '../data/index.js'
+import { emitLibraryPlaylistsUpdated } from '../utils/library-events.js'
 import styles from './playlist.module.css'
 
 function PlaylistPage() {
@@ -201,6 +203,93 @@ function PlaylistPage() {
     navigate('/library')
   }
 
+  async function handleRenamePlaylist() {
+    if (!playlist?.canEdit) {
+      window.alert(t('playlist_manage_local_only'))
+      return
+    }
+
+    // TODO: Replace browser prompt with the shared project modal once the library action dialog exists.
+    const nextTitle = window.prompt(
+      t('playlist_rename_prompt'),
+      playlist.title || t('library_new_playlist'),
+    )
+
+    if (nextTitle === null) {
+      return
+    }
+
+    const normalizedTitle = nextTitle.trim()
+
+    if (!normalizedTitle) {
+      window.alert(t('playlist_rename_empty'))
+      return
+    }
+
+    if (normalizedTitle.length > 80) {
+      window.alert(t('playlist_rename_too_long'))
+      return
+    }
+
+    if (normalizedTitle === playlist.title) {
+      return
+    }
+
+    try {
+      const data = await request(`/api/library/playlists/${path}`, {
+        method: 'PATCH',
+        body: {
+          title: normalizedTitle,
+        },
+      })
+
+      if (!data?.playlist) {
+        return
+      }
+
+      const updatedPlaylist = mapLocalPlaylistDetails(data.playlist)
+      setPlaylist(updatedPlaylist)
+      emitLibraryPlaylistsUpdated({
+        type: 'renamed',
+        playlistId: path,
+        playlist: updatedPlaylist,
+      })
+    } catch (requestError) {
+      window.alert(requestError.message || t('playlist_rename_failed'))
+    }
+  }
+
+  async function handleDeletePlaylist() {
+    if (!playlist?.canDelete) {
+      window.alert(t('playlist_manage_local_only'))
+      return
+    }
+
+    // TODO: Replace browser confirm with a shared danger modal when the project gets one.
+    const confirmed = window.confirm(
+      t('playlist_delete_confirm', {
+        title: playlist.title || t('library_new_playlist'),
+      }),
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await request(`/api/library/playlists/${path}`, {
+        method: 'DELETE',
+      })
+      emitLibraryPlaylistsUpdated({
+        type: 'deleted',
+        playlistId: path,
+      })
+      navigate('/library')
+    } catch (requestError) {
+      window.alert(requestError.message || t('playlist_delete_failed'))
+    }
+  }
+
   return (
     <div className={styles.PlaylistPage}>
       <div className={styles.gradientBg} />
@@ -211,9 +300,20 @@ function PlaylistPage() {
         <PlaylistDetails data={playlist} />
 
         <div className={styles.PlaylistIcons}>
-          <PlayButton isthisplay={isthisplay} onClick={togglePlaylistPlayback} />
+          <div className={styles.PlayControl}>
+            <PlayButton isthisplay={isthisplay} onClick={togglePlaylistPlayback} />
+          </div>
           <IconButton icon={<Icons.Like />} activeicon={<Icons.LikeActive />} />
-          <Icons.More className={styles.moreIcon} />
+          {(playlist.canEdit || playlist.canDelete) ? (
+            <div className={styles.ActionsMenuWrap}>
+              <PlaylistActionsMenu
+                onRename={playlist.canEdit ? handleRenamePlaylist : null}
+                onDelete={playlist.canDelete ? handleDeletePlaylist : null}
+              />
+            </div>
+          ) : (
+            <Icons.More className={styles.moreIcon} />
+          )}
         </div>
 
         {unavailableTrackCount > 0 && (
@@ -254,7 +354,7 @@ function PlaylistPage() {
         </div>
 
         <div className={styles.PlaylistSongs}>
-          {playlist.playlistData.map((song) => (
+          {playlist.playlistData.map((song, songIndex) => (
             <button
               key={song.id || song.index}
               type="button"
@@ -270,7 +370,9 @@ function PlaylistPage() {
               <PlaylistTrack
                 data={{
                   listType: playlist.type,
+                  playlistId: playlist.link,
                   song,
+                  songIndex,
                 }}
               />
             </button>

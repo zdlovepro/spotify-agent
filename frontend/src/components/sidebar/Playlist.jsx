@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useSelector } from 'react-redux'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { PLAYLISTBTN } from '../../constants/index.jsx'
+import PlaylistCover from '../library/PlaylistCover.jsx'
+import {
+  emitLibraryPlaylistsUpdated,
+  subscribeLibraryPlaylistsUpdated,
+} from '../../utils/library-events.js'
 import { mapLocalPlaylistSummary } from '../../utils/library.js'
 import * as Icons from '../icons/index.jsx'
 import styles from './playlist.module.css'
@@ -24,10 +29,6 @@ function normalizeType(item) {
   }
 
   return 'playlist'
-}
-
-function getItemImage(item) {
-  return item.imgUrl || item.cover || item.playlistData?.[0]?.songimg || ''
 }
 
 function getTypeLabel(item, t) {
@@ -54,13 +55,32 @@ function Playlist() {
   const [playlists, setPlaylists] = useState([])
   const [error, setError] = useState('')
 
+  const loadLibrary = useCallback(async () => {
+    if (!isAuthenticated) {
+      setPlaylists([])
+      setError('')
+      return
+    }
+
+    try {
+      const data = await request('/api/library/playlists')
+      setPlaylists((data.items || []).map(mapLocalPlaylistSummary))
+      setError('')
+    } catch (requestError) {
+      setPlaylists([])
+      setError(requestError.message)
+    }
+  }, [isAuthenticated, request])
+
   useEffect(() => {
     let cancelled = false
 
-    async function loadLibrary() {
+    async function bootstrapLibrary() {
       if (!isAuthenticated) {
-        setPlaylists([])
-        setError('')
+        if (!cancelled) {
+          setPlaylists([])
+          setError('')
+        }
         return
       }
 
@@ -81,12 +101,19 @@ function Playlist() {
       }
     }
 
-    loadLibrary()
+    bootstrapLibrary()
+
+    const unsubscribe = subscribeLibraryPlaylistsUpdated(() => {
+      if (!cancelled) {
+        loadLibrary().catch(() => {})
+      }
+    })
 
     return () => {
       cancelled = true
+      unsubscribe()
     }
-  }, [isAuthenticated, request])
+  }, [isAuthenticated, loadLibrary, request])
 
   const libraryItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -145,6 +172,10 @@ function Playlist() {
       }
 
       setPlaylists((currentPlaylists) => [nextPlaylist, ...currentPlaylists])
+      emitLibraryPlaylistsUpdated({
+        type: 'created',
+        playlistId: nextPlaylist.link,
+      })
       navigate(`/playlist/${nextPlaylist.link}`)
     } catch (requestError) {
       setError(requestError.message)
@@ -179,7 +210,7 @@ function Playlist() {
             title={t('library_action_open')}
             onClick={handleOpenLibrary}
           >
-            ↗
+            <Icons.Nextpage />
           </button>
         </div>
       </header>
@@ -250,7 +281,6 @@ function Playlist() {
 
         {libraryItems.map((list) => {
           const isActive = activePlaylistId === list.link
-          const image = getItemImage(list)
 
           return (
             <Link
@@ -258,20 +288,21 @@ function Playlist() {
               key={list.link || list.title}
               className={`${styles.LibraryItem} ${isActive ? styles.ActiveItem : ''}`}
             >
-              <div
-                className={styles.Cover}
-                style={{
-                  backgroundColor: list.playlistBg || list.hoverColor || '#303030',
-                }}
-              >
-                {image ? <img src={image} alt={list.title} /> : <span>♪</span>}
+              <div className={styles.Cover}>
+                <PlaylistCover
+                  playlist={list}
+                  imageUrl={list.imgUrl}
+                  title={list.title}
+                  size="sm"
+                  className={styles.CoverMedia}
+                />
               </div>
 
               <div className={styles.LibraryItemCopy}>
                 <p className={styles.ItemTitle}>{list.title}</p>
                 <p className={styles.ItemMeta}>
                   {getTypeLabel(list, t)}
-                  {list.artist ? ` · ${list.artist}` : ''}
+                  {list.artist ? ` 路 ${list.artist}` : ''}
                 </p>
               </div>
 

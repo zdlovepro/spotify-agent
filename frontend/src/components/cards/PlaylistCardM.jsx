@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom'
 import { changePlay, changeTrack } from '../../store/index.js'
 import { useSpotify } from '../../context/SpotifyContext.jsx'
 import { canStartTrackPlayback, createPlaybackQueue } from '../../lib/spotify.js'
+import PlaylistActionsMenu from '../library/PlaylistActionsMenu.jsx'
+import PlaylistCover from '../library/PlaylistCover.jsx'
 import TextBoldL from '../text/TextBoldL'
 import TextRegularM from '../text/TextRegularM'
 import PlayButton from '../buttons/PlayButton'
@@ -14,6 +16,8 @@ function PlaylistCardM({
   data,
   showDisabledPlayButton = false,
   disabledPlayTitle = '',
+  onRename = null,
+  onDelete = null,
 }) {
   const { t } = useTranslation()
   const dispatch = useDispatch()
@@ -33,6 +37,7 @@ function PlaylistCardM({
     canStartTrackPlayback(song, { allowRemote: isConnected }),
   )
   const shouldRenderPlayButton = canPlay || showDisabledPlayButton
+  const canManage = Boolean((data.canEdit && onRename) || (data.canDelete && onDelete))
 
   function handlePlay(event) {
     event.preventDefault()
@@ -57,10 +62,24 @@ function PlaylistCardM({
 
   return (
     <div className={styles.PlaylistCardSBox}>
+      {canManage && (
+        <div className={styles.MenuBox}>
+          <PlaylistActionsMenu
+            onRename={data.canEdit ? () => onRename?.(data) : null}
+            onDelete={data.canDelete ? () => onDelete?.(data) : null}
+          />
+        </div>
+      )}
       <Link to={`/playlist/${data.link}`}>
         <div className={styles.PlaylistCardS}>
           <div className={styles.ImgBox}>
-            <img src={data.imgUrl} alt={data.title} />
+            <PlaylistCover
+              playlist={data}
+              imageUrl={data.imgUrl}
+              title={data.title}
+              size="lg"
+              className={styles.CoverMedia}
+            />
           </div>
           <div className={styles.Title}>
             {data.sourceLabel && (

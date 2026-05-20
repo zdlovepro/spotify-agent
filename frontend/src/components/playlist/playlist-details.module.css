@@ -14,6 +14,12 @@
     -webkit-box-shadow: 0 4px 60px rgb(0 0 0 / 50%);
     box-shadow: 0 4px 60px rgb(0 0 0 / 50%);
 }
+.CoverMedia{
+    width: 100%;
+    height: 100%;
+    -webkit-box-shadow: 0 4px 60px rgb(0 0 0 / 50%);
+    box-shadow: 0 4px 60px rgb(0 0 0 / 50%);
+}
 .textBox{
     display: flex;
     flex-direction: column;
@@ -54,6 +60,10 @@
     height: 100%;
     -o-object-fit: cover;
     object-fit: cover;
+}
+.Artist figure .CoverMedia{
+    border-radius: 50%;
+    box-shadow: none;
 }
 .Artist p{
     margin: 0;

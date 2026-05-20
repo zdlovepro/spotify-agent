@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { changePlay } from '../../store/index.js'
 import { useSpotify } from '../../context/SpotifyContext.jsx'
@@ -9,21 +8,56 @@ import Playgif from '../../assets/images/now-play.gif'
 import * as Icons from '../icons/index.jsx'
 import styles from './playlist-track.module.css'
 
+function sameNonEmptyValue(leftValue, rightValue) {
+  if (leftValue === null || leftValue === undefined) {
+    return false
+  }
+
+  if (rightValue === null || rightValue === undefined) {
+    return false
+  }
+
+  const left = String(leftValue).trim()
+  const right = String(rightValue).trim()
+
+  return Boolean(left && right && left === right)
+}
+
 function PlaylistTrack({ data }) {
   const dispatch = useDispatch()
   const { isConnected } = useSpotify()
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const trackData = useSelector((state) => state.player.trackData)
-  const [thisSong, setThisSong] = useState(false)
   const playable = canStartTrackPlayback(data.song, { allowRemote: isConnected })
   const isAlbumView = data.listType === 'album' || data.listType === 'alb眉m'
 
-  useEffect(() => {
-    setThisSong(
-      (data.song.id === trackData.id || data.song.link === trackData.track) &&
-        isPlaying === true,
-    )
-  }, [data.song.id, data.song.link, trackData.id, trackData.track, isPlaying])
+  const songIndex = Number.isFinite(Number(data.songIndex))
+    ? Number(data.songIndex)
+    : Number(data.song.index) - 1
+  const trackQueueIndex = Number(trackData.queueIndex)
+  const hasPlaylistPosition =
+    sameNonEmptyValue(data.playlistId, trackData.playlistId) &&
+    Number.isFinite(songIndex) &&
+    Number.isFinite(trackQueueIndex)
+  const samePlaylistPosition =
+    hasPlaylistPosition && songIndex === trackQueueIndex
+  const sameTrackIdentity =
+    !data.playlistId || !trackData.playlistId
+      ? sameNonEmptyValue(data.song.id, trackData.id) ||
+        sameNonEmptyValue(
+          data.song.sourceId || data.song.source_id,
+          trackData.sourceId || trackData.source_id,
+        ) ||
+        sameNonEmptyValue(data.song.uri, trackData.uri || trackData.remoteUri) ||
+        sameNonEmptyValue(
+          data.song.audioUrl ||
+            data.song.audio_url ||
+            data.song.previewUrl ||
+            data.song.link,
+          trackData.audioUrl || trackData.previewUrl || trackData.track,
+        )
+      : false
+  const thisSong = isPlaying && (samePlaylistPosition || sameTrackIdentity)
 
   return (
     <div

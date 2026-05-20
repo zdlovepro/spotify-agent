@@ -3,6 +3,15 @@
     overflow: hidden;
 }
 
+.MenuBox{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    z-index: 3;
+    opacity: .76;
+    transition: opacity .2s ease;
+}
+
 .PlaylistCardS {
     position: relative;
     padding: 12px;
@@ -13,10 +22,12 @@
 
 .ImgBox {
     position: relative;
+    aspect-ratio: 1 / 1;
     box-shadow: 0 -2px 8px rgb(0 0 0 / 40%);
 }
 
-.ImgBox img {
+.ImgBox img,
+.CoverMedia {
     height: 100%;
     width: 100%;
     border-radius: 10px;
@@ -106,6 +117,12 @@
 .PlaylistCardSBox:hover .PlaylistCardS {
     background: rgba(255, 255, 255, 0.08);
     transform: translateY(-2px);
+}
+.PlaylistCardSBox:hover .MenuBox {
+    opacity: 1;
+}
+.PlaylistCardSBox:focus-within .MenuBox {
+    opacity: 1;
 }
 .DisabledIconBox button{
     cursor: not-allowed;

@@ -49,32 +49,43 @@
     padding: 24px 32px;
     position: relative;
 }
-.PlaylistIcons button{
+.PlaylistIcons > button{
     border: 0;
     background-color: transparent;
 }
-.PlaylistIcons div{
+.PlayControl{
     margin-right: 32px;
     width: 56px;
     height: 56px;
     border-radius: 28px;
     background-color: #1db954;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
 }
-.PlaylistIcons div button{
+.PlayControl button{
+    border: 0;
+    background-color: transparent;
     width: 56px;
     height: 56px;
 }
-.PlaylistIcons div button svg{
+.PlayControl button svg{
     font-size: 28px;
     fill: #fff !important;
 }
-.PlaylistIcons button svg{
+.PlaylistIcons > button svg{
     font-size: 28px;
 }
 .moreIcon{
     margin-left: 24px;
     font-size: 28px;
     color: hsla(0,0%,100%,.6);
+}
+.ActionsMenuWrap{
+    margin-left: 20px;
+    display: inline-flex;
+    align-items: center;
 }
 
 .PlaylistSongs{
@@ -176,16 +187,16 @@
     .PlaylistIcons{
         padding: 20px 16px;
     }
-    .PlaylistIcons div{
+    .PlayControl{
         width: 38px;
         height: 38px;
         margin-right: 24px;
     }
-    .PlaylistIcons div button{
+    .PlayControl button{
         width: 38px;
         height: 38px;
     }
-    .PlaylistIcons div button svg{
+    .PlayControl button svg{
         font-size: 21px;
     }
     .ListHead{

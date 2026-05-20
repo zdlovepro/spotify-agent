@@ -21,6 +21,10 @@ function nowIso() {
   return new Date().toISOString()
 }
 
+function isEditableStoredPlaylist(playlist = {}) {
+  return normalizeTrackString(playlist.sourceType) === LOCAL_PLAYLIST_SOURCE_TYPE
+}
+
 function createPlaylistSourceId(playlistId) {
   return `${LOCAL_PLAYLIST_SOURCE_PREFIX}${playlistId}`
 }
@@ -287,6 +291,8 @@ export function enrichStoredTrackReference(track = {}, options = {}) {
 export function enrichStoredPlaylist(playlist = {}, options = {}) {
   return {
     ...playlist,
+    canEdit: isEditableStoredPlaylist(playlist),
+    canDelete: isEditableStoredPlaylist(playlist),
     items: Array.isArray(playlist.items)
       ? playlist.items.map((item) => enrichStoredTrackReference(item, options))
       : [],
@@ -442,9 +448,15 @@ export function listPlaylists(ownerUserId) {
 export function createPlaylist(ownerUserId, input = {}) {
   const id = crypto.randomUUID()
   const now = nowIso()
+  const requestedTitle =
+    typeof input.title === 'string'
+      ? input.title
+      : typeof input.name === 'string'
+        ? input.name
+        : ''
   const title =
-    typeof input.title === 'string' && input.title.trim()
-      ? input.title.trim()
+    requestedTitle.trim()
+      ? requestedTitle.trim()
       : 'New Playlist'
   const description =
     typeof input.description === 'string' ? input.description.trim() : ''
@@ -558,10 +570,17 @@ export function updatePlaylist(ownerUserId, playlistId, input = {}) {
     return null
   }
 
+  const requestedTitle =
+    typeof input.title === 'string'
+      ? input.title
+      : typeof input.name === 'string'
+        ? input.name
+        : null
+
   const updated = {
     title:
-      typeof input.title === 'string' && input.title.trim()
-        ? input.title.trim()
+      typeof requestedTitle === 'string' && requestedTitle.trim()
+        ? requestedTitle.trim()
         : existing.title,
     description:
       typeof input.description === 'string'
