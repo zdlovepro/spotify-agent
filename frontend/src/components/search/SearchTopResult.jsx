@@ -10,7 +10,6 @@ function SearchTopResult({
   result,
   t,
   onPrimaryAction,
-  onAgentAction,
 }) {
   if (!result?.item || !result?.type) {
     return null
@@ -41,15 +40,6 @@ function SearchTopResult({
             <span className={styles.TopResultType}>{getItemTypeLabel(type, t)}</span>
             <h3 className={styles.TopResultTitle}>{item.name}</h3>
             <p className={styles.TopResultSubtitle}>{getItemSubtitle(item, type, t)}</p>
-            <div className={styles.TopResultActions}>
-              <button
-                type="button"
-                className={styles.TopResultSecondaryBtn}
-                onClick={onAgentAction}
-              >
-                {t('search_send_spotlight_to_agent')}
-              </button>
-            </div>
           </div>
         </div>
 

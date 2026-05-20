@@ -4,8 +4,8 @@
     justify-self: start;
     position: relative;
     height: 100%;
-    min-width: 280px;
-    max-width: 34vw;
+    min-width: 252px;
+    max-width: 30vw;
     min-height: 0;
     overflow: hidden;
 }
@@ -23,7 +23,7 @@
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0)),
         var(--card-background);
-    border-radius: 18px;
+    border-radius: 16px;
     overflow: hidden;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     min-height: 0;

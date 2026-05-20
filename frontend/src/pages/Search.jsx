@@ -9,11 +9,7 @@ import SearchResultList from '../components/search/SearchResultList.jsx'
 import SearchSkeleton from '../components/search/SearchSkeleton.jsx'
 import SearchTopResult from '../components/search/SearchTopResult.jsx'
 import {
-  buildAgentPrompt,
   buildAllSections,
-  buildBrowsePrompt,
-  buildEmptyQueryPrompt,
-  buildQueryPrompt,
   getResultCount,
   getTabItems,
   getTopResult,
@@ -123,15 +119,6 @@ function Search() {
     }
   }, [activeTab, t])
 
-  function openAgentWithPrompt(prompt) {
-    navigate('/agent', {
-      state: {
-        prompt,
-        autoSend: true,
-      },
-    })
-  }
-
   function handleTrackAction(track) {
     const trackAction = resolveTrackActionState({
       item: track,
@@ -220,16 +207,12 @@ function Search() {
             query={query}
             activeTab={activeTab}
             onTabChange={setActiveTab}
-            resultCount={resultCount}
             t={t}
           />
 
           {!query && (
             <SearchEmptyState
               title={t('search_empty_prompt_title')}
-              body={t('search_empty_prompt_body')}
-              actionLabel={t('search_open_agent_for_query')}
-              onAction={() => openAgentWithPrompt(buildBrowsePrompt())}
             >
               <div className={styles.SearchBrowseGrid}>
                 {SEARCHCARDS.map((card) => (
@@ -261,9 +244,7 @@ function Search() {
           {query && !isSearching && !searchError && resultCount === 0 && (
             <SearchEmptyState
               title={t('search_no_results_for', { query })}
-              body={t('search_try_agent')}
-              actionLabel={t('search_open_agent_for_query')}
-              onAction={() => openAgentWithPrompt(buildEmptyQueryPrompt(query))}
+              body={t('search_try_another_keyword')}
             />
           )}
 
@@ -275,15 +256,6 @@ function Search() {
                     result={topResult}
                     t={t}
                     onPrimaryAction={handleTopResultPrimaryAction}
-                    onAgentAction={() =>
-                      topResult
-                        ? openAgentWithPrompt(
-                            buildAgentPrompt(topResult.item, topResult.type, {
-                              query,
-                            }),
-                          )
-                        : undefined
-                    }
                   />
 
                   {allSections.map((section) => (
@@ -312,9 +284,7 @@ function Search() {
                   title={t('search_no_results_in_tab', {
                     tab: activeTabTitle,
                   })}
-                  body={t('search_try_agent')}
-                  actionLabel={t('search_open_agent_for_query')}
-                  onAction={() => openAgentWithPrompt(buildQueryPrompt(query))}
+                  body={t('search_try_another_keyword')}
                 />
               )}
             </>

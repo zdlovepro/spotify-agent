@@ -104,7 +104,7 @@ function loadConversationMessages(conversationId) {
         SELECT *
         FROM messages
         WHERE conversation_id = ?
-        ORDER BY created_at ASC, id ASC
+        ORDER BY created_at ASC, rowid ASC, id ASC
       `,
     )
     .all(conversationId)
@@ -190,10 +190,10 @@ export function listStoredConversations(ownerUserId, limit = 20) {
             WHERE m.conversation_id = c.id
           ) AS message_count,
           (
-            SELECT m.content
-            FROM messages m
-            WHERE m.conversation_id = c.id
-            ORDER BY m.created_at DESC, m.id DESC
+          SELECT m.content
+          FROM messages m
+          WHERE m.conversation_id = c.id
+            ORDER BY m.created_at DESC, m.rowid DESC, m.id DESC
             LIMIT 1
           ) AS last_message_content
         FROM conversations c
@@ -337,7 +337,7 @@ export function appendStoredConversationMessages(
           SELECT id
           FROM messages
           WHERE conversation_id = ?
-          ORDER BY created_at DESC, id DESC
+          ORDER BY created_at DESC, rowid DESC, id DESC
           LIMIT -1 OFFSET ?
         `,
       )

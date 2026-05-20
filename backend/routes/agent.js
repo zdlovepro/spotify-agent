@@ -75,14 +75,15 @@ function sanitizeContext(context) {
   }
 }
 
-function buildUserMessage(content) {
+function buildUserMessage(content, createdAt = '') {
   return {
     role: 'user',
     content,
+    createdAt,
   }
 }
 
-function buildAssistantMessage(result) {
+function buildAssistantMessage(result, createdAt = '') {
   return {
     role: 'assistant',
     content: result.reply,
@@ -95,6 +96,7 @@ function buildAssistantMessage(result) {
         result.memoryWriteback || result.artifacts?.memoryWriteback || null,
     },
     toolCalls: result.toolCalls,
+    createdAt,
   }
 }
 
@@ -353,7 +355,12 @@ router.post(
       conversation,
     })
 
-    const nextMessages = [buildUserMessage(message), buildAssistantMessage(agentResult)]
+    const userMessageCreatedAt = new Date().toISOString()
+    const assistantMessageCreatedAt = new Date(Date.now() + 1).toISOString()
+    const nextMessages = [
+      buildUserMessage(message, userMessageCreatedAt),
+      buildAssistantMessage(agentResult, assistantMessageCreatedAt),
+    ]
     const updatedConversation = req.localUserId
       ? appendStoredConversationMessages(
           req.localUserId,

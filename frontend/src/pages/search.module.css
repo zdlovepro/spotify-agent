@@ -8,19 +8,21 @@
 
 .SearchShell {
   min-height: 100%;
-  padding: 0 24px 40px;
+  padding: 0 18px 28px;
   margin-bottom: 96px;
 }
 
 .SearchMain {
   min-height: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
 }
 
 .SearchHeader {
   position: sticky;
   top: 0;
   z-index: 3;
-  padding: 24px 0 18px;
+  padding: 18px 0 12px;
   background:
     linear-gradient(180deg, rgba(18, 18, 18, 0.98), rgba(18, 18, 18, 0.94) 72%, rgba(18, 18, 18, 0));
   backdrop-filter: blur(12px);
@@ -28,8 +30,8 @@
 
 .SearchHeaderCopy {
   display: grid;
-  gap: 10px;
-  margin-bottom: 18px;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 
 .SearchEyebrow {
@@ -43,8 +45,8 @@
 
 .SearchTitle {
   margin: 0;
-  font-size: clamp(32px, 4vw, 44px);
-  line-height: 1.04;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.06;
   letter-spacing: -0.03em;
   color: #fff;
 }
@@ -53,13 +55,13 @@
   margin: 0;
   max-width: 760px;
   color: #b3b3b3;
-  font-size: 15px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .SearchTabs {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
@@ -70,13 +72,13 @@
 }
 
 .SearchTab {
-  min-height: 34px;
-  padding: 0 16px;
+  min-height: 30px;
+  padding: 0 12px;
   border: 0;
   border-radius: 999px;
   background: #2a2a2a;
   color: #fff;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
@@ -94,21 +96,21 @@
 }
 
 .SearchSection {
-  margin-top: 28px;
+  margin-top: 22px;
 }
 
 .SearchSectionHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .SearchSectionTitle {
   margin: 0;
   color: #fff;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -117,13 +119,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  height: 34px;
-  padding: 0 12px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   color: #b3b3b3;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -131,9 +133,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 26px 28px;
-  border-radius: 16px;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 14px;
   background: linear-gradient(180deg, rgba(42, 42, 42, 0.92), rgba(30, 30, 30, 0.92));
   transition: background-color 0.18s ease, transform 0.18s ease;
 }
@@ -147,16 +149,16 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 16px;
 }
 
 .TopResultImage {
-  width: 144px;
-  height: 144px;
-  border-radius: 12px;
+  width: 116px;
+  height: 116px;
+  border-radius: 10px;
   object-fit: cover;
   flex: 0 0 auto;
-  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
 }
 
 .TopResultImageRound {
@@ -166,32 +168,32 @@
 .TopResultCopy {
   min-width: 0;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .TopResultType {
   color: #b3b3b3;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .TopResultTitle {
   margin: 0;
   color: #fff;
-  font-size: clamp(32px, 3.8vw, 52px);
-  line-height: 1.02;
+  font-size: clamp(24px, 3vw, 38px);
+  line-height: 1.04;
   letter-spacing: -0.04em;
 }
 
 .TopResultSubtitle {
   margin: 0;
   color: #b3b3b3;
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .TopResultActions {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .TopResultSecondaryBtn,
@@ -222,19 +224,19 @@
 }
 
 .TopResultPlayBtn {
-  width: 96px;
-  height: 96px;
+  width: 74px;
+  height: 74px;
   border: 0;
   border-radius: 50%;
   flex: 0 0 auto;
   background: #1ed760;
   color: #04160a;
-  font-size: 34px;
+  font-size: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 14px 26px rgba(30, 215, 96, 0.28);
+  box-shadow: 0 10px 18px rgba(30, 215, 96, 0.22);
   transition: transform 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
 }
 
@@ -251,18 +253,18 @@
 
 .ResultList {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .ResultRow {
   min-width: 0;
-  min-height: 68px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  min-height: 60px;
+  padding: 8px 10px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
   background: transparent;
 }
 
@@ -282,13 +284,13 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .ResultRowImage {
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
   object-fit: cover;
   flex: 0 0 auto;
   background: #242424;
@@ -313,26 +315,26 @@
 
 .ResultRowTitle {
   color: #fff;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
 }
 
 .ResultRowSubtitle,
 .ResultRowMeta {
   color: #b3b3b3;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
 .ResultRowSubtitle {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .ResultRowActions {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .ResultGhostBtn,
@@ -345,28 +347,28 @@
 }
 
 .ResultGhostBtn {
-  min-width: 84px;
-  min-height: 38px;
-  padding: 0 16px;
-  font-size: 14px;
+  min-width: 72px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .ResultIconBtn {
-  width: 38px;
-  height: 38px;
-  font-size: 24px;
+  width: 34px;
+  height: 34px;
+  font-size: 20px;
   line-height: 1;
 }
 
 .SearchEmptyState {
-  margin-top: 24px;
-  padding: 26px;
-  border-radius: 16px;
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 14px;
   background: #181818;
   border: 1px solid rgba(255, 255, 255, 0.06);
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .SearchEmptyStateError {
@@ -376,69 +378,69 @@
 
 .SearchEmptyCopy {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .SearchEmptyTitle {
   margin: 0;
   color: #fff;
-  font-size: 28px;
-  line-height: 1.08;
+  font-size: 22px;
+  line-height: 1.1;
 }
 
 .SearchEmptyBody {
   margin: 0;
   color: #b3b3b3;
-  font-size: 15px;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .SearchBrowseGrid {
   display: grid;
-  gap: 18px;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }
 
 .SearchSkeleton {
   display: grid;
-  gap: 18px;
-  margin-top: 18px;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .SearchSkeletonTabs {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .TopResultSkeleton,
 .ResultRowSkeleton {
   background: #181818;
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .TopResultSkeleton {
-  min-height: 196px;
-  padding: 24px;
+  min-height: 156px;
+  padding: 18px;
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 16px;
 }
 
 .TopResultSkeletonCopy,
 .ResultRowSkeletonCopy {
   min-width: 0;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   flex: 1 1 auto;
 }
 
 .ResultRowSkeleton {
-  min-height: 76px;
-  padding: 10px 12px;
+  min-height: 66px;
+  padding: 8px 10px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .SkeletonPill,
@@ -461,15 +463,15 @@
 }
 
 .SkeletonPill {
-  width: 84px;
-  height: 34px;
+  width: 76px;
+  height: 30px;
   border-radius: 999px;
 }
 
 .SkeletonCover {
-  width: 132px;
-  height: 132px;
-  border-radius: 12px;
+  width: 108px;
+  height: 108px;
+  border-radius: 10px;
   flex: 0 0 auto;
 }
 
@@ -481,33 +483,33 @@
 
 .SkeletonLineLong {
   width: min(420px, 80%);
-  height: 22px;
+  height: 18px;
   border-radius: 999px;
 }
 
 .SkeletonLineMid {
   width: min(260px, 70%);
-  height: 14px;
+  height: 12px;
   border-radius: 999px;
 }
 
 .SkeletonPlay {
-  width: 88px;
-  height: 88px;
+  width: 70px;
+  height: 70px;
   border-radius: 50%;
   flex: 0 0 auto;
 }
 
 .SkeletonThumb {
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
   flex: 0 0 auto;
 }
 
 .SkeletonMiniBtn {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: 999px;
   flex: 0 0 auto;
 }
@@ -524,28 +526,28 @@
 
 @media screen and (max-width: 900px) {
   .SearchShell {
-    padding: 0 18px 34px;
+    padding: 0 16px 28px;
   }
 
   .TopResultCard {
-    padding: 22px;
+    padding: 16px 18px;
   }
 
   .TopResultImage {
-    width: 112px;
-    height: 112px;
+    width: 96px;
+    height: 96px;
   }
 
   .TopResultPlayBtn {
-    width: 80px;
-    height: 80px;
-    font-size: 28px;
+    width: 66px;
+    height: 66px;
+    font-size: 24px;
   }
 }
 
 @media screen and (max-width: 700px) {
   .SearchHeader {
-    padding-top: 18px;
+    padding-top: 14px;
   }
 
   .TopResultCard,
@@ -578,71 +580,71 @@
 
 @media screen and (max-width: 600px) {
   .SearchShell {
-    padding: 0 16px 34px;
+    padding: 0 14px 28px;
     margin-bottom: 180px;
   }
 
   .SearchTitle {
-    font-size: 30px;
+    font-size: 24px;
   }
 
   .SearchDescription,
   .SearchEmptyBody {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .SearchBrowseGrid {
-    gap: 14px;
+    gap: 10px;
     grid-template-columns: 1fr 1fr;
   }
 
   .TopResultMain {
-    gap: 16px;
+    gap: 12px;
   }
 
   .TopResultImage {
-    width: 88px;
-    height: 88px;
+    width: 76px;
+    height: 76px;
   }
 
   .TopResultTitle {
-    font-size: 28px;
+    font-size: 22px;
   }
 
   .TopResultPlayBtn {
-    width: 68px;
-    height: 68px;
-    font-size: 24px;
+    width: 58px;
+    height: 58px;
+    font-size: 20px;
   }
 
   .ResultRow {
-    padding: 10px 8px;
+    padding: 8px 6px;
   }
 
   .ResultRowImage {
-    width: 48px;
-    height: 48px;
+    width: 42px;
+    height: 42px;
   }
 
   .ResultRowTitle {
-    font-size: 16px;
+    font-size: 14px;
   }
 
   .ResultRowSubtitle,
   .ResultRowMeta {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .ResultGhostBtn {
-    min-width: 72px;
-    min-height: 34px;
-    padding: 0 12px;
-    font-size: 13px;
+    min-width: 64px;
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
   }
 
   .ResultIconBtn {
-    width: 34px;
-    height: 34px;
-    font-size: 22px;
+    width: 30px;
+    height: 30px;
+    font-size: 18px;
   }
 }

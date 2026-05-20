@@ -18,8 +18,8 @@
     background: linear-gradient(0deg,transparent,rgba(0,0,0,.4));
 }
 .SearchCard img{
-    width: 100px;
-    height: 100px;
+    width: 84px;
+    height: 84px;
     position: absolute;
     bottom: 0;
     right: 0;
@@ -28,10 +28,12 @@
     -webkit-transform: rotate(25deg) translate(18%,-2%);
     transform: rotate(25deg) translate(18%,-2%);}
 .SearchCard h2{
-    padding: 16px;
+    padding: 14px;
     margin: 0;
     top: 0;
     letter-spacing: -.04em;
     overflow-wrap: break-word;
     position: absolute;
+    font-size: 18px;
+    line-height: 1.15;
 }

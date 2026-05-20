@@ -3,9 +3,9 @@
   overflow: hidden;
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
-  gap: 22px;
-  padding: 24px;
-  border-radius: 28px;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 22px;
   background:
     radial-gradient(circle at top left, rgba(30, 215, 96, 0.28), transparent 34%),
     radial-gradient(circle at bottom right, rgba(255, 184, 77, 0.18), transparent 24%),
@@ -17,11 +17,11 @@
   content: "";
   position: absolute;
   inset: auto -60px -60px auto;
-  width: 180px;
-  height: 180px;
+  width: 148px;
+  height: 148px;
   border-radius: 50%;
   background: rgba(30, 215, 96, 0.12);
-  filter: blur(18px);
+  filter: blur(14px);
   pointer-events: none;
 }
 
@@ -31,7 +31,7 @@
 }
 
 .Eyebrow {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -40,24 +40,24 @@
 
 .Title {
   margin: 0;
-  font-size: 33px;
-  line-height: 1.04;
+  font-size: 26px;
+  line-height: 1.06;
   color: #fff;
 }
 
 .Text {
-  margin: 14px 0 0;
+  margin: 10px 0 0;
   max-width: 620px;
-  font-size: 15px;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.55;
   color: rgba(255, 255, 255, 0.72);
 }
 
 .Actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 22px;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .PrimaryBtn,
@@ -74,7 +74,8 @@
 .PrimaryBtn,
 .SecondaryBtn {
   border-radius: 999px;
-  padding: 12px 16px;
+  padding: 10px 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -97,65 +98,66 @@
 .QuickPrompts {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 18px;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .PromptBtn {
   border-radius: 999px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
 }
 
 .Stats {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   align-content: start;
 }
 
 .StatCard {
-  padding: 16px;
-  border-radius: 20px;
+  padding: 12px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .StatLabel {
   display: block;
-  margin-bottom: 8px;
-  font-size: 12px;
+  margin-bottom: 6px;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.5);
 }
 
 .StatValue {
   display: block;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   color: #fff;
 }
 
 .StatText {
-  margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.6;
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
   color: rgba(255, 255, 255, 0.66);
 }
 
 .StatusRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .Pill {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  padding: 6px 10px;
+  padding: 5px 9px;
   background: rgba(255, 255, 255, 0.08);
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.82);
 }
 
@@ -167,11 +169,11 @@
 
 @media screen and (max-width: 640px) {
   .Card {
-    padding: 18px;
-    border-radius: 22px;
+    padding: 16px;
+    border-radius: 18px;
   }
 
   .Title {
-    font-size: 28px;
+    font-size: 22px;
   }
 }

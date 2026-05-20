@@ -40,12 +40,6 @@ function AgentPreviewCard() {
       <div className={styles.Content}>
         <p className={styles.Eyebrow}>{t('agent_title')}</p>
         <h2 className={styles.Title}>{t('agent_preview_title')}</h2>
-        <p className={styles.Text}>{t('agent_preview_body')}</p>
-        <p className={styles.Text}>
-          {isConnected
-            ? t('agent_spotify_unlocked_body')
-            : t('agent_spotify_locked_body')}
-        </p>
 
         <div className={styles.Actions}>
           <button
@@ -105,7 +99,7 @@ function AgentPreviewCard() {
           <p className={styles.StatText}>
             {isAuthenticated
               ? currentConversation?.title || t('agent_no_conversations')
-              : t('agent_guest_saved_note')}
+              : t('agent_guest_label')}
           </p>
         </div>
 

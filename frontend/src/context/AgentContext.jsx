@@ -9,6 +9,7 @@ import {
 import { useAuth } from './AuthContext.jsx'
 
 const AgentContext = createContext(null)
+const DEFAULT_CONVERSATION_TITLE = 'New Conversation'
 
 function createEmptyConversation() {
   return {
@@ -20,28 +21,136 @@ function createEmptyConversation() {
   }
 }
 
+function nowIso(offsetMs = 0) {
+  return new Date(Date.now() + offsetMs).toISOString()
+}
+
+function createLocalId(prefix) {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `local-${prefix}-${crypto.randomUUID()}`
+  }
+
+  return `local-${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function normalizeString(value) {
+  return typeof value === 'string' ? value : ''
+}
+
+function normalizeMessage(message = {}, index = 0) {
+  const status =
+    message.status === 'loading' || message.status === 'error'
+      ? message.status
+      : 'sent'
+
+  return {
+    id: normalizeString(message.id) || createLocalId(`message-${index}`),
+    role: message.role === 'user' ? 'user' : 'assistant',
+    content: normalizeString(message.content),
+    intent: normalizeString(message.intent) || null,
+    actions: Array.isArray(message.actions) ? message.actions : [],
+    artifacts:
+      message.artifacts && typeof message.artifacts === 'object'
+        ? message.artifacts
+        : {},
+    toolCalls: Array.isArray(message.toolCalls) ? message.toolCalls : [],
+    createdAt: normalizeString(message.createdAt),
+    status,
+    error: normalizeString(message.error),
+    metadata:
+      message.metadata && typeof message.metadata === 'object'
+        ? message.metadata
+        : {},
+    localOnly: message.localOnly === true,
+  }
+}
+
+function normalizeMessages(messages = []) {
+  return (Array.isArray(messages) ? messages : [])
+    .map((message, index) => ({
+      ...normalizeMessage(message, index),
+      _index: index,
+    }))
+    .sort((left, right) => {
+      if (left.createdAt && right.createdAt) {
+        const timestampComparison = left.createdAt.localeCompare(right.createdAt)
+
+        if (timestampComparison !== 0) {
+          return timestampComparison
+        }
+      }
+
+      return left._index - right._index
+    })
+    .map(({ _index, ...message }) => message)
+}
+
+function normalizeConversation(conversation = {}) {
+  const messages = normalizeMessages(conversation.messages)
+  const createdAt = normalizeString(conversation.createdAt) || messages[0]?.createdAt || ''
+  const updatedAt =
+    normalizeString(conversation.updatedAt) || messages.at(-1)?.createdAt || createdAt
+
+  return {
+    id: normalizeString(conversation.id),
+    title: normalizeString(conversation.title),
+    createdAt,
+    updatedAt,
+    messages,
+    temporary: conversation.temporary === true,
+  }
+}
+
 function getFeedbackKey(entry = {}) {
   return entry.recommendationId || entry.messageId || ''
 }
 
+function getConversationPreview(messages = []) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+
+    if (message?.content) {
+      return message.content.slice(0, 120)
+    }
+
+    if (message?.status === 'error' && message.error) {
+      return message.error.slice(0, 120)
+    }
+  }
+
+  return ''
+}
+
+function createConversationTitleFallback(message = '') {
+  const trimmedMessage = normalizeString(message).trim()
+
+  if (!trimmedMessage) {
+    return DEFAULT_CONVERSATION_TITLE
+  }
+
+  return trimmedMessage.slice(0, 48)
+}
+
 function mapConversationSummary(conversation) {
-  const lastMessage = conversation.messages?.at(-1)
+  const normalizedConversation = normalizeConversation(conversation)
 
   return {
-    id: conversation.id,
-    title: conversation.title || 'New Conversation',
-    createdAt: conversation.createdAt || '',
-    updatedAt: conversation.updatedAt || '',
-    messageCount: Array.isArray(conversation.messages)
-      ? conversation.messages.length
-      : conversation.messageCount || 0,
-    lastMessagePreview:
-      lastMessage?.content?.slice(0, 120) || conversation.lastMessagePreview || '',
+    id: normalizedConversation.id,
+    title: normalizedConversation.title || DEFAULT_CONVERSATION_TITLE,
+    createdAt: normalizedConversation.createdAt || '',
+    updatedAt: normalizedConversation.updatedAt || '',
+    messageCount: normalizedConversation.messages.length,
+    lastMessagePreview: getConversationPreview(normalizedConversation.messages),
   }
 }
 
 function upsertConversationSummary(list, conversation) {
   const summary = mapConversationSummary(conversation)
+
+  if (!summary.id) {
+    return list
+  }
+
   const nextItems = [summary, ...list.filter((item) => item.id !== summary.id)]
 
   return nextItems.sort((left, right) =>
@@ -76,16 +185,6 @@ export function AgentProvider({ children }) {
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
   const [error, setError] = useState('')
 
-  const resetState = useCallback(() => {
-    setConversations([])
-    setCurrentConversation(createEmptyConversation())
-    setFeedbackMap({})
-    setIsBootstrapping(false)
-    setIsSending(false)
-    setIsSubmittingFeedback(false)
-    setError('')
-  }, [])
-
   const loadConversation = useCallback(
     async (conversationId) => {
       if (!conversationId) {
@@ -94,13 +193,14 @@ export function AgentProvider({ children }) {
       }
 
       const data = await request(`/api/agent/conversations/${conversationId}`)
+      const normalizedConversation = normalizeConversation(data.conversation)
 
-      setCurrentConversation(data.conversation)
+      setCurrentConversation(normalizedConversation)
       setConversations((currentList) =>
-        upsertConversationSummary(currentList, data.conversation),
+        upsertConversationSummary(currentList, normalizedConversation),
       )
 
-      return data.conversation
+      return normalizedConversation
     },
     [request],
   )
@@ -128,7 +228,9 @@ export function AgentProvider({ children }) {
         request('/api/agent/feedback?limit=50'),
       ])
 
-      const nextConversations = conversationData.items || []
+      const nextConversations = Array.isArray(conversationData.items)
+        ? conversationData.items
+        : []
 
       setConversations(nextConversations)
       setFeedbackMap(mapFeedbackItems(feedbackData.items || []))
@@ -145,7 +247,7 @@ export function AgentProvider({ children }) {
     } finally {
       setIsBootstrapping(false)
     }
-  }, [isAuthenticated, loadConversation, request, resetState])
+  }, [isAuthenticated, loadConversation, request])
 
   const sendMessage = useCallback(
     async ({ message, context }) => {
@@ -155,35 +257,113 @@ export function AgentProvider({ children }) {
         return null
       }
 
+      const conversationId =
+        currentConversation.id || createLocalId('conversation')
+      const userMessage = normalizeMessage({
+        id: createLocalId('user'),
+        role: 'user',
+        content: trimmedMessage,
+        createdAt: nowIso(0),
+        status: 'sent',
+        localOnly: true,
+      })
+      const assistantPlaceholder = normalizeMessage({
+        id: createLocalId('assistant'),
+        role: 'assistant',
+        content: '',
+        createdAt: nowIso(1),
+        status: 'loading',
+        localOnly: true,
+        metadata: {
+          retryMessage: trimmedMessage,
+        },
+      })
+      const optimisticConversation = normalizeConversation({
+        ...currentConversation,
+        id: conversationId,
+        title:
+          currentConversation.title &&
+          currentConversation.title !== DEFAULT_CONVERSATION_TITLE
+            ? currentConversation.title
+            : createConversationTitleFallback(trimmedMessage),
+        updatedAt: assistantPlaceholder.createdAt,
+        messages: [
+          ...normalizeMessages(currentConversation.messages),
+          userMessage,
+          assistantPlaceholder,
+        ],
+        temporary: !isAuthenticated,
+      })
+
+      setCurrentConversation(optimisticConversation)
+      setConversations((currentList) =>
+        isAuthenticated
+          ? upsertConversationSummary(currentList, optimisticConversation)
+          : currentList,
+      )
+      setError('')
       setIsSending(true)
 
       try {
         const data = await request('/api/agent/chat', {
           method: 'POST',
           body: {
-            conversationId: currentConversation.id || undefined,
+            conversationId,
+            title: optimisticConversation.title || undefined,
             message: trimmedMessage,
             context,
           },
         })
+        const nextConversation = normalizeConversation(data.conversation)
 
-        setCurrentConversation(data.conversation)
+        setCurrentConversation((activeConversation) =>
+          activeConversation.id === conversationId
+            ? nextConversation
+            : activeConversation,
+        )
         setConversations((currentList) =>
           isAuthenticated
-            ? upsertConversationSummary(currentList, data.conversation)
+            ? upsertConversationSummary(currentList, nextConversation)
             : currentList,
         )
         setError('')
 
-        return data
+        return {
+          ...data,
+          conversation: nextConversation,
+        }
       } catch (err) {
+        const failedConversation = normalizeConversation({
+          ...optimisticConversation,
+          messages: optimisticConversation.messages.map((messageItem) =>
+            messageItem.id === assistantPlaceholder.id
+              ? {
+                  ...messageItem,
+                  status: 'error',
+                  error:
+                    err.message || 'Agent response failed. Please try again later.',
+                }
+              : messageItem,
+          ),
+        })
+
+        setCurrentConversation((activeConversation) =>
+          activeConversation.id === conversationId
+            ? failedConversation
+            : activeConversation,
+        )
+        setConversations((currentList) =>
+          isAuthenticated
+            ? upsertConversationSummary(currentList, failedConversation)
+            : currentList,
+        )
         setError(err.message)
         throw err
       } finally {
         setIsSending(false)
       }
     },
-    [currentConversation.id, isAuthenticated, request],
+    [currentConversation, isAuthenticated, request],
   )
 
   const submitFeedback = useCallback(

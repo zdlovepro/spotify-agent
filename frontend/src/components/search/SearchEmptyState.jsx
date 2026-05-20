@@ -16,7 +16,7 @@ function SearchEmptyState({
     >
       <div className={styles.SearchEmptyCopy}>
         <h2 className={styles.SearchEmptyTitle}>{title}</h2>
-        <p className={styles.SearchEmptyBody}>{body}</p>
+        {body ? <p className={styles.SearchEmptyBody}>{body}</p> : null}
       </div>
 
       {actionLabel && typeof onAction === 'function' && (

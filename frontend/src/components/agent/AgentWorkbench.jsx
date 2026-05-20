@@ -32,14 +32,6 @@ function formatIntentLabel(intent, t) {
   }
 }
 
-function getFeedbackKey(message) {
-  return message.artifacts?.recommendationId || message.id || ''
-}
-
-function getSourcePlan(message) {
-  return message.artifacts?.sourcePlan || null
-}
-
 function getArtifactTracks(artifacts = {}) {
   const trackMap = new Map()
 
@@ -110,66 +102,76 @@ function getTrackDescription(track, t) {
   return [artists || t('appName'), album].filter(Boolean).join(' · ')
 }
 
-function buildFriendlyToolSummary(message, t) {
-  const sourcePlan = getSourcePlan(message)
+function MessageRichText({ content }) {
+  const blocks = String(content || '')
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
 
-  if (Array.isArray(sourcePlan?.steps) && sourcePlan.steps.length > 0) {
-    return sourcePlan.steps
+  if (!blocks.length) {
+    return null
   }
 
-  const labels = []
-  const toolNames = Array.isArray(message.toolCalls)
-    ? message.toolCalls.map((toolCall) => toolCall?.name || '').filter(Boolean)
-    : []
-  const pushLabel = (label) => {
-    if (label && !labels.includes(label)) {
-      labels.push(label)
-    }
-  }
+  return blocks.map((block, index) => {
+    const lines = block
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .filter(Boolean)
 
-  toolNames.forEach((name) => {
-    if (
-      name === 'library.list_audio_assets' ||
-      name === 'library.search_local_audio'
-    ) {
-      pushLabel(t('agent_tool_summary_local'))
-      return
-    }
-
-    if (
-      name === 'spotify.search_tracks' ||
-      name === 'spotify.get_user_top_tracks' ||
-      name === 'spotify.get_user_top_artists'
-    ) {
-      pushLabel(t('agent_tool_summary_spotify'))
-      return
+    if (lines.length > 1 && lines.every((line) => /^\s*[-*]\s+/.test(line))) {
+      return (
+        <ul key={`ul-${index}`} className={styles.BubbleList}>
+          {lines.map((line, lineIndex) => (
+            <li key={`ul-item-${lineIndex}`}>
+              {line.replace(/^\s*[-*]\s+/, '')}
+            </li>
+          ))}
+        </ul>
+      )
     }
 
-    if (
-      name === 'player.play_local' ||
-      name === 'player.play_spotify_uri' ||
-      name === 'player.play_spotify_uris' ||
-      name === 'player.replace_queue' ||
-      name === 'player.append_queue'
-    ) {
-      pushLabel(t('agent_tool_summary_queue'))
-      return
+    if (lines.length > 1 && lines.every((line) => /^\s*\d+\.\s+/.test(line))) {
+      return (
+        <ol key={`ol-${index}`} className={styles.BubbleList}>
+          {lines.map((line, lineIndex) => (
+            <li key={`ol-item-${lineIndex}`}>
+              {line.replace(/^\s*\d+\.\s+/, '')}
+            </li>
+          ))}
+        </ol>
+      )
     }
 
-    if (
-      name === 'library.create_playlist' ||
-      name === 'library.add_track_to_playlist'
-    ) {
-      pushLabel(t('agent_tool_summary_playlist'))
-      return
-    }
-
-    if (name === 'library.favorite_track') {
-      pushLabel(t('agent_tool_summary_favorite'))
-    }
+    return (
+      <p key={`p-${index}`} className={styles.BubbleText}>
+        {block}
+      </p>
+    )
   })
+}
 
-  return labels
+function AgentTypingIndicator({ t }) {
+  return (
+    <div className={styles.TypingState}>
+      <span className={styles.TypingLabel}>{t('agent_thinking')}</span>
+      <span className={styles.TypingDots} aria-hidden="true">
+        <span className={styles.TypingDot} />
+        <span className={styles.TypingDot} />
+        <span className={styles.TypingDot} />
+      </span>
+    </div>
+  )
+}
+
+function AgentErrorState({ message, t }) {
+  return (
+    <div className={styles.MessageErrorState}>
+      <p className={styles.MessageErrorTitle}>{t('agent_response_failed')}</p>
+      <p className={styles.MessageErrorBody}>
+        {message.error || t('agent_response_failed_hint')}
+      </p>
+    </div>
+  )
 }
 
 function findPreferredStartIndex(
@@ -222,9 +224,6 @@ function AgentArtifact({
   onPlayTracks,
   onFavoriteTrack,
   onAddTracksToPlaylist,
-  onSubmitFeedback,
-  feedbackState,
-  isSubmittingFeedback,
   isConnected,
   isSpotifyPlaybackReady,
   isAuthenticated,
@@ -235,16 +234,13 @@ function AgentArtifact({
   const artifacts = message.artifacts || {}
   const recommendationSet = artifacts.recommendation_set || null
   const tracks = getArtifactTracks(artifacts)
-  const feedbackKey = getFeedbackKey(message)
   const playlist = artifacts.playlist || null
-  const sourcePlan = getSourcePlan(message)
-  const toolSummary = buildFriendlyToolSummary(message, t)
   const canPlayArtifactTracks = tracks.length > 0 && hasPrimaryPlayableTracks(tracks)
   const primaryTrack = artifacts.track || tracks[0] || null
 
   return (
     <>
-      {sourcePlan && (
+      {false && sourcePlan && (
         <div className={styles.SourcePlanCard}>
           <p className={styles.SectionLabel}>{t('agent_source_plan_title')}</p>
           <p className={styles.SourcePlanSummary}>{sourcePlan.summary}</p>
@@ -282,8 +278,7 @@ function AgentArtifact({
                   artifacts.album?.name ||
                   t('agent_tracks')}
               </p>
-              {recommendationSet?.summary &&
-                recommendationSet.summary !== sourcePlan?.summary && (
+              {recommendationSet?.summary && (
                 <p className={styles.ArtifactCaption}>{recommendationSet.summary}</p>
               )}
             </div>
@@ -542,7 +537,7 @@ function AgentArtifact({
             </div>
           )}
 
-          {toolSummary.length > 0 && (
+          {false && toolSummary.length > 0 && (
             <div className={styles.ToolSummaryBox}>
               <p className={styles.SectionLabel}>{t('agent_tool_summary_title')}</p>
               <div className={styles.ToolSummaryList}>
@@ -561,7 +556,7 @@ function AgentArtifact({
         </div>
       )}
 
-      {artifacts.recommendationId && (
+      {false && artifacts.recommendationId && (
         <div className={styles.FeedbackRow}>
           <button
             type="button"
@@ -617,21 +612,21 @@ function AgentWorkbench({
     conversations,
     currentConversation,
     error,
-    feedbackMap,
     isBootstrapping,
     isSending,
-    isSubmittingFeedback,
     loadConversation,
     sendMessage,
     startNewConversation,
-    submitFeedback,
   } = useAgent()
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const [message, setMessage] = useState('')
   const [artifactNotices, setArtifactNotices] = useState({})
   const [busyArtifactKey, setBusyArtifactKey] = useState('')
+  const [isConversationSidebarOpen, setIsConversationSidebarOpen] = useState(false)
+  const [isComposing, setIsComposing] = useState(false)
   const messageEndRef = useRef(null)
+  const messageInputRef = useRef(null)
 
   const quickPrompts = useMemo(
     () => [
@@ -646,6 +641,18 @@ function AgentWorkbench({
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [currentConversation.messages, isSending])
+
+  useEffect(() => {
+    if (!messageInputRef.current) {
+      return
+    }
+
+    messageInputRef.current.style.height = 'auto'
+    messageInputRef.current.style.height = `${Math.min(
+      messageInputRef.current.scrollHeight,
+      180,
+    )}px`
+  }, [message])
 
   useEffect(() => {
     if (!prefilledPrompt) {
@@ -668,6 +675,8 @@ function AgentWorkbench({
     if (!nextMessage) {
       return
     }
+
+    setMessage('')
 
     const response = await sendMessage({
       message: nextMessage,
@@ -702,12 +711,26 @@ function AgentWorkbench({
     if (response?.assistant?.actions?.length) {
       dispatch(executePlayerActions(response.assistant.actions))
     }
-
-    setMessage('')
   }
 
   function handlePromptClick(prompt) {
     handleSend(prompt).catch(() => {})
+  }
+
+  function handleComposerKeyDown(event) {
+    if (event.key !== 'Enter') {
+      return
+    }
+
+    if (event.shiftKey || isComposing || event.nativeEvent?.isComposing) {
+      return
+    }
+
+    event.preventDefault()
+
+    if (!isSending && !isBootstrapping) {
+      handleSend().catch(() => {})
+    }
   }
 
   function setArtifactNotice(messageId, notice) {
@@ -908,18 +931,6 @@ function AgentWorkbench({
     }
   }
 
-  async function handleFeedback(messageItem, payload) {
-    await submitFeedback({
-      ...payload,
-      conversationId: currentConversation.id,
-      messageId: messageItem.id,
-      note: messageItem.content?.slice(0, 120) || '',
-      metadata: {
-        source: 'agent-workbench',
-      },
-    })
-  }
-
   const identityLabel = isAuthenticated
     ? user?.displayName || user?.email || t('appName')
     : t('agent_guest_label')
@@ -928,34 +939,31 @@ function AgentWorkbench({
     : isConnected
       ? t('mode_spotify_enhanced')
       : t('mode_local')
-  const modeDescription = !isAuthenticated
-    ? t('agent_guest_body')
-    : isConnected
-      ? t('agent_spotify_unlocked_body')
-      : t('agent_spotify_locked_body')
 
   return (
-    <div className={styles.Shell}>
-      <aside className={styles.Sidebar}>
+    <div
+      className={`${styles.Shell} ${
+        isConversationSidebarOpen
+          ? styles.ShellSidebarOpen
+          : styles.ShellSidebarClosed
+      }`}
+    >
+      <aside
+        id="agent-conversation-sidebar"
+        className={`${styles.Sidebar} ${
+          isConversationSidebarOpen ? styles.SidebarOpen : styles.SidebarClosed
+        }`}
+      >
         <div className={styles.SidebarHeader}>
           <div>
             <p className={styles.Eyebrow}>{t('agent_conversations')}</p>
             <h2 className={styles.Title}>{t('agent_title')}</h2>
-            <p className={styles.Subtitle}>{t('agent_subtitle')}</p>
           </div>
-          <button
-            type="button"
-            className={styles.SecondaryBtn}
-            onClick={startNewConversation}
-          >
-            {t('agent_new_chat')}
-          </button>
         </div>
 
         <div className={styles.SummaryCard}>
           <p className={styles.Eyebrow}>{t('agent_mode_title')}</p>
           <strong className={styles.ConversationTitle}>{modeLabel}</strong>
-          <p className={styles.NowPlaying}>{modeDescription}</p>
           {!isAuthenticated && (
             <button
               type="button"
@@ -1032,134 +1040,159 @@ function AgentWorkbench({
 
       <section className={styles.Chat}>
         <div className={styles.ChatHeader}>
-          <div>
-            <p className={styles.Eyebrow}>{t('agent_workspace')}</p>
-            <h2 className={styles.Title}>
-              {currentConversation.title || t('agent_empty_title')}
-            </h2>
-            <div className={styles.HeaderMeta}>
-              <span className={styles.Pill}>
-                {isSending ? t('agent_working') : t('agent_ready')}
-              </span>
-              <span className={styles.Pill}>
-                {isPlaying ? t('agent_player_playing') : t('agent_player_paused')}
-              </span>
-              <span className={styles.Pill}>{identityLabel}</span>
-              <span className={styles.Pill}>
-                {isConnected ? t('spotify_connected') : t('spotify_not_connected')}
-              </span>
+          <div className={styles.ChatHeaderContent}>
+            <div className={styles.ChatHeaderActions}>
+              <button
+                type="button"
+                className={`${styles.SidebarToggleBtn} ${
+                  isConversationSidebarOpen ? styles.SidebarToggleBtnActive : ''
+                }`}
+                onClick={() =>
+                  setIsConversationSidebarOpen((currentValue) => !currentValue)
+                }
+                aria-controls="agent-conversation-sidebar"
+                aria-expanded={isConversationSidebarOpen}
+                title={
+                  isConversationSidebarOpen
+                    ? t('agent_hide_conversations')
+                    : t('agent_show_conversations')
+                }
+                aria-label={
+                  isConversationSidebarOpen
+                    ? t('agent_hide_conversations')
+                    : t('agent_show_conversations')
+                }
+              >
+                <span className={styles.SidebarToggleIcon} aria-hidden="true">
+                  {isConversationSidebarOpen ? '<' : '>'}
+                </span>
+                <span className={styles.SidebarToggleLabel}>
+                  {t('agent_conversations')}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={styles.ChatSecondaryBtn}
+                onClick={startNewConversation}
+              >
+                {t('agent_new_chat')}
+              </button>
             </div>
+
           </div>
         </div>
 
         <div className={styles.Messages}>
-          {currentConversation.messages?.length ? (
-            currentConversation.messages.map((messageItem) => {
-              const feedbackKey = getFeedbackKey(messageItem)
-              const feedbackState = feedbackMap[feedbackKey] || ''
-
-              return (
-                <div
-                  key={messageItem.id}
-                  className={`${styles.MessageRow} ${
-                    messageItem.role === 'user' ? styles.MessageUser : ''
-                  }`}
-                >
+          <div className={`${styles.MessageThread} ${styles.ChatColumn}`}>
+            {currentConversation.messages?.length ? (
+              currentConversation.messages.map((messageItem) => {
+                return (
                   <div
-                    className={`${styles.Bubble} ${
-                      messageItem.role === 'user' ? styles.BubbleUser : ''
+                    key={messageItem.id}
+                    className={`${styles.MessageRow} ${
+                      messageItem.role === 'user' ? styles.MessageUser : ''
                     }`}
                   >
-                    <div className={styles.BubbleMeta}>
-                      <span>
-                        {messageItem.role === 'user'
-                          ? t('agent_role_user')
-                          : t('agent_role_agent')}
-                      </span>
+                    <div
+                      className={`${styles.Bubble} ${
+                        messageItem.role === 'user' ? styles.BubbleUser : ''
+                      }`}
+                    >
                       {messageItem.intent && (
-                        <span className={styles.IntentBadge}>
-                          {formatIntentLabel(messageItem.intent, t)}
-                        </span>
+                        <div className={styles.BubbleMeta}>
+                          <span className={styles.IntentBadge}>
+                            {formatIntentLabel(messageItem.intent, t)}
+                          </span>
+                        </div>
                       )}
+
+                      {messageItem.role === 'assistant' &&
+                      messageItem.status === 'loading' ? (
+                        <AgentTypingIndicator t={t} />
+                      ) : messageItem.role === 'assistant' &&
+                        messageItem.status === 'error' ? (
+                        <AgentErrorState message={messageItem} t={t} />
+                      ) : (
+                        <MessageRichText content={messageItem.content} />
+                      )}
+
+                      {messageItem.role === 'assistant' &&
+                        messageItem.status === 'sent' && (
+                        <AgentArtifact
+                          message={messageItem}
+                          onPlayTracks={handlePlayTracks}
+                          onFavoriteTrack={handleFavoriteTrack}
+                          onAddTracksToPlaylist={handleAddTracksToPlaylist}
+                          isConnected={isConnected}
+                          isSpotifyPlaybackReady={isSpotifyPlaybackReady}
+                          isAuthenticated={isAuthenticated}
+                          artifactNotice={artifactNotices[messageItem.id] || ''}
+                          isActionBusy={busyArtifactKey.endsWith(messageItem.id)}
+                          t={t}
+                        />
+                        )}
                     </div>
-
-                    <p className={styles.BubbleText}>{messageItem.content}</p>
-
-                    {messageItem.role === 'assistant' && (
-                      <AgentArtifact
-                        message={messageItem}
-                        onPlayTracks={handlePlayTracks}
-                        onFavoriteTrack={handleFavoriteTrack}
-                        onAddTracksToPlaylist={handleAddTracksToPlaylist}
-                        onSubmitFeedback={(targetMessage, payload) =>
-                          handleFeedback(targetMessage, payload).catch(() => {})
-                        }
-                        feedbackState={feedbackState}
-                        isSubmittingFeedback={isSubmittingFeedback}
-                        isConnected={isConnected}
-                        isSpotifyPlaybackReady={isSpotifyPlaybackReady}
-                        isAuthenticated={isAuthenticated}
-                        artifactNotice={artifactNotices[messageItem.id] || ''}
-                        isActionBusy={busyArtifactKey.endsWith(messageItem.id)}
-                        t={t}
-                      />
-                    )}
                   </div>
+                )
+              })
+            ) : (
+              <div className={styles.EmptyState}>
+                <div className={styles.QuickPrompts}>
+                  {quickPrompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      className={styles.Chip}
+                      onClick={() => handlePromptClick(prompt)}
+                    >
+                      {prompt}
+                    </button>
+                  ))}
                 </div>
-              )
-            })
-          ) : (
-            <div className={styles.EmptyState}>
-              <h3 className={styles.EmptyTitle}>{t('agent_empty_title')}</h3>
-              <p className={styles.EmptyText}>
-                {isAuthenticated ? t('agent_empty_hint') : t('agent_guest_body')}
-              </p>
-              <div className={styles.QuickPrompts}>
-                {quickPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    className={styles.Chip}
-                    onClick={() => handlePromptClick(prompt)}
-                  >
-                    {prompt}
-                  </button>
-                ))}
               </div>
-            </div>
-          )}
-          <div ref={messageEndRef} />
+            )}
+            <div ref={messageEndRef} />
+          </div>
         </div>
 
-        <form
-          className={styles.Composer}
-          onSubmit={(event) => {
-            event.preventDefault()
-            handleSend().catch(() => {})
-          }}
-        >
-          <div>
-            <textarea
-              className={styles.Textarea}
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder={t('agent_message_placeholder')}
-            />
-            <p className={`${styles.StatusText} ${error ? styles.ErrorText : ''}`}>
-              {error ||
-                (isAuthenticated
-                  ? t('agent_input_hint')
-                  : t('agent_guest_saved_note'))}
-            </p>
-          </div>
-          <button
-            type="submit"
-            className={styles.SendBtn}
-            disabled={isSending || isBootstrapping}
+        <div className={styles.InputDock}>
+          <form
+            className={`${styles.Composer} ${styles.ChatColumn}`}
+            onSubmit={(event) => {
+              event.preventDefault()
+              handleSend().catch(() => {})
+            }}
           >
-            {isSending ? t('agent_sending') : t('agent_send')}
-          </button>
-        </form>
+            <div className={styles.ComposerCard}>
+              <div className={styles.ComposerField}>
+                <textarea
+                  ref={messageInputRef}
+                  className={styles.Textarea}
+                  value={message}
+                  rows={1}
+                  onChange={(event) => setMessage(event.target.value)}
+                  onCompositionStart={() => setIsComposing(true)}
+                  onCompositionEnd={() => setIsComposing(false)}
+                  onKeyDown={handleComposerKeyDown}
+                  placeholder=""
+                />
+                {error ? (
+                  <p className={`${styles.StatusText} ${styles.ErrorText}`}>
+                    {error}
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="submit"
+                className={styles.SendBtn}
+                disabled={!message.trim() || isSending || isBootstrapping}
+              >
+                {isSending ? t('agent_sending') : t('agent_send')}
+              </button>
+            </div>
+          </form>
+        </div>
       </section>
     </div>
   )
