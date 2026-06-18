@@ -1,5 +1,4 @@
-import { useSelector, useDispatch } from 'react-redux'
-import { changePlay } from '../../store/index.js'
+import { useSelector } from 'react-redux'
 import { useSpotify } from '../../context/SpotifyContext.jsx'
 import { canStartTrackPlayback } from '../../lib/spotify.js'
 import TextBoldL from '../text/TextBoldL'
@@ -24,12 +23,13 @@ function sameNonEmptyValue(leftValue, rightValue) {
 }
 
 function PlaylistTrack({ data }) {
-  const dispatch = useDispatch()
   const { isConnected } = useSpotify()
   const isPlaying = useSelector((state) => state.player.isPlaying)
   const trackData = useSelector((state) => state.player.trackData)
   const playable = canStartTrackPlayback(data.song, { allowRemote: isConnected })
-  const isAlbumView = data.listType === 'album' || data.listType === 'alb眉m'
+  const normalizedListType = String(data.listType || '').toLowerCase()
+  const isAlbumView =
+    normalizedListType.includes('album') || normalizedListType.includes('alb')
 
   const songIndex = Number.isFinite(Number(data.songIndex))
     ? Number(data.songIndex)
@@ -64,13 +64,9 @@ function PlaylistTrack({ data }) {
       className={`${styles.trackDiv} ${thisSong ? 'activeTrack' : ''} ${!playable ? styles.DisabledTrack : ''}`}
       style={isAlbumView ? { gridTemplateColumns: '16px 1fr 38px' } : {}}
     >
-      <button
-        className={styles.playBtn}
-        disabled={!playable}
-        onClick={() => dispatch(changePlay(thisSong ? !isPlaying : true))}
-      >
+      <span className={styles.playBtn} aria-hidden="true">
         {thisSong ? <Icons.Pause /> : <Icons.Play />}
-      </button>
+      </span>
 
       {thisSong ? (
         <img className={styles.gif} src={Playgif} alt="now playing" />

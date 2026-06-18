@@ -111,32 +111,43 @@ function PlaylistPage() {
     }
   }, [playlist])
 
-  function startPlaylist(trackId) {
+  function startPlaylist(startIndex = 0) {
     if (!playlist) {
       return
     }
 
-    const queue = createPlaybackQueue(playlist).filter((track) =>
-      canStartTrackPlayback(track, { allowRemote: isConnected }),
-    )
+    const queue = createPlaybackQueue(playlist)
 
-    if (!queue.length) {
+    if (!queue.some((track) => canStartTrackPlayback(track, { allowRemote: isConnected }))) {
       return
     }
-
-    const startIndex = trackId
-      ? queue.findIndex(
-          (track) => track.id === trackId || track.track === trackId,
-        )
-      : 0
 
     dispatch(
       changeTrack({
         queue,
-        startIndex: startIndex >= 0 ? startIndex : 0,
+        startIndex,
       }),
     )
     dispatch(changePlay(true))
+  }
+
+  function handleTrackPlayback(song, songIndex) {
+    if (!canStartTrackPlayback(song, { allowRemote: isConnected })) {
+      return
+    }
+
+    const activeQueueIndex = Number(trackData.queueIndex)
+    const isCurrentSong =
+      trackData.playlistId === playlist?.link &&
+      Number.isFinite(activeQueueIndex) &&
+      activeQueueIndex === songIndex
+
+    if (isCurrentSong) {
+      dispatch(changePlay(!isPlaying))
+      return
+    }
+
+    startPlaylist(songIndex)
   }
 
   function togglePlaylistPlayback(event) {
@@ -151,7 +162,7 @@ function PlaylistPage() {
       return
     }
 
-    startPlaylist()
+    startPlaylist(0)
   }
 
   if (isLoadingPlaylist) {
@@ -364,7 +375,7 @@ function PlaylistPage() {
                   ? t(getTrackPlaybackStatusKey(song, { allowRemote: isConnected }))
                   : song.songName
               }
-              onClick={() => startPlaylist(song.id || song.link)}
+              onClick={() => handleTrackPlayback(song, songIndex)}
               className={styles.SongBtn}
             >
               <PlaylistTrack

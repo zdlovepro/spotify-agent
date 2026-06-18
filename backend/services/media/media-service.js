@@ -22,6 +22,37 @@ function nowIso() {
   return new Date().toISOString()
 }
 
+function scorePossibleMojibake(value = '') {
+  const mojibakeMatches =
+    value.match(/[ÃÂâÐÑæåçéèêëîïôöûüœŸ¤¢£�]/g) || []
+  const controlMatches =
+    value.match(/[\u0080-\u009f]/g) || []
+
+  return mojibakeMatches.length * 2 + controlMatches.length * 3
+}
+
+function normalizeUploadedText(value = '') {
+  const trimmedValue = String(value || '').trim()
+
+  if (!trimmedValue) {
+    return ''
+  }
+
+  if (!/[^\u0000-\u007f]/.test(trimmedValue)) {
+    return trimmedValue
+  }
+
+  const decodedValue = Buffer.from(trimmedValue, 'latin1').toString('utf8').trim()
+
+  if (!decodedValue || decodedValue === trimmedValue) {
+    return trimmedValue
+  }
+
+  return scorePossibleMojibake(decodedValue) < scorePossibleMojibake(trimmedValue)
+    ? decodedValue
+    : trimmedValue
+}
+
 function resolveFileExtension(file = {}) {
   const originalNameExtension = path.extname(file.originalname || '').toLowerCase()
 
@@ -124,10 +155,12 @@ function resolveAssetRow(userId, assetId) {
 export function createAudioAsset(userId, file, input = {}) {
   const id = crypto.randomUUID()
   const now = nowIso()
+  const originalFilename = normalizeUploadedText(file.originalname || file.filename || '')
+  const fallbackTitleSource = originalFilename || file.originalname || file.filename || 'audio'
   const title =
     typeof input.title === 'string' && input.title.trim()
-      ? input.title.trim()
-      : path.parse(file.originalname).name
+      ? normalizeUploadedText(input.title)
+      : path.parse(fallbackTitleSource).name
   const artists = normalizeArtists(input.artists)
   const albumName =
     typeof input.album === 'string' && input.album.trim()
@@ -177,7 +210,7 @@ export function createAudioAsset(userId, file, input = {}) {
     sourceId,
     'local',
     storagePath,
-    file.originalname,
+    originalFilename,
     file.mimetype,
     fileExtension,
     title,

@@ -190,6 +190,9 @@ function sanitizeTrackReference(input) {
   return {
     sourceType,
     sourceId,
+    audioAssetId,
+    playMode,
+    uri,
     title:
       normalizeTrackString(input.title) ||
       normalizeTrackString(input.name) ||
@@ -336,7 +339,8 @@ function mapPlaylistItemRow(row) {
         ? row.source_id
         : ''
   const audioAssetId =
-    typeof metadata.audioAssetId === 'string' ? metadata.audioAssetId.trim() : ''
+    normalizeTrackString(row.audio_asset_id) ||
+    (typeof metadata.audioAssetId === 'string' ? metadata.audioAssetId.trim() : '')
   const playMode =
     typeof metadata.playMode === 'string' && metadata.playMode.trim()
       ? metadata.playMode.trim()
@@ -390,7 +394,8 @@ function mapFavoriteRow(row) {
         ? row.source_id
         : ''
   const audioAssetId =
-    typeof metadata.audioAssetId === 'string' ? metadata.audioAssetId.trim() : ''
+    normalizeTrackString(row.audio_asset_id) ||
+    (typeof metadata.audioAssetId === 'string' ? metadata.audioAssetId.trim() : '')
   const playMode =
     typeof metadata.playMode === 'string' && metadata.playMode.trim()
       ? metadata.playMode.trim()
@@ -670,6 +675,7 @@ export function addPlaylistItem(ownerUserId, playlistId, input) {
       INSERT INTO library_playlist_items (
         id,
         playlist_id,
+        audio_asset_id,
         added_by_user_id,
         item_type,
         position,
@@ -684,11 +690,12 @@ export function addPlaylistItem(ownerUserId, playlistId, input) {
         metadata_json,
         created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
     playlistId,
+    track.audioAssetId || null,
     ownerUserId,
     'track',
     position,
@@ -822,6 +829,7 @@ export function createFavorite(ownerUserId, input = {}) {
       INSERT OR REPLACE INTO library_favorites (
         id,
         owner_user_id,
+        audio_asset_id,
         favorite_type,
         source_type,
         source_id,
@@ -834,11 +842,12 @@ export function createFavorite(ownerUserId, input = {}) {
         metadata_json,
         created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
     ownerUserId,
+    track.audioAssetId || null,
     favoriteType,
     track.sourceType,
     track.sourceId,

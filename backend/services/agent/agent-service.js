@@ -293,7 +293,7 @@ function wantsImmediateRecommendationPlayback(message) {
 function extractRecommendationQuery(message) {
   return normalizeMessage(message)
     .replace(
-      /\u63a8\u8350|\u6765\u70b9|\u7ed9\u6211|\u5e2e\u6211|\u7ed3\u5408|\u4e00\u7ec4|\u5408\u9002|\u9002\u5408|recommend(?:ation)?|suggest|give me|find me/gi,
+      /\u63a8\u8350|\u6765\u70b9|\u70b9\u513f?|\u7ed9\u6211|\u5e2e\u6211|\u7ed3\u5408|\u4e00\u7ec4|\u5408\u9002|\u9002\u5408|recommend(?:ation)?|suggest|give me|find me/gi,
       ' ',
     )
     .replace(
@@ -352,10 +352,95 @@ function createTrackScoreSets(memoryProfile = {}) {
         .map((track) => track.sourceId || track.source_id || track.id || '')
         .filter(Boolean),
     ),
+    preferredArtists: new Map(
+      (memoryProfile.topArtists || [])
+        .map((artist, index) => {
+          const artistName = normalizeMessage(artist?.name || '').toLowerCase()
+
+          if (!artistName) {
+            return null
+          }
+
+          return [artistName, Math.max(6, 12 - index * 2)]
+        })
+        .filter(Boolean),
+    ),
   }
 }
 
-function scoreRecommendationTrack(track, scoreSets, { preferLocal = false } = {}) {
+function buildRecommendationSearchKeywords(text = '') {
+  const normalized = normalizeMessage(text)
+    .toLowerCase()
+    .replace(/[“”"'`]/g, ' ')
+    .replace(/[，。！？、,.!?]/g, ' ')
+    .replace(
+      /推荐|来点|给我|帮我|适合|时候|一下|一点|一些|歌曲|歌单|音乐|spotify|local|本地|上传|song|songs|music|playlist/gi,
+      ' ',
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!normalized) {
+    return []
+  }
+
+  return unique([
+    ...(normalized.match(/[\u3400-\u9fff]{2,12}/g) || []),
+    ...(normalized.match(/[a-z0-9][a-z0-9&'/-]{1,}/g) || []),
+  ])
+}
+
+function buildRecommendationTrackText(track = {}) {
+  return normalizeMessage(
+    [
+      track.name,
+      ...(Array.isArray(track.artists) ? track.artists : []),
+      track.album,
+    ]
+      .filter(Boolean)
+      .join(' '),
+  ).toLowerCase()
+}
+
+function computeRecommendationQueryScore(track, requestKeywords = []) {
+  if (!requestKeywords.length) {
+    return 0
+  }
+
+  const trackText = buildRecommendationTrackText(track)
+
+  if (!trackText) {
+    return 0
+  }
+
+  let matchedCount = 0
+  let score = 0
+
+  for (const keyword of requestKeywords) {
+    if (!trackText.includes(keyword)) {
+      continue
+    }
+
+    matchedCount += 1
+    score += /[\u3400-\u9fff]/.test(keyword)
+      ? 10
+      : keyword.length >= 4
+        ? 8
+        : 5
+  }
+
+  if (matchedCount > 1 && matchedCount === requestKeywords.length) {
+    score += 6
+  }
+
+  return Math.min(score, 28)
+}
+
+function scoreRecommendationTrack(
+  track,
+  scoreSets,
+  { preferLocal = false, requestKeywords = [] } = {},
+) {
   const key = getTrackIdentity(track)
   let score = 0
 
@@ -375,20 +460,40 @@ function scoreRecommendationTrack(track, scoreSets, { preferLocal = false } = {}
     score += 8
   }
 
+  score += computeRecommendationQueryScore(track, requestKeywords)
+
+  let artistAffinity = 0
+
+  for (const artist of Array.isArray(track.artists) ? track.artists : []) {
+    artistAffinity +=
+      scoreSets.preferredArtists.get(normalizeMessage(artist).toLowerCase()) || 0
+  }
+
+  score += Math.min(artistAffinity, 12)
+
   return score
 }
 
 function sortRecommendationTracks(
   tracks = [],
   memoryProfile = {},
-  { preferLocal = false } = {},
+  { preferLocal = false, requestQuery = '', requestMessage = '' } = {},
 ) {
   const scoreSets = createTrackScoreSets(memoryProfile)
+  const requestKeywords = buildRecommendationSearchKeywords(
+    requestQuery || requestMessage,
+  )
 
   return [...tracks].sort((left, right) => {
     const scoreDelta =
-      scoreRecommendationTrack(right, scoreSets, { preferLocal }) -
-      scoreRecommendationTrack(left, scoreSets, { preferLocal })
+      scoreRecommendationTrack(right, scoreSets, {
+        preferLocal,
+        requestKeywords,
+      }) -
+      scoreRecommendationTrack(left, scoreSets, {
+        preferLocal,
+        requestKeywords,
+      })
 
     if (scoreDelta !== 0) {
       return scoreDelta
@@ -1279,26 +1384,37 @@ async function handleHybridRecommendation({
           memoryProfile,
         ),
         memoryProfile,
-        { preferLocal: true },
+        {
+          preferLocal: true,
+          requestQuery: recommendationQuery,
+          requestMessage: message,
+        },
       )
     } catch {
       localTracks = []
     }
   }
 
-  if (spotifyConnected && (!localRequested || mixedRequested || localTracks.length === 0)) {
-    try {
-      const topArtistResult = await tools.run('spotify.get_user_top_artists', {
-        limit: 4,
-      })
-      spotifyTopArtists = topArtistResult.items || []
-    } catch {
-      spotifyTopArtists = []
+  const shouldSearchSpotify =
+    !localRequested ||
+    mixedRequested ||
+    localTracks.length === 0
+
+  if (shouldSearchSpotify) {
+    if (spotifyConnected) {
+      try {
+        const topArtistResult = await tools.run('spotify.get_user_top_artists', {
+          limit: 4,
+        })
+        spotifyTopArtists = topArtistResult.items || []
+      } catch {
+        spotifyTopArtists = []
+      }
     }
 
     spotifyQueryPlan = buildSpotifyRecommendationQueries({
       message,
-      explicitGenres: explicitGenres.length ? explicitGenres : defaultGenres,
+      explicitGenres,
       topArtists: spotifyTopArtists,
       memoryProfile,
     })
@@ -1313,7 +1429,9 @@ async function handleHybridRecommendation({
           disableQueryExpansion: true,
           intent: 'recommend_music',
           message,
+          memoryProfile,
           preferredLanguage,
+          topArtists: spotifyTopArtists,
         })
         spotifySearchRuns.push(searchResult)
       } catch {
@@ -1335,6 +1453,10 @@ async function handleHybridRecommendation({
         mood: spotifyQueryPlan.mood,
         avoidLiteralTerms: spotifyQueryPlan.avoidLiteralTerms,
         specificSearch: spotifyQueryPlan.isSpecificTrackSearch,
+        rawQuery: recommendationQuery,
+        requestMessage: message,
+        memoryProfile,
+        preferredArtists: spotifyTopArtists,
         limit: 8,
       },
     )
@@ -3827,9 +3949,13 @@ async function runDeepSeekPlannedAgent({
   const usedSpotifySearch = executedSteps.some(
     (step) => step.tool === 'spotify.search_tracks',
   )
+  const localIntentResult = classifyIntent(message)
+  const shouldFallbackToHybridRecommendation =
+    plannerResponse.plan.intent === 'recommend_music' ||
+    localIntentResult.intent === 'generate_recommendation'
 
   if (
-    plannerResponse.plan.intent === 'recommend_music' &&
+    shouldFallbackToHybridRecommendation &&
     trackArtifacts.length === 0 &&
     !usedSpotifySearch
   ) {

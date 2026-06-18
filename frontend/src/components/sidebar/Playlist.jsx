@@ -302,7 +302,7 @@ function Playlist() {
                 <p className={styles.ItemTitle}>{list.title}</p>
                 <p className={styles.ItemMeta}>
                   {getTypeLabel(list, t)}
-                  {list.artist ? ` 路 ${list.artist}` : ''}
+                  {list.artist ? ` | ${list.artist}` : ''}
                 </p>
               </div>
 

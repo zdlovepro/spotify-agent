@@ -113,6 +113,13 @@ function Footer() {
       return
     }
 
+    if (trackChanged) {
+      audio.currentTime = 0
+      audio.load()
+      setCurrentTime(0)
+      setDuration(0)
+    }
+
     if (isPlaying) {
       audio
         .play()

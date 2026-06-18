@@ -83,19 +83,34 @@ export function mapLocalAudioCard(asset) {
         ? 'm4a'
         : 'm4a / mp3'
 
+  const filenameText =
+    asset.originalFilename &&
+    asset.originalFilename !== asset.title
+      ? asset.originalFilename
+      : ''
+  const artistText =
+    Array.isArray(asset.artists) && asset.artists.length
+      ? asset.artists.join(', ')
+      : ''
+  const albumText = asset.album || ''
+  const summaryText =
+    [artistText, albumText].filter(Boolean).join(' | ') ||
+    filenameText ||
+    'Local audio'
+  const detailText = [
+    summaryText !== filenameText ? filenameText : '',
+    asset.durationMs ? formatDuration(asset.durationMs) : fallbackFormatLabel,
+    formatFileSize(asset.sizeBytes || 0),
+  ].filter(Boolean).join(' | ')
+
   return {
     id: asset.id,
     title: asset.title || asset.originalFilename || 'Local audio',
-    filenameText:
-      asset.originalFilename &&
-      asset.originalFilename !== asset.title
-        ? asset.originalFilename
-        : '',
-    albumText: asset.album || '',
-    artistText:
-      Array.isArray(asset.artists) && asset.artists.length
-        ? asset.artists.join(', ')
-        : 'Local audio',
+    filenameText,
+    albumText,
+    artistText: artistText || 'Local audio',
+    summaryText,
+    detailText,
     formatLabel: fallbackFormatLabel,
     durationText: asset.durationMs
       ? formatDuration(asset.durationMs)

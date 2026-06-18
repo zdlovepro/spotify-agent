@@ -413,6 +413,57 @@ function sanitizeSpotifySearchQuery(rawQuery = '') {
   return query.trim()
 }
 
+function extractSearchTokens(rawQuery = '') {
+  const normalized = sanitizeSpotifySearchQuery(rawQuery).toLowerCase()
+
+  if (!normalized) {
+    return []
+  }
+
+  return [...new Set([
+    ...(normalized.match(/[\u3400-\u9fff]{2,12}/g) || []),
+    ...(normalized.match(/[a-z0-9][a-z0-9&'/-]{1,}/g) || []),
+  ])]
+}
+
+function computeLocalAudioSearchScore(track = {}, rawQuery = '', tokens = []) {
+  const normalizedQuery = sanitizeSpotifySearchQuery(rawQuery).toLowerCase()
+  const haystack = [
+    normalizeString(track.name),
+    ...normalizeTrackArtists(track.artists || track.artist),
+    normalizeString(track.album),
+    normalizeString(track.fileExtension),
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  if (!haystack) {
+    return 0
+  }
+
+  let score = normalizedQuery && haystack.includes(normalizedQuery) ? 20 : 0
+  let matchedCount = 0
+
+  for (const token of tokens) {
+    if (!token || !haystack.includes(token)) {
+      continue
+    }
+
+    matchedCount += 1
+    score += /[\u3400-\u9fff]/.test(token)
+      ? 10
+      : token.length >= 4
+        ? 8
+        : 5
+  }
+
+  if (matchedCount > 1 && matchedCount === tokens.length) {
+    score += 8
+  }
+
+  return score
+}
+
 function inferSpotifySearchFallbackQuery(input = '') {
   const normalizedInput = normalizeString(input)
 
@@ -508,6 +559,8 @@ async function performSpotifyTrackSearches(args = {}, fallbackMessage = '') {
     memoryProfile: args.memoryProfile || null,
     preferredLanguage: args.preferredLanguage || '',
     rawQuery,
+    explicitGenres: Array.isArray(args.explicitGenres) ? args.explicitGenres : [],
+    topArtists: Array.isArray(args.topArtists) ? args.topArtists : [],
   })
   const perQueryLimit = parseInteger(args.limit, 5, { min: 1, max: 50 })
   const finalLimit = parseInteger(
@@ -553,6 +606,10 @@ async function performSpotifyTrackSearches(args = {}, fallbackMessage = '') {
     mood: queryPlan.mood,
     avoidLiteralTerms: queryPlan.avoidLiteralTerms,
     specificSearch: queryPlan.isSpecificTrackSearch,
+    rawQuery,
+    requestMessage: rawMessage,
+    memoryProfile: args.memoryProfile || null,
+    preferredArtists: Array.isArray(args.topArtists) ? args.topArtists : [],
     limit: finalLimit,
   })
 
@@ -1235,26 +1292,25 @@ function createSpotifyRemoteTrack(input = {}) {
 
     register('library.search_local_audio', (args = {}) => {
       ensureLocalUser(localUserId)
-      const query = typeof args.q === 'string' ? args.q.trim().toLowerCase() : ''
+      const rawQuery = typeof args.q === 'string' ? args.q.trim() : ''
+      const query = rawQuery.toLowerCase()
+      const tokens = extractSearchTokens(rawQuery)
       const limit = parseInteger(args.limit, 10, { min: 1, max: 50 })
       const items = listAudioAssets(localUserId)
         .map((asset) => mapLocalAudioAssetToTrack(asset, localSessionToken))
-        .filter((asset) => {
-          if (!query) {
-            return true
+        .map((asset) => ({
+          asset,
+          score: query ? computeLocalAudioSearchScore(asset, rawQuery, tokens) : 0,
+        }))
+        .filter((entry) => !query || entry.score > 0)
+        .sort((left, right) => {
+          if (right.score !== left.score) {
+            return right.score - left.score
           }
 
-          const haystack = [
-            asset.name,
-            ...(Array.isArray(asset.artists) ? asset.artists : []),
-            asset.album,
-            asset.fileExtension,
-          ]
-            .join(' ')
-            .toLowerCase()
-
-          return haystack.includes(query)
+          return String(left.asset.name || '').localeCompare(String(right.asset.name || ''))
         })
+        .map((entry) => entry.asset)
         .slice(0, limit)
 
       return {

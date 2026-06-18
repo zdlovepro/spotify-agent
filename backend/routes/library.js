@@ -17,6 +17,7 @@ import {
   listPlaylists,
   updatePlaylist,
 } from '../services/library/library-service.js'
+import { getAudioAssetStorageRecord } from '../services/media/media-service.js'
 
 const router = Router()
 
@@ -24,6 +25,12 @@ const LOCAL_LIBRARY_SOURCE_TYPE = 'agentmusic'
 
 function createLocalAudioStreamUrl(req, assetId) {
   if (typeof assetId !== 'string' || !assetId.trim()) {
+    return ''
+  }
+
+  const asset = getAudioAssetStorageRecord(req.localUserId, assetId)
+
+  if (!asset) {
     return ''
   }
 

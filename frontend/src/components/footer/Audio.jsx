@@ -16,6 +16,7 @@ const Audio = forwardRef(function Audio(
   return (
     <audio
       ref={ref}
+      preload="auto"
       onEnded={onEnded}
       onError={onError}
       onLoadedMetadata={(e) => handleDuration(e.target.duration)}

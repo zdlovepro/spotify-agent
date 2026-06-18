@@ -5,6 +5,7 @@ import { useDispatch } from 'react-redux'
 import TitleM from '../components/text/TitleM'
 import PlaylistCardM from '../components/cards/PlaylistCardM'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useSpotify } from '../context/SpotifyContext.jsx'
 import { startAgentPlayback } from '../store/index.js'
 import { mapLocalPlaylistSummary } from '../utils/library.js'
 import {
@@ -47,6 +48,7 @@ function Library() {
   const { t } = useTranslation()
   const dispatch = useDispatch()
   const { isAuthenticated, openAuthDialog, request, session } = useAuth()
+  const { isConnected } = useSpotify()
   const fileInputRef = useRef(null)
   const [playlists, setPlaylists] = useState([])
   const [audioAssets, setAudioAssets] = useState([])
@@ -328,6 +330,7 @@ function Library() {
                 <PlaylistTab
                   playlists={playlists}
                   audioAssets={audioAssets}
+                  isSpotifyConnected={isConnected}
                   isUploading={isUploading}
                   onDeletePlaylist={handleDeletePlaylist}
                   onDeleteAsset={handleDeleteAsset}
@@ -359,6 +362,7 @@ function Library() {
 function PlaylistTab({
   playlists,
   audioAssets,
+  isSpotifyConnected,
   isUploading,
   onDeletePlaylist,
   onDeleteAsset,
@@ -370,6 +374,12 @@ function PlaylistTab({
   const localPlaylists = playlists.filter(
     (playlist) => playlist.sourceLabel !== 'spotify_import',
   )
+  const importedPlaylists = playlists.filter(
+    (playlist) => playlist.sourceLabel === 'spotify_import',
+  )
+  const importedPlaylistHint = isSpotifyConnected
+    ? t('library_spotify_playlists_ready_hint')
+    : t('library_spotify_playlists_connect_hint')
 
   return (
     <div className={styles.LibrarySections}>
@@ -397,6 +407,33 @@ function PlaylistTab({
             <div className={styles.EmptyState}>
               <p className={styles.EmptyText}>{t('library_empty')}</p>
               <p className={styles.SectionHint}>{t('library_empty_hint')}</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className={styles.SectionBlock}>
+        <div className={styles.SectionHeader}>
+          <TitleM>{t('library_spotify_playlists_section')}</TitleM>
+          <p className={styles.SectionHint}>{importedPlaylistHint}</p>
+        </div>
+
+        <div className={styles.Grid}>
+          {importedPlaylists.length ? (
+            importedPlaylists.map((item) => (
+              <PlaylistCardM
+                key={item.link}
+                data={item}
+                onDelete={onDeletePlaylist}
+                onRename={onRenamePlaylist}
+              />
+            ))
+          ) : (
+            <div className={styles.EmptyState}>
+              <p className={styles.EmptyText}>{t('library_spotify_playlists_empty')}</p>
+              <p className={styles.SectionHint}>
+                {t('library_spotify_playlists_empty_hint')}
+              </p>
             </div>
           )}
         </div>
@@ -441,10 +478,10 @@ function PlaylistTab({
                       </span>
                     </div>
                     <p className={styles.AssetMeta}>
-                      {card.filenameText || card.artistText}
+                      {card.summaryText}
                     </p>
                     <p className={styles.AssetMeta}>
-                      {card.durationText} | {card.sizeText}
+                      {card.detailText}
                     </p>
                   </div>
                   <div className={styles.AssetActions}>
