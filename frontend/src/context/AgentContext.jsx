@@ -82,7 +82,11 @@ function normalizeMessages(messages = []) {
 
       return left._index - right._index
     })
-    .map(({ _index, ...message }) => message)
+    .map((message) => {
+      const normalizedMessage = { ...message }
+      delete normalizedMessage._index
+      return normalizedMessage
+    })
 }
 
 function normalizeConversation(conversation = {}) {

@@ -17,7 +17,7 @@ export const PLAYLIST = [
 					"https://i.scdn.co/image/ab67616d0000b2731d26b3e7ea803059a6e4ffea",
 				songArtist: "Ari Barokos",
 				link:
-					"https://server1.indiryuklemp3.org/mp3_files/yasiyorum-sil-bastan-h8OmycopAr-0.mp3",
+					"https://p.scdn.co/mp3-preview/8dd8fbb1721d4964028ad362a80ad3ae2422f547?cid=6d083ea30aaa46428fbf1590d31f6750",
 				trackTime: "3:19",
 			},
 			{
@@ -27,7 +27,7 @@ export const PLAYLIST = [
 					"https://i.scdn.co/image/ab67616d0000b2731d26b3e7ea803059a6e4ffea",
 				songArtist: "Ari Barokos",
 				link:
-					"https://server1.indiryuklemp3.org/mp3_files/salaksin-I6hfUKt21R-0.mp3",
+					"https://p.scdn.co/mp3-preview/70bcfb8ae773f9e74501a6b28d545ac04abd0fdd?cid=6d083ea30aaa46428fbf1590d31f6750",
 				trackTime: "5:12",
 			},
 			{
@@ -37,7 +37,7 @@ export const PLAYLIST = [
 					"https://i.scdn.co/image/ab67616d0000b2731d26b3e7ea803059a6e4ffea",
 				songArtist: "Ari Barokos",
 				link:
-					"https://server1.indiryuklemp3.org/mp3_files/yalnizlik-kaninda-var-0vWfgutCZj-0.mp3",
+					"https://p.scdn.co/mp3-preview/225415a01d8093fbde5462def2f54c805d5ce4a5?cid=6d083ea30aaa46428fbf1590d31f6750",
 				trackTime: "3:48",
 			},
 			{
@@ -47,7 +47,7 @@ export const PLAYLIST = [
 					"https://i.scdn.co/image/ab67616d0000b2731d26b3e7ea803059a6e4ffea",
 				songArtist: "Ari Barokos",
 				link:
-					"https://server1.indiryuklemp3.org/mp3_files/gavurlar-hzfjF7ZWLE-0.mp3",
+					"https://p.scdn.co/mp3-preview/d306c50b99606e47644c5ed8a405da31094d0e2b?cid=6d083ea30aaa46428fbf1590d31f6750",
 				trackTime: "4:08",
 			},
 			{
@@ -485,19 +485,19 @@ export const PLAYLIST = [
 export const MUSICLINKS = [
 	{
 		link:
-			"https://server1.indiryuklemp3.org/mp3_files/yalan-t3OjaAeo6z-0.mp3",
+			"https://p.scdn.co/mp3-preview/8dd8fbb1721d4964028ad362a80ad3ae2422f547?cid=6d083ea30aaa46428fbf1590d31f6750",
 	},
 	{
 		link:
-			"https://server1.indiryuklemp3.org/mp3_files/a9b438cef5490afe36b0d0cb18ba9385.mp3",
+			"https://p.scdn.co/mp3-preview/70bcfb8ae773f9e74501a6b28d545ac04abd0fdd?cid=6d083ea30aaa46428fbf1590d31f6750",
 	},
 	{
 		link:
-			"https://server1.indiryuklemp3.org/mp3_files/a9b438cef5490afe36b0d0cb18ba9385.mp3",
+			"https://p.scdn.co/mp3-preview/225415a01d8093fbde5462def2f54c805d5ce4a5?cid=6d083ea30aaa46428fbf1590d31f6750",
 	},
 	{
 		link:
-			"https://server1.indiryuklemp3.org/mp3_files/a9b438cef5490afe36b0d0cb18ba9385.mp3",
+			"https://p.scdn.co/mp3-preview/d306c50b99606e47644c5ed8a405da31094d0e2b?cid=6d083ea30aaa46428fbf1590d31f6750",
 	},
 ];
 

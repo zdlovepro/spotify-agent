@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -24,7 +23,7 @@ function PlaylistCardM({
   const { isConnected } = useSpotify()
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
-  const [isthisplay, setIsthisPlay] = useState(false)
+  const isThisPlaylist = trackData.playlistId === data.link
   const trackCount = Number(data.itemCount)
   const trackCountText = Number.isFinite(trackCount)
     ? t('search_tracks_count', { count: trackCount })
@@ -55,10 +54,6 @@ function PlaylistCardM({
     dispatch(changeTrack({ queue: createPlaybackQueue(data), startIndex: 0 }))
     dispatch(changePlay(true))
   }
-
-  useEffect(() => {
-    setIsthisPlay(trackData.playlistId === data.link)
-  }, [data.link, trackData.playlistId])
 
   return (
     <div className={styles.PlaylistCardSBox}>
@@ -94,11 +89,11 @@ function PlaylistCardM({
         <div
           onClick={canPlay ? handlePlay : undefined}
           className={`${styles.IconBox} ${
-            isthisplay && isPlaying ? styles.ActiveIconBox : ''
+            isThisPlaylist && isPlaying ? styles.ActiveIconBox : ''
           } ${!canPlay ? styles.DisabledIconBox : ''}`}
         >
           <PlayButton
-            isthisplay={isthisplay}
+            isthisplay={isThisPlaylist}
             onClick={handlePlay}
             disabled={!canPlay}
             title={!canPlay ? disabledPlayTitle : ''}

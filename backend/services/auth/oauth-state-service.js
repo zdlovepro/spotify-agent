@@ -31,6 +31,7 @@ export function createOAuthPendingState({
   providerName,
   localUserId,
   returnTo = '/',
+  frontendOrigin = null,
   ttlMs,
 }) {
   const createdAt = nowIso()
@@ -43,18 +44,28 @@ export function createOAuthPendingState({
         provider_name,
         local_user_id,
         return_to,
+        frontend_origin,
         created_at,
         expires_at
       )
-      VALUES (?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
-  ).run(state, providerName, localUserId, returnTo, createdAt, expiresAt)
+  ).run(
+    state,
+    providerName,
+    localUserId,
+    returnTo,
+    frontendOrigin,
+    createdAt,
+    expiresAt,
+  )
 
   return {
     state,
     providerName,
     localUserId,
     returnTo,
+    frontendOrigin,
     createdAt,
     expiresAt,
   }
@@ -92,6 +103,7 @@ export function consumeOAuthPendingState(state, providerName) {
     providerName: row.provider_name,
     localUserId: row.local_user_id,
     returnTo: row.return_to || '/',
+    frontendOrigin: row.frontend_origin || null,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
   }

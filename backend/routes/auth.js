@@ -40,10 +40,33 @@ function pruneAllSpotifyPendingStates() {
   pruneExpiredOAuthPendingStates(SPOTIFY_PROVIDER_NAME)
 }
 
-function buildFrontendRedirect(pathname, params = {}) {
+function normalizeFrontendOrigin(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return ''
+  }
+
+  try {
+    const url = new URL(value)
+    const configuredUrl = new URL(env.frontendUri)
+    const isConfiguredOrigin = url.origin === configuredUrl.origin
+    const isLoopbackHost =
+      url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+    const isVitePort = Number(url.port) >= 5173 && Number(url.port) <= 5179
+    const isLoopbackViteOrigin =
+      url.protocol === 'http:' && isLoopbackHost && isVitePort
+
+    return isConfiguredOrigin || isLoopbackViteOrigin ? url.origin : ''
+  } catch {
+    return ''
+  }
+}
+
+function buildFrontendRedirect(pathname, params = {}, frontendOrigin = env.frontendUri) {
   const normalizedPath =
     typeof pathname === 'string' && pathname.startsWith('/') ? pathname : '/'
   const query = new URLSearchParams()
+  const redirectOrigin =
+    normalizeFrontendOrigin(frontendOrigin) || normalizeFrontendOrigin(env.frontendUri)
 
   for (const [key, value] of Object.entries(params)) {
     if (value) {
@@ -52,7 +75,7 @@ function buildFrontendRedirect(pathname, params = {}) {
   }
 
   const suffix = query.toString() ? `?${query.toString()}` : ''
-  return `${env.frontendUri}${normalizedPath}${suffix}`
+  return `${redirectOrigin}${normalizedPath}${suffix}`
 }
 
 router.get('/login', (req, res) => {
@@ -80,26 +103,46 @@ router.get(
 
     const { code, state, error } = req.query
 
-    if (error || !code) {
-      return res.redirect(
-        `${env.frontendUri}?error=${encodeURIComponent(error || 'access_denied')}`,
-      )
-    }
-
     const providerStateEntry =
       state && typeof state === 'string'
         ? consumeOAuthPendingState(state, SPOTIFY_PROVIDER_NAME)
         : null
+
+    if (error || !code) {
+      if (providerStateEntry) {
+        return res.redirect(
+          buildFrontendRedirect(
+            providerStateEntry.returnTo,
+            {
+              provider: SPOTIFY_PROVIDER_NAME,
+              error: error || 'access_denied',
+            },
+            providerStateEntry.frontendOrigin,
+          ),
+        )
+      }
+
+      return res.redirect(
+        buildFrontendRedirect('/', {
+          provider: SPOTIFY_PROVIDER_NAME,
+          error: error || 'access_denied',
+        }),
+      )
+    }
 
     if (providerStateEntry) {
       const localUser = findUserById(providerStateEntry.localUserId)
 
       if (!localUser) {
         return res.redirect(
-          buildFrontendRedirect(providerStateEntry.returnTo, {
-            provider: SPOTIFY_PROVIDER_NAME,
-            error: 'local_auth_required',
-          }),
+          buildFrontendRedirect(
+            providerStateEntry.returnTo,
+            {
+              provider: SPOTIFY_PROVIDER_NAME,
+              error: 'local_auth_required',
+            },
+            providerStateEntry.frontendOrigin,
+          ),
         )
       }
 
@@ -123,10 +166,14 @@ router.get(
         )
 
         return res.redirect(
-          buildFrontendRedirect(providerStateEntry.returnTo, {
-            provider: SPOTIFY_PROVIDER_NAME,
-            connected: 1,
-          }),
+          buildFrontendRedirect(
+            providerStateEntry.returnTo,
+            {
+              provider: SPOTIFY_PROVIDER_NAME,
+              connected: 1,
+            },
+            providerStateEntry.frontendOrigin,
+          ),
         )
       } catch (error_) {
         const message =
@@ -136,10 +183,14 @@ router.get(
           'provider_link_failed'
 
         return res.redirect(
-          buildFrontendRedirect(providerStateEntry.returnTo, {
-            provider: SPOTIFY_PROVIDER_NAME,
-            error: message,
-          }),
+          buildFrontendRedirect(
+            providerStateEntry.returnTo,
+            {
+              provider: SPOTIFY_PROVIDER_NAME,
+              error: message,
+            },
+            providerStateEntry.frontendOrigin,
+          ),
         )
       }
     }

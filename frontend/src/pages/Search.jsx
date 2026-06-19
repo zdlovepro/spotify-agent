@@ -10,6 +10,8 @@ import SearchSkeleton from '../components/search/SearchSkeleton.jsx'
 import SearchTopResult from '../components/search/SearchTopResult.jsx'
 import {
   buildAllSections,
+  getArtistNames,
+  getItemImage,
   getResultCount,
   getTabItems,
   getTopResult,
@@ -23,7 +25,60 @@ import { useSpotify } from '../context/SpotifyContext.jsx'
 import { useSpotifyPlayback } from '../context/SpotifyPlaybackContext.jsx'
 import { TRACK_PLAY_MODES } from '../lib/spotify.js'
 import { startAgentPlayback } from '../store/index.js'
+import {
+  emitLibraryPlaylistsUpdated,
+  subscribeLibraryPlaylistsUpdated,
+} from '../utils/library-events.js'
 import styles from './search.module.css'
+
+function getEditablePlaylistItems(data = {}) {
+  return (Array.isArray(data.items) ? data.items : [])
+    .filter((playlist) => playlist.canEdit || playlist.sourceType === 'agentmusic')
+    .map((playlist) => ({
+      id: playlist.id,
+      title: playlist.title || playlist.name || 'Playlist',
+      itemCount: Array.isArray(playlist.items)
+        ? playlist.items.length
+        : Number(playlist.itemCount) || 0,
+    }))
+    .filter((playlist) => playlist.id)
+}
+
+function createSearchTrackLibraryPayload(track = {}) {
+  const uri = getTrackUri(track)
+  const previewUrl = track.preview_url || track.previewUrl || ''
+  const imageUrl = getItemImage(track, 'track')
+  const playMode = uri
+    ? TRACK_PLAY_MODES.SPOTIFY_REMOTE
+    : previewUrl
+      ? TRACK_PLAY_MODES.PREVIEW
+      : TRACK_PLAY_MODES.UNAVAILABLE
+
+  return {
+    source_type: 'spotify',
+    source_id: uri || (track.id ? `spotify:track:${track.id}` : ''),
+    title: track.name || '',
+    artists: Array.isArray(track.artists)
+      ? track.artists.map((artist) => artist?.name || '').filter(Boolean)
+      : [],
+    album: track.album || '',
+    image_url: imageUrl,
+    preview_url: previewUrl,
+    duration_ms: track.duration_ms ?? track.durationMs ?? null,
+    uri,
+    playMode,
+    metadata: {
+      provider: 'spotify',
+      entityType: 'track',
+      spotifyId: track.id || null,
+      uri: uri || null,
+      playMode,
+      albumName: track.album?.name || '',
+      artistLabel: getArtistNames(track.artists),
+      externalUrl: track.external_urls?.spotify || null,
+    },
+  }
+}
 
 function Search() {
   const { t } = useTranslation()
@@ -44,10 +99,50 @@ function Search() {
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [retryCount, setRetryCount] = useState(0)
+  const [availablePlaylists, setAvailablePlaylists] = useState([])
+  const [hasLoadedPlaylists, setHasLoadedPlaylists] = useState(false)
+  const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false)
+  const [addMenuTrackId, setAddMenuTrackId] = useState('')
+  const [addingTrackId, setAddingTrackId] = useState('')
+  const [addStatus, setAddStatus] = useState(null)
 
   useEffect(() => {
     setActiveTab('all')
+    setAddMenuTrackId('')
+    setAddStatus(null)
   }, [query])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setAvailablePlaylists([])
+      setHasLoadedPlaylists(false)
+      setAddMenuTrackId('')
+      setAddStatus(null)
+    }
+  }, [isAuthenticated])
+
+  useEffect(() => {
+    return subscribeLibraryPlaylistsUpdated(() => {
+      setAvailablePlaylists([])
+      setHasLoadedPlaylists(false)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!addMenuTrackId) {
+      return undefined
+    }
+
+    function closeAddMenu() {
+      setAddMenuTrackId('')
+    }
+
+    window.addEventListener('click', closeAddMenu)
+
+    return () => {
+      window.removeEventListener('click', closeAddMenu)
+    }
+  }, [addMenuTrackId])
 
   useEffect(() => {
     let cancelled = false
@@ -167,6 +262,95 @@ function Search() {
     )
   }
 
+  async function loadEditablePlaylists({ force = false, trackId = '' } = {}) {
+    if (!isAuthenticated) {
+      return []
+    }
+
+    if (!force && hasLoadedPlaylists) {
+      return availablePlaylists
+    }
+
+    setIsLoadingPlaylists(true)
+
+    try {
+      const data = await request('/api/library/playlists')
+      const playlists = getEditablePlaylistItems(data)
+
+      setAvailablePlaylists(playlists)
+      setHasLoadedPlaylists(true)
+      return playlists
+    } catch (error) {
+      setAddStatus({
+        type: 'error',
+        trackId,
+        message: error?.message || t('search_load_playlists_failed'),
+      })
+      return []
+    } finally {
+      setIsLoadingPlaylists(false)
+    }
+  }
+
+  function handleAddTrackClick(track) {
+    if (!isAuthenticated) {
+      openAuthDialog('login')
+      return
+    }
+
+    const nextTrackId = addMenuTrackId === track.id ? '' : track.id
+    setAddMenuTrackId(nextTrackId)
+    setAddStatus(null)
+
+    if (nextTrackId) {
+      loadEditablePlaylists({ trackId: nextTrackId }).catch(() => {})
+    }
+  }
+
+  async function handleAddTrackToPlaylist(track, playlist) {
+    if (!track?.id || !playlist?.id || addingTrackId) {
+      return
+    }
+
+    setAddingTrackId(track.id)
+    setAddStatus(null)
+
+    try {
+      await request(`/api/library/playlists/${playlist.id}/items`, {
+        method: 'POST',
+        body: createSearchTrackLibraryPayload(track),
+      })
+
+      setAvailablePlaylists((currentPlaylists) =>
+        currentPlaylists.map((item) =>
+          item.id === playlist.id
+            ? { ...item, itemCount: (Number(item.itemCount) || 0) + 1 }
+            : item,
+        ),
+      )
+      setAddStatus({
+        type: 'success',
+        trackId: track.id,
+        message: t('search_added_to_playlist', {
+          playlist: playlist.title,
+        }),
+      })
+      emitLibraryPlaylistsUpdated({
+        type: 'item-added',
+        playlistId: playlist.id,
+        trackId: track.id,
+      })
+    } catch (error) {
+      setAddStatus({
+        type: 'error',
+        trackId: track.id,
+        message: error?.message || t('search_add_to_playlist_failed'),
+      })
+    } finally {
+      setAddingTrackId('')
+    }
+  }
+
   function handleOpenPlaylist(playlist) {
     navigate(`/playlist/${playlist.id}`)
   }
@@ -265,6 +449,13 @@ function Search() {
                       items={section.items}
                       type={section.type}
                       t={t}
+                      addMenuTrackId={addMenuTrackId}
+                      addingTrackId={addingTrackId}
+                      addStatus={addStatus}
+                      availablePlaylists={availablePlaylists}
+                      isLoadingPlaylists={isLoadingPlaylists}
+                      onAddTrackClick={handleAddTrackClick}
+                      onAddTrackToPlaylist={handleAddTrackToPlaylist}
                       onOpenPlaylist={handleOpenPlaylist}
                       onPlayTrack={handleTrackAction}
                     />
@@ -276,6 +467,13 @@ function Search() {
                   items={activeTabItems}
                   type={activeTab}
                   t={t}
+                  addMenuTrackId={addMenuTrackId}
+                  addingTrackId={addingTrackId}
+                  addStatus={addStatus}
+                  availablePlaylists={availablePlaylists}
+                  isLoadingPlaylists={isLoadingPlaylists}
+                  onAddTrackClick={handleAddTrackClick}
+                  onAddTrackToPlaylist={handleAddTrackToPlaylist}
                   onOpenPlaylist={handleOpenPlaylist}
                   onPlayTrack={handleTrackAction}
                 />

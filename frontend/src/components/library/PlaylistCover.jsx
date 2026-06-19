@@ -6,7 +6,6 @@ function PlaylistCover({
   playlist = null,
   imageUrl = '',
   title = '',
-  size = 'md',
   shape = 'square',
   className = '',
 }) {

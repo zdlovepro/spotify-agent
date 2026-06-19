@@ -23,10 +23,23 @@ const allowedOrigins = new Set([
   'http://127.0.0.1:5173',
 ])
 
+function isLoopbackViteOrigin(origin) {
+  try {
+    const url = new URL(origin)
+    const isLoopbackHost =
+      url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+    const isVitePort = Number(url.port) >= 5173 && Number(url.port) <= 5179
+
+    return url.protocol === 'http:' && isLoopbackHost && isVitePort
+  } catch {
+    return false
+  }
+}
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.has(origin)) {
+      if (!origin || allowedOrigins.has(origin) || isLoopbackViteOrigin(origin)) {
         callback(null, true)
         return
       }

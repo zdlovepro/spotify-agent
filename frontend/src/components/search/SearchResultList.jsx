@@ -6,6 +6,13 @@ function SearchResultList({
   items,
   type,
   t,
+  addMenuTrackId,
+  addingTrackId,
+  addStatus,
+  availablePlaylists,
+  isLoadingPlaylists,
+  onAddTrackClick,
+  onAddTrackToPlaylist,
   onOpenPlaylist,
   onPlayTrack,
 }) {
@@ -27,6 +34,13 @@ function SearchResultList({
             item={item}
             type={type}
             t={t}
+            addMenuTrackId={addMenuTrackId}
+            addingTrackId={addingTrackId}
+            addStatus={addStatus}
+            availablePlaylists={availablePlaylists}
+            isLoadingPlaylists={isLoadingPlaylists}
+            onAddTrackClick={onAddTrackClick}
+            onAddTrackToPlaylist={onAddTrackToPlaylist}
             onOpenPlaylist={onOpenPlaylist}
             onPlayTrack={onPlayTrack}
           />

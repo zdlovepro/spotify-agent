@@ -35,10 +35,41 @@ function pruneExpiredStates() {
   pruneExpiredOAuthPendingStates(SPOTIFY_PROVIDER_NAME)
 }
 
-function buildFrontendRedirect(pathname, params = {}) {
+function normalizeFrontendOrigin(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return ''
+  }
+
+  try {
+    const url = new URL(value)
+    const configuredUrl = new URL(env.frontendUri)
+    const isConfiguredOrigin = url.origin === configuredUrl.origin
+    const isLoopbackHost =
+      url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+    const isVitePort = Number(url.port) >= 5173 && Number(url.port) <= 5179
+    const isLoopbackViteOrigin =
+      url.protocol === 'http:' && isLoopbackHost && isVitePort
+
+    return isConfiguredOrigin || isLoopbackViteOrigin ? url.origin : ''
+  } catch {
+    return ''
+  }
+}
+
+function resolveFrontendOrigin(req) {
+  return (
+    normalizeFrontendOrigin(req.header('origin')) ||
+    normalizeFrontendOrigin(req.header('referer')) ||
+    normalizeFrontendOrigin(env.frontendUri)
+  )
+}
+
+function buildFrontendRedirect(pathname, params = {}, frontendOrigin = env.frontendUri) {
   const normalizedPath =
     typeof pathname === 'string' && pathname.startsWith('/') ? pathname : '/'
   const query = new URLSearchParams()
+  const redirectOrigin =
+    normalizeFrontendOrigin(frontendOrigin) || normalizeFrontendOrigin(env.frontendUri)
 
   for (const [key, value] of Object.entries(params)) {
     if (value) {
@@ -47,7 +78,7 @@ function buildFrontendRedirect(pathname, params = {}) {
   }
 
   const suffix = query.toString() ? `?${query.toString()}` : ''
-  return `${env.frontendUri}${normalizedPath}${suffix}`
+  return `${redirectOrigin}${normalizedPath}${suffix}`
 }
 
 function shouldReturnJson(req) {
@@ -161,6 +192,7 @@ router.get(
       providerName: SPOTIFY_PROVIDER_NAME,
       localUserId: req.localUserId,
       returnTo,
+      frontendOrigin: resolveFrontendOrigin(req),
       ttlMs: STATE_TTL_MS,
     })
 
@@ -193,16 +225,23 @@ router.get(
 
     const { code, state, error } = req.query
 
+    const stateEntry =
+      state && typeof state === 'string'
+        ? consumeOAuthPendingState(state, SPOTIFY_PROVIDER_NAME)
+        : null
+
     if (error || !code || !state) {
       return res.redirect(
-        buildFrontendRedirect('/', {
-          provider: SPOTIFY_PROVIDER_NAME,
-          error: error || 'access_denied',
-        }),
+        buildFrontendRedirect(
+          stateEntry?.returnTo || '/',
+          {
+            provider: SPOTIFY_PROVIDER_NAME,
+            error: error || 'access_denied',
+          },
+          stateEntry?.frontendOrigin,
+        ),
       )
     }
-
-    const stateEntry = consumeOAuthPendingState(state, SPOTIFY_PROVIDER_NAME)
 
     if (!stateEntry) {
       return res.redirect(
@@ -217,10 +256,14 @@ router.get(
 
     if (!localUser) {
       return res.redirect(
-        buildFrontendRedirect(stateEntry.returnTo, {
-          provider: SPOTIFY_PROVIDER_NAME,
-          error: 'local_auth_required',
-        }),
+        buildFrontendRedirect(
+          stateEntry.returnTo,
+          {
+            provider: SPOTIFY_PROVIDER_NAME,
+            error: 'local_auth_required',
+          },
+          stateEntry.frontendOrigin,
+        ),
       )
     }
 
@@ -244,10 +287,14 @@ router.get(
       )
 
       res.redirect(
-        buildFrontendRedirect(stateEntry.returnTo, {
-          provider: SPOTIFY_PROVIDER_NAME,
-          connected: 1,
-        }),
+        buildFrontendRedirect(
+          stateEntry.returnTo,
+          {
+            provider: SPOTIFY_PROVIDER_NAME,
+            connected: 1,
+          },
+          stateEntry.frontendOrigin,
+        ),
       )
     } catch (error_) {
       const message =
@@ -257,10 +304,14 @@ router.get(
         'provider_link_failed'
 
       res.redirect(
-        buildFrontendRedirect(stateEntry.returnTo, {
-          provider: SPOTIFY_PROVIDER_NAME,
-          error: message,
-        }),
+        buildFrontendRedirect(
+          stateEntry.returnTo,
+          {
+            provider: SPOTIFY_PROVIDER_NAME,
+            error: message,
+          },
+          stateEntry.frontendOrigin,
+        ),
       )
     }
   }),

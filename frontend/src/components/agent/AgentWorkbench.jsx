@@ -240,26 +240,6 @@ function AgentArtifact({
 
   return (
     <>
-      {false && sourcePlan && (
-        <div className={styles.SourcePlanCard}>
-          <p className={styles.SectionLabel}>{t('agent_source_plan_title')}</p>
-          <p className={styles.SourcePlanSummary}>{sourcePlan.summary}</p>
-          {Array.isArray(sourcePlan.sources) && sourcePlan.sources.length > 0 && (
-            <div className={styles.SourceChipRow}>
-              {sourcePlan.sources.map((source) => (
-                <span
-                  key={`${message.id}-${source.type}-${source.label}`}
-                  className={styles.SourceChip}
-                >
-                  {source.label}
-                  {source.count > 0 ? ` · ${source.count}` : ''}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {(primaryTrack ||
         artifacts.artist ||
         artifacts.album ||
@@ -537,59 +517,12 @@ function AgentArtifact({
             </div>
           )}
 
-          {false && toolSummary.length > 0 && (
-            <div className={styles.ToolSummaryBox}>
-              <p className={styles.SectionLabel}>{t('agent_tool_summary_title')}</p>
-              <div className={styles.ToolSummaryList}>
-                {toolSummary.slice(0, 4).map((item) => (
-                  <span key={`${feedbackKey}-${item}`} className={styles.ToolSummaryItem}>
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
           {artifactNotice && (
             <p className={styles.ActionNotice}>{artifactNotice}</p>
           )}
         </div>
       )}
 
-      {false && artifacts.recommendationId && (
-        <div className={styles.FeedbackRow}>
-          <button
-            type="button"
-            className={`${styles.FeedbackBtn} ${
-              feedbackState === 'like' ? styles.FeedbackActive : ''
-            }`}
-            disabled={isSubmittingFeedback}
-            onClick={() =>
-              onSubmitFeedback(message, {
-                recommendationId: artifacts.recommendationId,
-                feedback: 'like',
-              })
-            }
-          >
-            {t('agent_feedback_like')}
-          </button>
-          <button
-            type="button"
-            className={`${styles.FeedbackBtn} ${
-              feedbackState === 'dislike' ? styles.FeedbackActive : ''
-            }`}
-            disabled={isSubmittingFeedback}
-            onClick={() =>
-              onSubmitFeedback(message, {
-                recommendationId: artifacts.recommendationId,
-                feedback: 'dislike',
-              })
-            }
-          >
-            {t('agent_feedback_dislike')}
-          </button>
-        </div>
-      )}
     </>
   )
 }

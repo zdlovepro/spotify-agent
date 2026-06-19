@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { Link } from 'react-router-dom'
 import { changePlay, changeTrack } from '../../store/index.js'
@@ -13,7 +12,7 @@ function PlaylistCardS({ data }) {
   const { isConnected } = useSpotify()
   const trackData = useSelector((state) => state.player.trackData)
   const isPlaying = useSelector((state) => state.player.isPlaying)
-  const [isthisplay, setIsthisPlay] = useState(false)
+  const isThisPlaylist = trackData.playlistId === data.link
   const canPlay = (data.playlistData || []).some((song) =>
     canStartTrackPlayback(song, { allowRemote: isConnected }),
   )
@@ -39,10 +38,6 @@ function PlaylistCardS({ data }) {
     dispatch(changePlay(true))
   }
 
-  useEffect(() => {
-    setIsthisPlay(trackData.playlistId === data.link)
-  }, [data.link, trackData.playlistId])
-
   return (
     <div className={styles.PlaylistCardSBox}>
       <Link to={`/playlist/${data.link}`} onMouseOver={changeTheme}>
@@ -58,9 +53,9 @@ function PlaylistCardS({ data }) {
       {canPlay && (
         <div
           onClick={handlePlay}
-          className={`${styles.IconBox} ${isthisplay && isPlaying ? styles.ActiveIconBox : ''}`}
+          className={`${styles.IconBox} ${isThisPlaylist && isPlaying ? styles.ActiveIconBox : ''}`}
         >
-          <PlayButton isthisplay={isthisplay} onClick={handlePlay} />
+          <PlayButton isthisplay={isThisPlaylist} onClick={handlePlay} />
         </div>
       )}
     </div>

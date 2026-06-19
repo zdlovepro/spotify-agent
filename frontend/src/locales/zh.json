@@ -59,6 +59,13 @@
     "search_not_listenable_meta": "无预览",
     "search_follow": "关注",
     "search_add": "添加",
+    "search_add_to_playlist": "加入歌单",
+    "search_added_to_playlist": "已加入《{{playlist}}》。",
+    "search_add_to_playlist_failed": "加入歌单失败，请稍后再试。",
+    "search_loading_playlists": "正在加载歌单...",
+    "search_load_playlists_failed": "歌单加载失败，请稍后再试。",
+    "search_no_editable_playlists": "还没有可加入的站内歌单，先在资料库创建一个。",
+    "search_playlist_track_count": "{{count}} 首歌",
     "search_clear": "清空搜索",
     "search_coming_soon": "即将支持",
     "playlists": "歌单",
@@ -283,6 +290,8 @@
     "spotify_playback_activate": "激活网页播放器",
     "spotify_playback_device_id": "设备 {{deviceId}}",
     "spotify_requires_local_account": "请先登录 AgentMusic 账号，再把 Spotify 作为增强能力连接进来。",
+    "spotify_callback_session_missing": "Spotify 已返回，但当前页面没有 AgentMusic 登录态。请用发起连接时相同的地址打开应用，登录后再连接。",
+    "spotify_callback_link_missing": "Spotify 授权已返回，但没有找到已保存的连接。请从同一个 AgentMusic 账号重新连接 Spotify。",
     "spotify_connect_success": "Spotify 已成功连接。",
     "spotify_disconnect_success": "Spotify 已断开连接。"
   }

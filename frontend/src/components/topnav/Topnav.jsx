@@ -42,11 +42,19 @@ function Topnav() {
   const showLibraryTabs =
     location.pathname === '/library' || location.pathname.startsWith('/library/')
   const isSpotifyEnhanced = isAuthenticated && isConnected
+  const resolveStatusMessage = (message) => {
+    if (!message) {
+      return ''
+    }
+
+    const translated = t(message)
+    return translated === message ? message : translated
+  }
   const statusText =
     connectHint ||
-    (spotifyNotice ? t(spotifyNotice) : '') ||
-    spotifyError ||
-    authError
+    resolveStatusMessage(spotifyError) ||
+    resolveStatusMessage(spotifyNotice) ||
+    resolveStatusMessage(authError)
   const displayName =
     user?.displayName || user?.email || profile?.display_name || t('appName')
   const modeLabel = !isAuthenticated

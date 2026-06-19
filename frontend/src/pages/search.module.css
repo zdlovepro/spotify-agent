@@ -337,13 +337,18 @@
   gap: 10px;
 }
 
+.ResultActionWrap {
+  position: relative;
+  display: inline-flex;
+}
+
 .ResultGhostBtn,
 .ResultIconBtn {
   border-radius: 999px;
   background: transparent;
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.24);
-  cursor: not-allowed;
+  cursor: pointer;
 }
 
 .ResultGhostBtn {
@@ -359,6 +364,115 @@
   height: 34px;
   font-size: 20px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.ResultIconBtn:hover:not(:disabled),
+.ResultIconBtn:focus-visible:not(:disabled) {
+  background: #1ed760;
+  border-color: #1ed760;
+  color: #04160a;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.ResultIconBtn:disabled,
+.ResultGhostBtn:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.PlaylistAddMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 6;
+  width: min(280px, calc(100vw - 32px));
+  max-height: 320px;
+  overflow: hidden;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #202020;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+  display: grid;
+  gap: 8px;
+}
+
+.PlaylistAddTitle,
+.PlaylistAddHint,
+.PlaylistAddStatus {
+  margin: 0;
+}
+
+.PlaylistAddTitle {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.PlaylistAddHint,
+.PlaylistAddStatus {
+  color: #b3b3b3;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.PlaylistAddStatus {
+  color: #1ed760;
+}
+
+.PlaylistAddStatusError {
+  color: #ff8d84;
+}
+
+.PlaylistAddList {
+  max-height: 226px;
+  overflow-y: auto;
+  display: grid;
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.PlaylistAddItem {
+  min-width: 0;
+  min-height: 42px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.PlaylistAddItem:hover:not(:disabled),
+.PlaylistAddItem:focus-visible:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+.PlaylistAddItem span,
+.PlaylistAddItem small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.PlaylistAddItem span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.PlaylistAddItem small {
+  color: #b3b3b3;
+  font-size: 11px;
 }
 
 .SearchEmptyState {
@@ -575,6 +689,11 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 8px;
+  }
+
+  .PlaylistAddMenu {
+    top: 0;
+    right: 40px;
   }
 }
 

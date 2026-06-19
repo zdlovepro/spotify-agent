@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useAuth } from './AuthContext.jsx'
@@ -32,6 +33,7 @@ function readProviderCallback(search) {
 export function SpotifyProvider({ children }) {
   const {
     isAuthenticated: isLocalAuthenticated,
+    isLoading: isLocalAuthLoading,
     openAuthDialog,
     request: authRequest,
     user,
@@ -44,6 +46,7 @@ export function SpotifyProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const handledProviderCallbackRef = useRef(false)
 
   const clearSpotifyState = useCallback(() => {
     setConnection(null)
@@ -278,10 +281,11 @@ export function SpotifyProvider({ children }) {
   useEffect(() => {
     const callbackState = readProviderCallback(window.location.search)
 
-    if (!callbackState) {
+    if (!callbackState || isLocalAuthLoading) {
       return
     }
 
+    handledProviderCallbackRef.current = true
     window.history.replaceState({}, document.title, window.location.pathname)
 
     if (callbackState.error) {
@@ -291,18 +295,41 @@ export function SpotifyProvider({ children }) {
     }
 
     if (callbackState.connected) {
+      if (!isLocalAuthenticated) {
+        setNotice('')
+        setError('spotify_callback_session_missing')
+        openAuthDialog('login')
+        return
+      }
+
+      setNotice('spotify_connect_success')
       refreshConnectionState()
         .then((spotifyLink) => {
-          if (spotifyLink?.connected || spotifyLink?.provider === 'spotify') {
+          if (spotifyLink?.connected) {
             setError('')
             setNotice('spotify_connect_success')
+          } else {
+            setNotice('')
+            setError('spotify_callback_link_missing')
           }
         })
-        .catch(() => {})
+        .catch((requestError) => {
+          setNotice('')
+          setError(requestError.message || 'spotify_callback_link_missing')
+        })
     }
-  }, [refreshConnectionState])
+  }, [
+    isLocalAuthLoading,
+    isLocalAuthenticated,
+    openAuthDialog,
+    refreshConnectionState,
+  ])
 
   useEffect(() => {
+    if (handledProviderCallbackRef.current) {
+      return
+    }
+
     refreshConnectionState().catch(() => {})
   }, [refreshConnectionState, user?.id])
 

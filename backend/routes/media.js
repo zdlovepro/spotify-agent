@@ -97,7 +97,7 @@ router.post(
   asyncHandler(async (req, res) => {
     assert(req.file, 'file is required')
 
-    const asset = createAudioAsset(req.localUserId, req.file, {
+    const asset = await createAudioAsset(req.localUserId, req.file, {
       title: req.body?.title,
       artists: req.body?.artists,
       album: req.body?.album,

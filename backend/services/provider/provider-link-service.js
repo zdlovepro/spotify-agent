@@ -61,91 +61,126 @@ function mapProviderLinkRow(row) {
 
 function upsertProviderLinkRow(payload) {
   const now = new Date().toISOString()
-  const existing = db
-    .prepare(
+  const upsertTransaction = db.transaction(() => {
+    const existingForUser = db
+      .prepare(
+        `
+          SELECT id
+          FROM provider_links
+          WHERE user_id = @user_id
+            AND provider_name = @provider_name
+          LIMIT 1
+        `,
+      )
+      .get({
+        user_id: payload.userId,
+        provider_name: payload.providerName,
+      })
+
+    const existingForSource = db
+      .prepare(
+        `
+          SELECT id
+          FROM provider_links
+          WHERE source_type = @source_type
+            AND source_id = @source_id
+          LIMIT 1
+        `,
+      )
+      .get({
+        source_type: payload.sourceType,
+        source_id: payload.sourceId,
+      })
+
+    if (
+      existingForUser?.id &&
+      existingForSource?.id &&
+      existingForUser.id !== existingForSource.id
+    ) {
+      db.prepare(
+        `
+          DELETE FROM provider_links
+          WHERE id = ?
+        `,
+      ).run(existingForUser.id)
+    }
+
+    const existing = existingForSource || existingForUser
+    const id = existing?.id || crypto.randomUUID()
+
+    db.prepare(
       `
-        SELECT id
-        FROM provider_links
-        WHERE user_id = @user_id
-          AND provider_name = @provider_name
-        LIMIT 1
+        INSERT INTO provider_links (
+          id,
+          user_id,
+          provider_name,
+          provider_user_id,
+          source_type,
+          source_id,
+          display_name,
+          access_token,
+          refresh_token,
+          scopes_json,
+          token_expires_at,
+          profile_json,
+          metadata_json,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          @id,
+          @user_id,
+          @provider_name,
+          @provider_user_id,
+          @source_type,
+          @source_id,
+          @display_name,
+          @access_token,
+          @refresh_token,
+          @scopes_json,
+          @token_expires_at,
+          @profile_json,
+          @metadata_json,
+          @created_at,
+          @updated_at
+        )
+        ON CONFLICT(id) DO UPDATE SET
+          user_id = excluded.user_id,
+          provider_name = excluded.provider_name,
+          provider_user_id = excluded.provider_user_id,
+          source_type = excluded.source_type,
+          source_id = excluded.source_id,
+          display_name = excluded.display_name,
+          access_token = excluded.access_token,
+          refresh_token = COALESCE(excluded.refresh_token, provider_links.refresh_token),
+          scopes_json = excluded.scopes_json,
+          token_expires_at = excluded.token_expires_at,
+          profile_json = excluded.profile_json,
+          metadata_json = excluded.metadata_json,
+          updated_at = excluded.updated_at
       `,
-    )
-    .get({
+    ).run({
+      id,
       user_id: payload.userId,
       provider_name: payload.providerName,
+      provider_user_id: payload.providerUserId || null,
+      source_type: payload.sourceType,
+      source_id: payload.sourceId,
+      display_name: payload.displayName || null,
+      access_token: payload.accessToken || null,
+      refresh_token: payload.refreshToken || null,
+      scopes_json: JSON.stringify(payload.scopes || []),
+      token_expires_at: payload.tokenExpiresAt || null,
+      profile_json: JSON.stringify(payload.profile || {}),
+      metadata_json: JSON.stringify(payload.metadata || {}),
+      created_at: now,
+      updated_at: now,
     })
 
-  const id = existing?.id || crypto.randomUUID()
-
-  db.prepare(
-    `
-      INSERT INTO provider_links (
-        id,
-        user_id,
-        provider_name,
-        provider_user_id,
-        source_type,
-        source_id,
-        display_name,
-        access_token,
-        refresh_token,
-        scopes_json,
-        token_expires_at,
-        profile_json,
-        metadata_json,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        @id,
-        @user_id,
-        @provider_name,
-        @provider_user_id,
-        @source_type,
-        @source_id,
-        @display_name,
-        @access_token,
-        @refresh_token,
-        @scopes_json,
-        @token_expires_at,
-        @profile_json,
-        @metadata_json,
-        @created_at,
-        @updated_at
-      )
-      ON CONFLICT(id) DO UPDATE SET
-        provider_user_id = excluded.provider_user_id,
-        source_type = excluded.source_type,
-        source_id = excluded.source_id,
-        display_name = excluded.display_name,
-        access_token = excluded.access_token,
-        refresh_token = COALESCE(excluded.refresh_token, provider_links.refresh_token),
-        scopes_json = excluded.scopes_json,
-        token_expires_at = excluded.token_expires_at,
-        profile_json = excluded.profile_json,
-        metadata_json = excluded.metadata_json,
-        updated_at = excluded.updated_at
-    `,
-  ).run({
-    id,
-    user_id: payload.userId,
-    provider_name: payload.providerName,
-    provider_user_id: payload.providerUserId || null,
-    source_type: payload.sourceType,
-    source_id: payload.sourceId,
-    display_name: payload.displayName || null,
-    access_token: payload.accessToken || null,
-    refresh_token: payload.refreshToken || null,
-    scopes_json: JSON.stringify(payload.scopes || []),
-    token_expires_at: payload.tokenExpiresAt || null,
-    profile_json: JSON.stringify(payload.profile || {}),
-    metadata_json: JSON.stringify(payload.metadata || {}),
-    created_at: existing ? now : now,
-    updated_at: now,
+    return id
   })
 
-  return id
+  return upsertTransaction()
 }
 
 export function linkProvider(payload) {

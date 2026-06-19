@@ -59,6 +59,13 @@
     "search_not_listenable_meta": "No preview",
     "search_follow": "Follow",
     "search_add": "Add",
+    "search_add_to_playlist": "Add to playlist",
+    "search_added_to_playlist": "Added to \"{{playlist}}\".",
+    "search_add_to_playlist_failed": "Could not add to playlist. Try again later.",
+    "search_loading_playlists": "Loading playlists...",
+    "search_load_playlists_failed": "Could not load playlists. Try again later.",
+    "search_no_editable_playlists": "No local playlists are available. Create one in your library first.",
+    "search_playlist_track_count": "{{count}} tracks",
     "search_clear": "Clear search",
     "search_coming_soon": "Coming soon",
     "playlists": "Playlists",
@@ -283,6 +290,8 @@
     "spotify_playback_activate": "Activate web player",
     "spotify_playback_device_id": "Device {{deviceId}}",
     "spotify_requires_local_account": "Sign in to AgentMusic first, then connect Spotify as an enhancement.",
+    "spotify_callback_session_missing": "Spotify returned to AgentMusic, but this page is not signed in. Open the app with the same address you started from, sign in, then connect again.",
+    "spotify_callback_link_missing": "Spotify authorization returned, but no saved connection was found. Connect Spotify again from the same AgentMusic account.",
     "spotify_connect_success": "Spotify connected successfully.",
     "spotify_disconnect_success": "Spotify disconnected."
   }
