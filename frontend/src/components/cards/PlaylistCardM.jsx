@@ -1,0 +1,107 @@
+import { useSelector, useDispatch } from 'react-redux'
+import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
+import { changePlay, changeTrack } from '../../store/index.js'
+import { useSpotify } from '../../context/SpotifyContext.jsx'
+import { canStartTrackPlayback, createPlaybackQueue } from '../../lib/spotify.js'
+import PlaylistActionsMenu from '../library/PlaylistActionsMenu.jsx'
+import PlaylistCover from '../library/PlaylistCover.jsx'
+import TextBoldL from '../text/TextBoldL'
+import TextRegularM from '../text/TextRegularM'
+import PlayButton from '../buttons/PlayButton'
+import styles from './playlist-card-m.module.css'
+
+function PlaylistCardM({
+  data,
+  showDisabledPlayButton = false,
+  disabledPlayTitle = '',
+  onRename = null,
+  onDelete = null,
+}) {
+  const { t } = useTranslation()
+  const dispatch = useDispatch()
+  const { isConnected } = useSpotify()
+  const trackData = useSelector((state) => state.player.trackData)
+  const isPlaying = useSelector((state) => state.player.isPlaying)
+  const isThisPlaylist = trackData.playlistId === data.link
+  const trackCount = Number(data.itemCount)
+  const trackCountText = Number.isFinite(trackCount)
+    ? t('search_tracks_count', { count: trackCount })
+    : ''
+  const secondaryText =
+    data.artist && trackCountText
+      ? `${data.artist} | ${trackCountText}`
+      : data.artist || trackCountText
+  const canPlay = (data.playlistData || []).some((song) =>
+    canStartTrackPlayback(song, { allowRemote: isConnected }),
+  )
+  const shouldRenderPlayButton = canPlay || showDisabledPlayButton
+  const canManage = Boolean((data.canEdit && onRename) || (data.canDelete && onDelete))
+
+  function handlePlay(event) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (!canPlay) {
+      return
+    }
+
+    if (trackData.playlistId === data.link) {
+      dispatch(changePlay(!isPlaying))
+      return
+    }
+
+    dispatch(changeTrack({ queue: createPlaybackQueue(data), startIndex: 0 }))
+    dispatch(changePlay(true))
+  }
+
+  return (
+    <div className={styles.PlaylistCardSBox}>
+      {canManage && (
+        <div className={styles.MenuBox}>
+          <PlaylistActionsMenu
+            onRename={data.canEdit ? () => onRename?.(data) : null}
+            onDelete={data.canDelete ? () => onDelete?.(data) : null}
+          />
+        </div>
+      )}
+      <Link to={`/playlist/${data.link}`}>
+        <div className={styles.PlaylistCardS}>
+          <div className={styles.ImgBox}>
+            <PlaylistCover
+              playlist={data}
+              imageUrl={data.imgUrl}
+              title={data.title}
+              size="lg"
+              className={styles.CoverMedia}
+            />
+          </div>
+          <div className={styles.Title}>
+            {data.sourceLabel && (
+              <span className={styles.SourceBadge}>{t(data.sourceLabel)}</span>
+            )}
+            <TextBoldL>{data.title}</TextBoldL>
+            <TextRegularM>{secondaryText}</TextRegularM>
+          </div>
+        </div>
+      </Link>
+      {shouldRenderPlayButton && (
+        <div
+          onClick={canPlay ? handlePlay : undefined}
+          className={`${styles.IconBox} ${
+            isThisPlaylist && isPlaying ? styles.ActiveIconBox : ''
+          } ${!canPlay ? styles.DisabledIconBox : ''}`}
+        >
+          <PlayButton
+            isthisplay={isThisPlaylist}
+            onClick={handlePlay}
+            disabled={!canPlay}
+            title={!canPlay ? disabledPlayTitle : ''}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default PlaylistCardM

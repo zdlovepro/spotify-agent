@@ -1,0 +1,67 @@
+.MenuRoot {
+  position: relative;
+  display: inline-flex;
+}
+
+.Trigger {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 18, 18, 0.72);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.Trigger:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.Trigger svg {
+  font-size: 18px;
+}
+
+.Menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 144px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(24, 24, 24, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.34);
+  z-index: 12;
+}
+
+.Item {
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+
+.Item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.Danger {
+  color: #ffb4ac;
+}

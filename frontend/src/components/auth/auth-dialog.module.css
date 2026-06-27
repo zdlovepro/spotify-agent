@@ -1,0 +1,146 @@
+.Overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 132px 24px 32px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(16px);
+}
+
+.Dialog {
+  position: relative;
+  width: min(100%, 460px);
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+  max-height: calc(100vh - 176px);
+  overflow-y: auto;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(30, 215, 96, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(22, 22, 22, 0.98), rgba(14, 14, 14, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 28px 56px rgba(0, 0, 0, 0.34);
+}
+
+.CloseBtn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.Eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.Title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  color: #fff;
+}
+
+.Description {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.Form {
+  display: grid;
+  gap: 14px;
+}
+
+.Field {
+  display: grid;
+  gap: 8px;
+}
+
+.Field span {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.Field input {
+  height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  padding: 0 14px;
+  font: inherit;
+}
+
+.Field input::placeholder {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.Status {
+  margin: 0;
+  min-height: 20px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.54);
+}
+
+.Error {
+  color: #ff8a80;
+}
+
+.Actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.PrimaryBtn,
+.SecondaryBtn {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.PrimaryBtn {
+  background: linear-gradient(135deg, #1ed760, #17b44f);
+  color: #04160a;
+}
+
+.SecondaryBtn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+@media screen and (max-width: 640px) {
+  .Overlay {
+    padding: 104px 16px 20px;
+  }
+
+  .Dialog {
+    padding: 22px;
+    max-height: calc(100vh - 132px);
+  }
+
+  .Actions {
+    display: grid;
+  }
+}

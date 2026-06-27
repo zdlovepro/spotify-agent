@@ -1,0 +1,769 @@
+.SearchPage {
+  min-height: 100%;
+  background:
+    linear-gradient(180deg, rgba(43, 43, 43, 0.82), rgba(18, 18, 18, 0.92) 18%, #121212 42%),
+    #121212;
+  color: #fff;
+}
+
+.SearchShell {
+  min-height: 100%;
+  padding: 0 18px 28px;
+  margin-bottom: 96px;
+}
+
+.SearchMain {
+  min-height: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.SearchHeader {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 18px 0 12px;
+  background:
+    linear-gradient(180deg, rgba(18, 18, 18, 0.98), rgba(18, 18, 18, 0.94) 72%, rgba(18, 18, 18, 0));
+  backdrop-filter: blur(12px);
+}
+
+.SearchHeaderCopy {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.SearchEyebrow {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #b3b3b3;
+}
+
+.SearchTitle {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  color: #fff;
+}
+
+.SearchDescription {
+  margin: 0;
+  max-width: 760px;
+  color: #b3b3b3;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.SearchTabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.SearchTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.SearchTab {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #2a2a2a;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.SearchTab:hover {
+  background: #343434;
+  transform: translateY(-1px);
+}
+
+.SearchTabActive {
+  background: #fff;
+  color: #000;
+}
+
+.SearchSection {
+  margin-top: 22px;
+}
+
+.SearchSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.SearchSectionTitle {
+  margin: 0;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.SearchSectionCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #b3b3b3;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.TopResultCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(42, 42, 42, 0.92), rgba(30, 30, 30, 0.92));
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+.TopResultCard:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(50, 50, 50, 0.96), rgba(36, 36, 36, 0.96));
+}
+
+.TopResultMain {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.TopResultImage {
+  width: 116px;
+  height: 116px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex: 0 0 auto;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+}
+
+.TopResultImageRound {
+  border-radius: 50%;
+}
+
+.TopResultCopy {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.TopResultType {
+  color: #b3b3b3;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.TopResultTitle {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(24px, 3vw, 38px);
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+}
+
+.TopResultSubtitle {
+  margin: 0;
+  color: #b3b3b3;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.TopResultActions {
+  margin-top: 6px;
+}
+
+.TopResultSecondaryBtn,
+.SearchPrimaryBtn {
+  min-height: 38px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  transition: transform 0.18s ease, opacity 0.18s ease, background-color 0.18s ease;
+}
+
+.TopResultSecondaryBtn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.SearchPrimaryBtn {
+  background: #1ed760;
+  color: #04160a;
+}
+
+.TopResultSecondaryBtn:hover,
+.SearchPrimaryBtn:hover {
+  transform: translateY(-1px);
+}
+
+.TopResultPlayBtn {
+  width: 74px;
+  height: 74px;
+  border: 0;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: #1ed760;
+  color: #04160a;
+  font-size: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 10px 18px rgba(30, 215, 96, 0.22);
+  transition: transform 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
+}
+
+.TopResultPlayBtn:hover:not(:disabled) {
+  transform: scale(1.04);
+  filter: brightness(1.03);
+}
+
+.TopResultPlayBtn:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.ResultList {
+  display: grid;
+  gap: 6px;
+}
+
+.ResultRow {
+  min-width: 0;
+  min-height: 60px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: transparent;
+}
+
+.ResultRowInteractive {
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.ResultRowInteractive:hover,
+.ResultRowInteractive:focus-visible,
+.ResultRow:hover {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.ResultRowMain {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ResultRowImage {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: #242424;
+}
+
+.ResultRowImageRound {
+  border-radius: 50%;
+}
+
+.ResultRowCopy {
+  min-width: 0;
+}
+
+.ResultRowTitle,
+.ResultRowSubtitle,
+.ResultRowMeta {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ResultRowTitle {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ResultRowSubtitle,
+.ResultRowMeta {
+  color: #b3b3b3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ResultRowSubtitle {
+  margin-top: 2px;
+}
+
+.ResultRowActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ResultActionWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.ResultGhostBtn,
+.ResultIconBtn {
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  cursor: pointer;
+}
+
+.ResultGhostBtn {
+  min-width: 72px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ResultIconBtn {
+  width: 34px;
+  height: 34px;
+  font-size: 20px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.ResultIconBtn:hover:not(:disabled),
+.ResultIconBtn:focus-visible:not(:disabled) {
+  background: #1ed760;
+  border-color: #1ed760;
+  color: #04160a;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.ResultIconBtn:disabled,
+.ResultGhostBtn:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.PlaylistAddMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 6;
+  width: min(280px, calc(100vw - 32px));
+  max-height: 320px;
+  overflow: hidden;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #202020;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+  display: grid;
+  gap: 8px;
+}
+
+.PlaylistAddTitle,
+.PlaylistAddHint,
+.PlaylistAddStatus {
+  margin: 0;
+}
+
+.PlaylistAddTitle {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.PlaylistAddHint,
+.PlaylistAddStatus {
+  color: #b3b3b3;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.PlaylistAddStatus {
+  color: #1ed760;
+}
+
+.PlaylistAddStatusError {
+  color: #ff8d84;
+}
+
+.PlaylistAddList {
+  max-height: 226px;
+  overflow-y: auto;
+  display: grid;
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.PlaylistAddItem {
+  min-width: 0;
+  min-height: 42px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.PlaylistAddItem:hover:not(:disabled),
+.PlaylistAddItem:focus-visible:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+.PlaylistAddItem span,
+.PlaylistAddItem small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.PlaylistAddItem span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.PlaylistAddItem small {
+  color: #b3b3b3;
+  font-size: 11px;
+}
+
+.SearchEmptyState {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 14px;
+  background: #181818;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: grid;
+  gap: 14px;
+}
+
+.SearchEmptyStateError {
+  border-color: rgba(255, 82, 82, 0.22);
+  background: linear-gradient(180deg, rgba(255, 82, 82, 0.08), rgba(24, 24, 24, 0.92));
+}
+
+.SearchEmptyCopy {
+  display: grid;
+  gap: 6px;
+}
+
+.SearchEmptyTitle {
+  margin: 0;
+  color: #fff;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.SearchEmptyBody {
+  margin: 0;
+  color: #b3b3b3;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.SearchBrowseGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.SearchSkeleton {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.SearchSkeletonTabs {
+  display: flex;
+  gap: 8px;
+}
+
+.TopResultSkeleton,
+.ResultRowSkeleton {
+  background: #181818;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.TopResultSkeleton {
+  min-height: 156px;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.TopResultSkeletonCopy,
+.ResultRowSkeletonCopy {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  flex: 1 1 auto;
+}
+
+.ResultRowSkeleton {
+  min-height: 66px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.SkeletonPill,
+.SkeletonCover,
+.SkeletonLineShort,
+.SkeletonLineLong,
+.SkeletonLineMid,
+.SkeletonPlay,
+.SkeletonThumb,
+.SkeletonMiniBtn {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.06)
+  );
+  background-size: 200% 100%;
+  animation: searchSkeletonPulse 1.4s ease infinite;
+}
+
+.SkeletonPill {
+  width: 76px;
+  height: 30px;
+  border-radius: 999px;
+}
+
+.SkeletonCover {
+  width: 108px;
+  height: 108px;
+  border-radius: 10px;
+  flex: 0 0 auto;
+}
+
+.SkeletonLineShort {
+  width: 112px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.SkeletonLineLong {
+  width: min(420px, 80%);
+  height: 18px;
+  border-radius: 999px;
+}
+
+.SkeletonLineMid {
+  width: min(260px, 70%);
+  height: 12px;
+  border-radius: 999px;
+}
+
+.SkeletonPlay {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.SkeletonThumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.SkeletonMiniBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+@keyframes searchSkeletonPulse {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media screen and (max-width: 900px) {
+  .SearchShell {
+    padding: 0 16px 28px;
+  }
+
+  .TopResultCard {
+    padding: 16px 18px;
+  }
+
+  .TopResultImage {
+    width: 96px;
+    height: 96px;
+  }
+
+  .TopResultPlayBtn {
+    width: 66px;
+    height: 66px;
+    font-size: 24px;
+  }
+}
+
+@media screen and (max-width: 700px) {
+  .SearchHeader {
+    padding-top: 14px;
+  }
+
+  .TopResultCard,
+  .TopResultMain {
+    align-items: flex-start;
+  }
+
+  .TopResultCard {
+    flex-direction: column;
+  }
+
+  .TopResultMain {
+    width: 100%;
+  }
+
+  .TopResultPlayBtn {
+    align-self: flex-end;
+  }
+
+  .ResultRow {
+    align-items: flex-start;
+  }
+
+  .ResultRowActions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .PlaylistAddMenu {
+    top: 0;
+    right: 40px;
+  }
+}
+
+@media screen and (max-width: 600px) {
+  .SearchShell {
+    padding: 0 14px 28px;
+    margin-bottom: 180px;
+  }
+
+  .SearchTitle {
+    font-size: 24px;
+  }
+
+  .SearchDescription,
+  .SearchEmptyBody {
+    font-size: 13px;
+  }
+
+  .SearchBrowseGrid {
+    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .TopResultMain {
+    gap: 12px;
+  }
+
+  .TopResultImage {
+    width: 76px;
+    height: 76px;
+  }
+
+  .TopResultTitle {
+    font-size: 22px;
+  }
+
+  .TopResultPlayBtn {
+    width: 58px;
+    height: 58px;
+    font-size: 20px;
+  }
+
+  .ResultRow {
+    padding: 8px 6px;
+  }
+
+  .ResultRowImage {
+    width: 42px;
+    height: 42px;
+  }
+
+  .ResultRowTitle {
+    font-size: 14px;
+  }
+
+  .ResultRowSubtitle,
+  .ResultRowMeta {
+    font-size: 12px;
+  }
+
+  .ResultGhostBtn {
+    min-width: 64px;
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .ResultIconBtn {
+    width: 30px;
+    height: 30px;
+    font-size: 18px;
+  }
+}

@@ -1,0 +1,65 @@
+import { useSelector, useDispatch } from 'react-redux'
+import { Link } from 'react-router-dom'
+import { changePlay, changeTrack } from '../../store/index.js'
+import { useSpotify } from '../../context/SpotifyContext.jsx'
+import { canStartTrackPlayback, createPlaybackQueue } from '../../lib/spotify.js'
+import TextBoldL from '../text/TextBoldL'
+import PlayButton from '../buttons/PlayButton'
+import styles from './playlist-card-s.module.css'
+
+function PlaylistCardS({ data }) {
+  const dispatch = useDispatch()
+  const { isConnected } = useSpotify()
+  const trackData = useSelector((state) => state.player.trackData)
+  const isPlaying = useSelector((state) => state.player.isPlaying)
+  const isThisPlaylist = trackData.playlistId === data.link
+  const canPlay = (data.playlistData || []).some((song) =>
+    canStartTrackPlayback(song, { allowRemote: isConnected }),
+  )
+
+  function changeTheme() {
+    document.documentElement.style.setProperty('--hover-home-bg', data.hoverColor)
+  }
+
+  function handlePlay(event) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (!canPlay) {
+      return
+    }
+
+    if (trackData.playlistId === data.link) {
+      dispatch(changePlay(!isPlaying))
+      return
+    }
+
+    dispatch(changeTrack({ queue: createPlaybackQueue(data), startIndex: 0 }))
+    dispatch(changePlay(true))
+  }
+
+  return (
+    <div className={styles.PlaylistCardSBox}>
+      <Link to={`/playlist/${data.link}`} onMouseOver={changeTheme}>
+        <div className={styles.PlaylistCardS}>
+          <div className={styles.ImgBox}>
+            <img src={data.imgUrl} alt={data.title} />
+          </div>
+          <div className={styles.Title}>
+            <TextBoldL>{data.title}</TextBoldL>
+          </div>
+        </div>
+      </Link>
+      {canPlay && (
+        <div
+          onClick={handlePlay}
+          className={`${styles.IconBox} ${isThisPlaylist && isPlaying ? styles.ActiveIconBox : ''}`}
+        >
+          <PlayButton isthisplay={isThisPlaylist} onClick={handlePlay} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default PlaylistCardS

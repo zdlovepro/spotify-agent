@@ -1,0 +1,115 @@
+.SeachBox {
+    position: relative;
+    flex: 1 1 auto;
+    width: min(500px, 100%);
+    max-width: 500px;
+    min-width: 200px;
+}
+
+.SeachBox svg {
+    position: absolute;
+    color: var(--text-gray);
+    top: 12px;
+    left: 14px;
+    font-size: 15px;
+}
+
+.SeachBox input {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0 46px 0 40px;
+    height: 40px;
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    text-overflow: ellipsis;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 16px;
+    box-sizing: border-box;
+    outline: none;
+    transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.SeachBox input::-webkit-search-cancel-button {
+    display: none;
+}
+
+.SeachBox input::placeholder {
+    color: var(--text-gray);
+}
+
+.SeachBox input:focus {
+    background: #fff;
+    border-color: #fff;
+    color: #000;
+}
+
+.ClearBtn {
+    position: absolute;
+    top: 5px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.72);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    transition: background-color .18s ease, color .18s ease;
+}
+
+.ClearBtn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+}
+
+.SeachBox input:focus + .ClearBtn {
+    background: rgba(0, 0, 0, 0.08);
+    color: rgba(0, 0, 0, 0.72);
+}
+
+@media screen and (max-width: 1180px) {
+    .SeachBox {
+        max-width: 380px;
+    }
+}
+
+@media screen and (max-width: 980px) {
+    .SeachBox {
+        max-width: none;
+        width: 100%;
+    }
+}
+
+@media screen and (max-width: 640px) {
+    .SeachBox {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+    }
+
+    .SeachBox svg {
+        left: 12px;
+        top: 11px;
+    }
+
+    .SeachBox input {
+        padding: 0 38px 0 34px;
+        height: 36px;
+        width: 100%;
+    }
+
+    .ClearBtn {
+        top: 4px;
+        right: 4px;
+        width: 26px;
+        height: 26px;
+    }
+}

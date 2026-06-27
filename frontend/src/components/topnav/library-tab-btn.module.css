@@ -1,0 +1,31 @@
+.TabNav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-left: 0;
+}
+
+.tabBtn {
+    color: #fff;
+    position: relative;
+    display: inline-block;
+    text-decoration: none;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.tabBtn p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.tabBtn:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+@media screen and (max-width: 640px) {
+    .tabBtn {
+        padding: 8px 12px;
+    }
+}

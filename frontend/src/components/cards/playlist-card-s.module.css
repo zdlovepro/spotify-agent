@@ -1,0 +1,83 @@
+.PlaylistCardSBox {
+    position: relative;
+}
+
+.PlaylistCardS {
+    position: relative;
+    height: 78px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    transition: background-color .3s ease, transform .3s ease;
+    display: grid;
+    grid-template-columns: 78px 1fr;
+    overflow: hidden;
+}
+
+.ImgBox {
+    width: 78px;
+    height: 78px;
+}
+
+.ImgBox img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.Title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    color: #fff;
+}
+
+.Title p {
+    -webkit-line-clamp: 2;
+    word-break: normal;
+    font-size: 15px;
+    line-height: 1.3;
+}
+
+.IconBox {
+    display: inline-flex;
+    opacity: 0;
+    transition: all .3s ease;
+    box-shadow: 0 8px 8px rgb(0 0 0 / 30%);
+    z-index: 2;
+    border-radius: 500px;
+    position: absolute;
+    right: 14px;
+    top: calc(50% - 18px);
+}
+.IconBox div{
+    background-color: #1db954;
+    height: 36px;
+    width: 36px;
+}
+.IconBox button{
+    height: 36px;
+    width: 36px;
+    -webkit-transition: -webkit-transform 33ms cubic-bezier(.3,0,0,1);
+    transition: -webkit-transform 33ms cubic-bezier(.3,0,0,1);
+    transition: transform 33ms cubic-bezier(.3,0,0,1);
+    transition: transform 33ms cubic-bezier(.3,0,0,1),-webkit-transform 33ms cubic-bezier(.3,0,0,1);
+}
+.ActiveIconBox{
+    opacity: 1;
+}
+.IconBox button svg{
+    fill: #fff !important;
+}
+.IconBox button:hover{
+    -webkit-transform: scale(1.06);
+    transform: scale(1.06);
+}
+.PlaylistCardS:hover {
+    background: rgba(255, 255, 255, 0.14);
+    transform: translateY(-2px);
+}
+
+.PlaylistCardSBox:hover .IconBox {
+    opacity: 1;
+}

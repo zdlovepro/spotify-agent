@@ -1,0 +1,179 @@
+.Card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 16px;
+  padding: 18px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top left, rgba(30, 215, 96, 0.28), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(255, 184, 77, 0.18), transparent 24%),
+    linear-gradient(145deg, rgba(21, 21, 21, 0.96), rgba(10, 10, 10, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.Card::after {
+  content: "";
+  position: absolute;
+  inset: auto -60px -60px auto;
+  width: 148px;
+  height: 148px;
+  border-radius: 50%;
+  background: rgba(30, 215, 96, 0.12);
+  filter: blur(14px);
+  pointer-events: none;
+}
+
+.Content {
+  position: relative;
+  z-index: 1;
+}
+
+.Eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.Title {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.06;
+  color: #fff;
+}
+
+.Text {
+  margin: 10px 0 0;
+  max-width: 620px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.Actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.PrimaryBtn,
+.SecondaryBtn,
+.PromptBtn {
+  border: 0;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.PrimaryBtn,
+.SecondaryBtn {
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.PrimaryBtn {
+  background: linear-gradient(135deg, #1ed760, #17b44f);
+  color: #04130a;
+}
+
+.SecondaryBtn {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.PrimaryBtn:hover,
+.SecondaryBtn:hover,
+.PromptBtn:hover {
+  transform: translateY(-1px);
+}
+
+.QuickPrompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.PromptBtn {
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+}
+
+.Stats {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.StatCard {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.StatLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.StatValue {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.StatText {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.StatusRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.Pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+@media screen and (max-width: 980px) {
+  .Card {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media screen and (max-width: 640px) {
+  .Card {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .Title {
+    font-size: 22px;
+  }
+}

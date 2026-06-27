@@ -1,0 +1,129 @@
+.PlaylistCardSBox {
+    position: relative;
+    overflow: hidden;
+}
+
+.MenuBox{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    z-index: 3;
+    opacity: .76;
+    transition: opacity .2s ease;
+}
+
+.PlaylistCardS {
+    position: relative;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 14px;
+    transition: background-color .3s ease, transform .3s ease;
+}
+
+.ImgBox {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    box-shadow: 0 -2px 8px rgb(0 0 0 / 40%);
+}
+
+.ImgBox img,
+.CoverMedia {
+    height: 100%;
+    width: 100%;
+    border-radius: 10px;
+}
+
+.IconBox {
+    position: absolute;
+    bottom: 80px;
+    right: 18px;
+    opacity: 0;
+    transition: all .3s ease;
+    box-shadow: 0 6px 8px rgb(0 0 0 / 26%);
+    z-index: 2;
+    border-radius: 500px;
+}
+.IconBox div{
+    background-color: #1db954;
+    height: 36px;
+    width: 36px;
+}
+.IconBox button{
+    height: 36px;
+    width: 36px;
+    -webkit-transition: -webkit-transform 33ms cubic-bezier(.3,0,0,1);
+    transition: -webkit-transform 33ms cubic-bezier(.3,0,0,1);
+    transition: transform 33ms cubic-bezier(.3,0,0,1);
+    transition: transform 33ms cubic-bezier(.3,0,0,1),-webkit-transform 33ms cubic-bezier(.3,0,0,1);
+}
+.ActiveIconBox{
+    bottom: 88px;
+    opacity: 1;
+}
+.DisabledIconBox{
+    opacity: 1;
+    bottom: 88px;
+}
+.IconBox button svg{
+    fill: #fff !important;
+}
+.Title {
+    margin-top: 12px;
+    min-height: 60px;
+}
+
+.SourceBadge{
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(30, 215, 96, 0.16);
+    color: #9cf0b6;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.Title p {
+    margin: 0;
+    color: var(--text-white);
+    word-break: normal;
+}
+
+.Title p:first-child {
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.3;
+}
+
+.Title p:last-child {
+    color: rgb(179, 179, 179);
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    -webkit-line-clamp: 2;
+}
+.IconBox button:hover{
+    -webkit-transform: scale(1.06);
+    transform: scale(1.06);
+}
+.PlaylistCardSBox:hover .IconBox {
+    bottom: 92px;
+    opacity: 1;
+}
+
+.PlaylistCardSBox:hover .PlaylistCardS {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+.PlaylistCardSBox:hover .MenuBox {
+    opacity: 1;
+}
+.PlaylistCardSBox:focus-within .MenuBox {
+    opacity: 1;
+}
+.DisabledIconBox button{
+    cursor: not-allowed;
+}

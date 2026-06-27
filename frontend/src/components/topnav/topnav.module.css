@@ -1,0 +1,471 @@
+.Topnav {
+    position: sticky;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 99;
+    padding: 12px 24px 8px;
+    background:
+        linear-gradient(180deg, rgba(18, 18, 18, 0.94), rgba(18, 18, 18, 0.82), transparent);
+    backdrop-filter: blur(18px);
+    border-radius: 16px;
+}
+
+.Inner {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.LeftGroup,
+.RightGroup {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.LeftGroup {
+    flex: 1 1 auto;
+}
+
+.RightGroup {
+    flex: 0 0 auto;
+    position: relative;
+}
+
+.BrandLink {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+    text-decoration: none;
+    min-width: 0;
+    margin-right: 4px;
+}
+
+.BrandIcon {
+    width: 62px;
+    height: 62px;
+    object-fit: contain;
+}
+
+.BrandText {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+}
+
+.IconLink {
+    color: inherit;
+}
+
+.HomeButton {
+    width: 42px;
+    height: 42px;
+    border-radius: 21px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    transition: transform .2s ease, background-color .2s ease;
+}
+
+.HomeButton:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.HomeButton svg {
+    font-size: 18px;
+}
+
+.HomeButtonActive {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.AgentButton {
+    height: 42px;
+    border-radius: 999px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(30, 215, 96, 0.16);
+    border: 1px solid rgba(30, 215, 96, 0.42);
+    color: #1ed760;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 800;
+    transition: transform .2s ease, background-color .2s ease, color .2s ease;
+}
+
+.AgentButton:hover {
+    transform: translateY(-1px);
+    background: rgba(30, 215, 96, 0.22);
+}
+
+.AgentButton svg {
+    font-size: 16px;
+}
+
+.AgentButtonActive {
+    background: #1ed760;
+    color: #04160a;
+}
+
+.SecondaryRow {
+    margin-top: 10px;
+}
+
+.AccountMenuWrapper {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.AccountMenuButton {
+    max-width: min(280px, calc(100vw - 32px));
+    height: 36px;
+    border: 0;
+    border-radius: 999px;
+    padding: 0 10px 0 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, .09);
+    color: #fff;
+    cursor: pointer;
+    transition: transform .2s ease, background-color .2s ease;
+}
+
+.AccountMenuButton:hover,
+.AccountMenuButton[aria-expanded='true'] {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, .15);
+}
+
+.AccountAvatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, .42);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.AccountName {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.AccountChevron {
+    flex: 0 0 auto;
+    color: rgba(255, 255, 255, .72);
+    font-size: 11px;
+    line-height: 1;
+    transition: transform .2s ease;
+}
+
+.AccountChevronOpen {
+    transform: rotate(180deg);
+}
+
+.AccountDropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(280px, calc(100vw - 24px));
+    padding: 6px;
+    border-radius: 14px;
+    background: #181818;
+    border: 1px solid rgba(255, 255, 255, .08);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, .38);
+    z-index: 160;
+}
+
+.AccountMenuStatus {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+    padding: 8px 10px;
+}
+
+.AccountMenuLabel {
+    color: rgba(255, 255, 255, .58);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.AccountMenuValue,
+.AccountMenuMeta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.AccountMenuValue {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.AccountMenuMeta {
+    color: rgba(255, 255, 255, .64);
+    font-size: 11px;
+}
+
+.AccountMenuDivider {
+    height: 1px;
+    margin: 8px 4px;
+    background: rgba(255, 255, 255, .08);
+}
+
+.AccountMenuItem {
+    width: 100%;
+    min-height: 36px;
+    border: 0;
+    border-radius: 10px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: background-color .2s ease;
+}
+
+.AccountMenuItem:hover {
+    background: rgba(255, 255, 255, .08);
+}
+
+.AccountMenuDanger {
+    color: #ffb3b3;
+}
+
+.AccountMenuDanger:hover {
+    background: rgba(255, 82, 82, .12);
+}
+
+.LangBtn,
+.SecondaryBtn,
+.ProfileBtn {
+    height: 32px;
+    border-radius: 999px;
+    color: #fff;
+    cursor: pointer;
+    transition: transform .2s ease, border-color .2s ease, background-color .2s ease;
+}
+
+.LangBtn:hover,
+.SecondaryBtn:hover,
+.ProfileBtn:hover {
+    transform: translateY(-1px);
+}
+
+.LangBtn {
+    border: 1px solid rgba(255, 255, 255, .16);
+    padding: 0 14px;
+    background-color: rgba(255, 255, 255, .04);
+}
+
+.LangBtn:hover {
+    border-color: rgba(255, 255, 255, .34);
+}
+
+.StatusText {
+    max-width: 180px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: rgba(255, 255, 255, .62);
+    text-align: right;
+    font-size: 12px;
+}
+
+.ModeBadge {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .01em;
+    white-space: nowrap;
+}
+
+.ModeBadgeGuest {
+    background: rgba(255, 255, 255, .08);
+    color: rgba(255, 255, 255, .86);
+}
+
+.ModeBadgeLocal {
+    background: rgba(86, 157, 255, .16);
+    color: #a8caff;
+}
+
+.ModeBadgeEnhanced {
+    background: rgba(30, 215, 96, .18);
+    color: #8ff0b4;
+    border: 1px solid rgba(30, 215, 96, .28);
+}
+
+.SecondaryBtn {
+    border: 1px solid rgba(255, 255, 255, .12);
+    padding: 0 14px;
+    background-color: transparent;
+}
+
+.ProfileBtn {
+    border: 0;
+    padding: 0 16px;
+    background-color: rgba(255, 255, 255, .09);
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media screen and (max-width: 1360px) {
+    .Topnav {
+        padding: 10px 20px 8px;
+    }
+
+    .BrandIcon {
+        width: 54px;
+        height: 54px;
+    }
+
+    .BrandText {
+        display: none;
+    }
+}
+
+@media screen and (max-width: 1180px) {
+    .LeftGroup,
+    .RightGroup {
+        gap: 10px;
+    }
+
+    .AgentButton {
+        padding: 0 14px;
+    }
+
+    .LangBtn,
+    .SecondaryBtn,
+    .ProfileBtn {
+        height: 34px;
+        font-size: 13px;
+    }
+
+    .ProfileBtn {
+        max-width: 140px;
+    }
+
+    .StatusText {
+        display: none;
+    }
+
+    .AccountMenuButton {
+        max-width: 220px;
+    }
+}
+
+@media screen and (max-width: 980px) {
+    .Topnav {
+        padding: 10px 16px 8px;
+    }
+
+    .Inner {
+        flex-wrap: wrap;
+        row-gap: 10px;
+    }
+
+    .LeftGroup {
+        width: 100%;
+        order: 2;
+    }
+
+    .RightGroup {
+        order: 1;
+        margin-left: auto;
+    }
+
+    .SecondaryBtn,
+    .ModeBadge {
+        display: none;
+    }
+}
+
+@media screen and (max-width: 760px) {
+    .Topnav {
+        border-radius: 0;
+    }
+
+    .AgentButton span {
+        display: none;
+    }
+
+    .ProfileBtn {
+        max-width: 110px;
+    }
+}
+
+@media screen and (max-width: 640px) {
+    .Topnav {
+        padding: 10px 14px 6px;
+        background-color: #121212;
+        border-radius: 0;
+    }
+
+    .Inner {
+        min-height: 44px;
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .LeftGroup,
+    .RightGroup {
+        width: 100%;
+        gap: 8px;
+    }
+
+    .AgentButton span {
+        display: none;
+    }
+
+    .BrandText {
+        display: none;
+    }
+
+    .StatusText {
+        display: none;
+    }
+
+    .SecondaryRow {
+        margin-top: 10px;
+    }
+}
